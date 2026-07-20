@@ -1,0 +1,21 @@
+export const BIBLIOTECA_EXERCICIOS = [
+  "Supino reto com barra", "Supino reto com halteres", "Supino inclinado com barra",
+  "Supino inclinado com halteres", "Supino declinado", "Crucifixo reto", "Crucifixo inclinado",
+  "Cross over", "Flexão de braço", "Peck deck",
+  "Puxada frontal", "Puxada atrás", "Remada curvada", "Remada baixa", "Remada unilateral (serrote)",
+  "Remada cavalinho", "Barra fixa", "Pulldown", "Levantamento terra", "Hiperextensão lombar",
+  "Desenvolvimento com barra", "Desenvolvimento com halteres", "Desenvolvimento Arnold",
+  "Elevação lateral", "Elevação frontal", "Crucifixo inverso", "Encolhimento de ombros", "Remada alta",
+  "Rosca direta com barra", "Rosca alternada", "Rosca martelo", "Rosca scott", "Rosca concentrada",
+  "Rosca punho",
+  "Tríceps pulley (corda)", "Tríceps testa", "Tríceps francês", "Tríceps banco (mergulho)",
+  "Tríceps coice", "Paralelas",
+  "Agachamento livre", "Agachamento no smith", "Agachamento búlgaro", "Leg press 45",
+  "Cadeira extensora", "Mesa flexora", "Cadeira flexora", "Stiff", "Avanço (passada)",
+  "Afundo", "Elevação pélvica", "Cadeira adutora", "Cadeira abdutora", "Agachamento sumô",
+  "Panturrilha em pé", "Panturrilha sentado", "Panturrilha no leg press",
+  "Abdominal supra", "Abdominal infra", "Abdominal oblíquo", "Prancha", "Prancha lateral",
+  "Abdominal máquina", "Elevação de pernas",
+  "Esteira (caminhada)", "Esteira (corrida)", "Bicicleta ergométrica", "Elíptico", "Escada",
+  "Corda naval", "Burpee", "Polichinelo", "Mountain climber", "Corrida estacionária"
+];
