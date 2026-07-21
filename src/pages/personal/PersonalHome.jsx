@@ -155,10 +155,27 @@ export default function PersonalHome({ user, perfil }) {
             )}
 
             {nOk && (
-              <div className="ok" style={{ marginBottom: 14 }}>
-                Aluno {nOk.nome} cadastrado. Código de acesso: <strong>{nOk.codigo}</strong> — envie o código e a senha para ele entrar.
-              </div>
-            )}
+  <div className="ok" style={{ marginBottom: 14 }}>
+    <div style={{ marginBottom: 10 }}>
+      Aluno {nOk.nome} cadastrado! Código: <strong>{nOk.codigo}</strong>
+    </div>
+    <button 
+      type="button"
+      className="btn btn-sm"
+      onClick={() => {
+        const link = `${window.location.origin}/?modo=aluno&codigo=${nOk.codigo}`
+        navigator.clipboard.writeText(link)
+        alert('Link copiado! Envie para ' + nOk.nome)
+      }}
+      style={{ width: 'auto', marginRight: 8 }}
+    >
+      📋 Copiar link do aluno
+    </button>
+    <div className="muted" style={{ marginTop: 8, fontSize: 12, wordBreak: 'break-all' }}>
+      {`${window.location.origin}/?modo=aluno&codigo=${nOk.codigo}`}
+    </div>
+  </div>
+)}
 
             {listaAlunos.length === 0 && <p className="muted">Nenhum aluno ainda. Clique em "Cadastrar aluno".</p>}
             {listaAlunos.map(([uid, a]) => (
