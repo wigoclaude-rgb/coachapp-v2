@@ -101,7 +101,24 @@ export default function AlunoDetalhe({ user }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {aluno.foto ? <img src={aluno.foto} className="foto-perfil" alt="" /> : null}
           <div>
-            <h2 style={{ fontSize: 22 }}>{aluno.nome}</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+  <h2 style={{ fontSize: 22, margin: 0 }}>{aluno.nome}</h2>
+  <button 
+    className="btn btn-sec btn-sm" 
+    onClick={() => {
+      if (confirm('Deletar aluno ' + aluno.nome + '? Vai deletar tudo!')) {
+        remove(ref(db, 'personals/' + user.uid + '/alunos/' + alunoId))
+        remove(ref(db, 'users/' + alunoId))
+        remove(ref(db, 'treinos/' + alunoId))
+        remove(ref(db, 'execucoes/' + alunoId))
+        remove(ref(db, 'cobrancas/' + alunoId))
+        navigate('/personal')
+      }
+    }}
+  >
+    Deletar
+  </button>
+</div>
             <span className="muted">{aluno.objetivo || 'Sem objetivo definido'}</span>
           </div>
         </div>

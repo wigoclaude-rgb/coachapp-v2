@@ -85,6 +85,17 @@ function aplicarTemplate(idx) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <h2>Treino de {nomeAluno || 'aluno'}</h2>
           <button className="btn btn-sec btn-sm" onClick={() => navigate('/personal')}>Voltar</button>
+<button 
+  className="btn btn-sec btn-sm" 
+  onClick={() => {
+    if (confirm('Deletar este treino?')) {
+      remove(ref(db, 'treinos/' + alunoId))
+      navigate('/personal-aluno/' + alunoId)
+    }
+  }}
+>
+  Deletar Treino
+</button>
         </div>
 
         <label>Começar por um modelo (opcional)</label>

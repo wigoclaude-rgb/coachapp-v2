@@ -1,14 +1,41 @@
 import { useState } from 'react'
-import { ref, push, update } from 'firebase/database'
+import { ref, push, update, remove } from 'firebase/database'
 import { db } from '../../firebase'
 import { fmtData, fmtMoeda, vencida, hojeISO } from '../../lib/util'
 import { notificar } from '../../lib/notify'
+
+// Calcula a data de vencimento da i-ésima cobrança com base na frequência
+function proximaData(dataISO, freq, i) {
+  if (i === 0) return dataISO
+  const [y, m, d] = dataISO.split('-').map(Number)
+  if (freq === 'mensal') {
+    const total = (m - 1) + i
+    const yy = y + Math.floor(total / 12)
+    const mm = ((total % 12) + 12) % 12
+    const ultimoDia = new Date(yy, mm + 1, 0).getDate()
+    const dd = Math.min(d, ultimoDia)
+    return `${yy}-${String(mm + 1).padStart(2, '0')}-${String(dd).padStart(2, '0')}`
+  }
+  const base = new Date(y, m - 1, d)
+  if (freq === 'diario') base.setDate(base.getDate() + i)
+  else if (freq === 'semanal') base.setDate(base.getDate() + 7 * i)
+  else if (freq === 'quinzenal') base.setDate(base.getDate() + 15 * i)
+  const yy = base.getFullYear()
+  const mm = String(base.getMonth() + 1).padStart(2, '0')
+  const dd = String(base.getDate()).padStart(2, '0')
+  return `${yy}-${mm}-${dd}`
+}
+
+function rotuloFreq(freq) {
+  return { diario: 'dia', semanal: 'semana', quinzenal: 'quinzena', mensal: 'mês' }[freq] || 'período'
+}
 
 export default function Financeiro({ user, alunos, cobrancas }) {
   const [alunoSel, setAlunoSel] = useState('')
   const [valor, setValor] = useState('')
   const [vencimento, setVencimento] = useState('')
   const [tipo, setTipo] = useState('mensal')
+  const [repetir, setRepetir] = useState('1')
   const [msg, setMsg] = useState('')
 
   const listaAlunos = Object.entries(alunos)
@@ -18,13 +45,22 @@ export default function Financeiro({ user, alunos, cobrancas }) {
     e.preventDefault()
     setMsg('')
     if (!alunoSel) return
-    await push(ref(db, 'cobrancas/' + alunoSel), {
-      valor: Number(valor), vencimento, tipo,
-      status: 'pendente', criadaEm: Date.now(), personalId: user.uid
-    })
-    notificar(alunoSel, 'Nova cobrança de ' + fmtMoeda(valor) + ' com vencimento em ' + vencimento.split('-').reverse().join('/'), '/aluno')
-    setMsg('Cobrança lançada para ' + (alunos[alunoSel]?.nome || 'aluno') + '.')
-    setValor(''); setVencimento('')
+    const vezes = tipo === 'avulso' ? 1 : Math.max(1, Number(repetir))
+    for (let i = 0; i < vezes; i++) {
+      await push(ref(db, 'cobrancas/' + alunoSel), {
+        valor: Number(valor), vencimento: proximaData(vencimento, tipo, i), tipo,
+        status: 'pendente', criadaEm: Date.now(), personalId: user.uid
+      })
+    }
+    const nome = alunos[alunoSel]?.nome || 'aluno'
+    if (vezes > 1) {
+      notificar(alunoSel, vezes + ' cobranças de ' + fmtMoeda(valor) + ' foram lançadas a partir de ' + vencimento.split('-').reverse().join('/'), '/aluno')
+      setMsg(vezes + ' cobranças lançadas para ' + nome + '.')
+    } else {
+      notificar(alunoSel, 'Nova cobrança de ' + fmtMoeda(valor) + ' com vencimento em ' + vencimento.split('-').reverse().join('/'), '/aluno')
+      setMsg('Cobrança lançada para ' + nome + '.')
+    }
+    setValor(''); setVencimento(''); setRepetir('1')
   }
 
   async function validar(alunoId, cobId, aprovar) {
@@ -35,6 +71,11 @@ export default function Financeiro({ user, alunos, cobrancas }) {
     notificar(alunoId, aprovar
       ? 'Pagamento confirmado. Seu treino está liberado.'
       : 'Seu registro de pagamento não foi aprovado. Fale com o personal.', '/aluno')
+  }
+
+  async function deletar(alunoId, cobId) {
+    if (!confirm('Deletar esta cobrança? Esta ação não pode ser desfeita.')) return
+    await remove(ref(db, 'cobrancas/' + alunoId + '/' + cobId))
   }
 
   // Montar listas
@@ -83,6 +124,17 @@ export default function Financeiro({ user, alunos, cobrancas }) {
               </select>
             </div>
           </div>
+          <label>Repetir cobrança</label>
+          <select value={repetir} onChange={e => setRepetir(e.target.value)} disabled={tipo === 'avulso'}>
+            <option value="1">Não repetir (apenas 1)</option>
+            <option value="2">2 vezes</option>
+            <option value="3">3 vezes</option>
+            <option value="6">6 vezes</option>
+            <option value="12">12 vezes</option>
+          </select>
+          {tipo !== 'avulso' && Number(repetir) > 1 && (
+            <p className="muted">Serão criadas {repetir} cobranças, uma a cada {rotuloFreq(tipo)}, a partir do vencimento escolhido.</p>
+          )}
           {msg && <div className="ok">{msg}</div>}
           <button className="btn">Lançar cobrança</button>
         </form>
@@ -105,6 +157,7 @@ export default function Financeiro({ user, alunos, cobrancas }) {
               <div className="aluno-acoes">
                 <button className="btn btn-sm" onClick={() => validar(c.aid, c.cid, true)}>Aprovar</button>
                 <button className="btn btn-sec btn-sm" onClick={() => validar(c.aid, c.cid, false)}>Rejeitar</button>
+                <button className="btn btn-sec btn-sm" onClick={() => deletar(c.aid, c.cid)}>Deletar</button>
               </div>
             </div>
           ))}
@@ -122,6 +175,9 @@ export default function Financeiro({ user, alunos, cobrancas }) {
                 Vence em {c.vencimento.split('-').reverse().join('/')} {vencida(c) ? '· VENCIDA (treino bloqueado)' : ''}
               </div>
             </div>
+            <div className="aluno-acoes">
+              <button className="btn btn-sec btn-sm" onClick={() => deletar(c.aid, c.cid)}>Deletar</button>
+            </div>
           </div>
         ))}
       </div>
@@ -135,7 +191,10 @@ export default function Financeiro({ user, alunos, cobrancas }) {
               <strong>{c.aluno}</strong> · {fmtMoeda(c.valor)} · {c.tipo}
               <div className="muted">Recebido/validado em {c.validadaEm ? fmtData(c.validadaEm) : '-'}</div>
             </div>
-            <span className="selo-pago">Pago</span>
+            <div className="aluno-acoes">
+              <span className="selo-pago">Pago</span>
+              <button className="btn btn-sec btn-sm" onClick={() => deletar(c.aid, c.cid)}>Deletar</button>
+            </div>
           </div>
         ))}
       </div>
