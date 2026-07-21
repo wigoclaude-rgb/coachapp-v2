@@ -8,6 +8,7 @@ import { fmtData, fmtMoeda, vencida, hojeISO } from '../../lib/util'
 import { notificar } from '../../lib/notify'
 import Chat from '../../components/Chat.jsx'
 import Config from '../Config.jsx'
+import MeusTemplates from './MeusTemplates.jsx'
 import Financeiro from './Financeiro.jsx'
 
 function gerarCodigo() {
@@ -102,6 +103,7 @@ export default function PersonalHome({ user, perfil }) {
         <button className={'tab ' + (aba === 'alunos' ? 'ativa' : '')} onClick={() => setAba('alunos')}>Alunos</button>
         <button className={'tab ' + (aba === 'financeiro' ? 'ativa' : '')} onClick={() => setAba('financeiro')}>Financeiro</button>
         <button className={'tab ' + (aba === 'chat' ? 'ativa' : '')} onClick={() => { setAba('chat'); setChatAluno(null) }}>Chat</button>
+<button className={'tab ' + (aba === 'templates' ? 'ativa' : '')} onClick={() => setAba('templates')}>Meus Templates</button>
         <button className={'tab ' + (aba === 'config' ? 'ativa' : '')} onClick={() => setAba('config')}>Configurações</button>
       </div>
 

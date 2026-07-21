@@ -4,6 +4,7 @@ import { ref, get, set, push } from 'firebase/database'
 import { db } from '../../firebase'
 import { BIBLIOTECA_EXERCICIOS } from '../../lib/exercicios'
 import { TEMPLATES } from '../../lib/templates'
+import { get } from 'firebase/database'
 import { notificar } from '../../lib/notify'
 
 const exercicioVazio = () => ({ nome: '', series: 3, reps: 12, carga: '', descanso: 60, video: '' })
@@ -15,12 +16,16 @@ export default function CriarTreino({ user }) {
   const [nomeTreino, setNomeTreino] = useState('')
   const [exercicios, setExercicios] = useState([exercicioVazio()])
   const [treinoExistente, setTreinoExistente] = useState(null)
+  const [meusTemplates, setMeusTemplates] = useState({})
   const [salvo, setSalvo] = useState(false)
   const [enviando, setEnviando] = useState(false)
 
   useEffect(() => {
     get(ref(db, 'personals/' + user.uid + '/alunos/' + alunoId)).then(s => {
       if (s.exists()) setNomeAluno(s.val().nome)
+get(ref(db, 'personals/' + user.uid + '/meusTemplates')).then(s => {
+    if (s.exists()) setMeusTemplates(s.val())
+  })
     })
     get(ref(db, 'treinos/' + alunoId)).then(s => {
       if (s.exists()) {
@@ -38,14 +43,22 @@ export default function CriarTreino({ user }) {
     setExercicios(novo)
   }
 
-  function aplicarTemplate(idx) {
-    if (idx === '') return
-    const t = TEMPLATES[Number(idx)]
-    if (exercicios.some(ex => ex.nome) && !confirm('Substituir os exercícios atuais pelo template "' + t.nome + '"?')) return
-    setNomeTreino(t.nome)
-    setExercicios(t.exercicios.map(ex => ({ ...ex })))
+function aplicarTemplate(idx) {
+  if (idx === '') return
+  
+  let template
+  if (idx.startsWith('pessoal_')) {
+    const templateId = idx.replace('pessoal_', '')
+    template = meusTemplates[templateId]
+  } else {
+    template = TEMPLATES[Number(idx)]
   }
-
+  
+  if (!template) return
+  if (exercicios.some(ex => ex.nome) && !confirm('Substituir os exercícios atuais pelo template "' + template.nome + '"?')) return
+  setNomeTreino(template.nome)
+  setExercicios((template.exercicios || []).map(ex => ({ ...ex, video: ex.video || '' })))
+}
   async function salvar(e) {
     e.preventDefault()
     setEnviando(true)
@@ -77,9 +90,16 @@ export default function CriarTreino({ user }) {
 
         <label>Começar por um modelo (opcional)</label>
         <select defaultValue="" onChange={e => { aplicarTemplate(e.target.value); e.target.value = '' }}>
-          <option value="">Escolher template de treino...</option>
-          {TEMPLATES.map((t, i) => <option key={i} value={i}>{t.nome}</option>)}
-        </select>
+  <option value="">Escolher template de treino...</option>
+  {Object.keys(meusTemplates).length > 0 && <optgroup label="Meus Templates">
+    {Object.entries(meusTemplates).map(([id, t]) => (
+      <option key={id} value={'pessoal_' + id}>{t.nome}</option>
+    ))}
+  </optgroup>}
+  <optgroup label="Templates Padrão">
+    {TEMPLATES.map((t, i) => <option key={i} value={i}>{t.nome}</option>)}
+  </optgroup>
+</select>
 
         <form onSubmit={salvar}>
           <label>Nome do treino</label>
