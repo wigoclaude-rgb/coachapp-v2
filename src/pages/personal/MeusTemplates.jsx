@@ -3,166 +3,172 @@ import { ref, onValue, push, update, remove } from 'firebase/database'
 import { db } from '../../firebase'
 import { BIBLIOTECA_EXERCICIOS } from '../../lib/exercicios'
 
-const exercicioVazio = () => ({ nome: '', series: 3, reps: 12, carga: '', descanso: 60, video: '' })
-
 export default function MeusTemplates({ user }) {
-  const [templates, setTemplates] = useState({})
-  const [novoNome, setNovoNome] = useState('')
-  const [exercicios, setExercicios] = useState([exercicioVazio()])
-  const [editandoId, setEditandoId] = useState(null)
-  const [salvo, setSalvo] = useState(false)
+  const [templates, setTemplates] = useState([])
+  const [nome, setNome] = useState('')
+  const [exercicios, setExercicios] = useState([{ nome: '', series: 3, reps: 12, carga: '', descanso: 60, video: '' }])
+  const [editando, setEditando] = useState(null)
   const [mostrarForm, setMostrarForm] = useState(false)
 
   useEffect(() => {
-    const unsub = onValue(ref(db, 'personals/' + user.uid + '/meusTemplates'), snap => {
-      setTemplates(snap.val() || {})
+    if (!user?.uid) return
+    
+    const unsub = onValue(ref(db, `personals/${user.uid}/meusTemplates`), (snap) => {
+      if (snap.exists()) {
+        const dados = snap.val()
+        const lista = Object.entries(dados).map(([id, dados]) => ({ id, ...dados }))
+        setTemplates(lista)
+      } else {
+        setTemplates([])
+      }
     })
+    
     return unsub
-  }, [user.uid])
+  }, [user?.uid])
 
-  function mudar(i, campo, valor) {
+  function adicionarExercicio() {
+    setExercicios([...exercicios, { nome: '', series: 3, reps: 12, carga: '', descanso: 60, video: '' }])
+  }
+
+  function removerExercicio(idx) {
+    setExercicios(exercicios.filter((_, i) => i !== idx))
+  }
+
+  function mudarExercicio(idx, campo, valor) {
     const novo = [...exercicios]
-    novo[i] = { ...novo[i], [campo]: valor }
+    novo[idx][campo] = valor
     setExercicios(novo)
   }
 
-  function limparForm() {
-    setNovoNome('')
-    setExercicios([exercicioVazio()])
-    setEditandoId(null)
-  }
-
-  async function salvarTemplate(e) {
+  async function salvar(e) {
     e.preventDefault()
-    if (!novoNome.trim()) return
+    if (!nome.trim() || exercicios.filter(ex => ex.nome).length === 0) {
+      alert('Preencha o nome e adicione pelo menos um exercício')
+      return
+    }
 
     const template = {
-      nome: novoNome,
-      exercicios: exercicios.filter(ex => ex.nome.trim() !== ''),
+      nome,
+      exercicios: exercicios.filter(ex => ex.nome),
       criadoEm: Date.now()
     }
 
-    if (editandoId) {
-      await update(ref(db, 'personals/' + user.uid + '/meusTemplates/' + editandoId), template)
+    if (editando) {
+      await update(ref(db, `personals/${user.uid}/meusTemplates/${editando}`), template)
+      setEditando(null)
     } else {
-      await push(ref(db, 'personals/' + user.uid + '/meusTemplates'), template)
+      await push(ref(db, `personals/${user.uid}/meusTemplates`), template)
     }
 
-    limparForm()
+    setNome('')
+    setExercicios([{ nome: '', series: 3, reps: 12, carga: '', descanso: 60, video: '' }])
     setMostrarForm(false)
-    setSalvo(true)
-    setTimeout(() => setSalvo(false), 3000)
   }
 
-  function editar(id, template) {
-    setEditandoId(id)
-    setNovoNome(template.nome)
-    setExercicios((template.exercicios || [exercicioVazio()]).map(ex => ({ video: '', ...ex })))
+  function editar(template) {
+    setEditando(template.id)
+    setNome(template.nome)
+    setExercicios(template.exercicios || [{ nome: '', series: 3, reps: 12, carga: '', descanso: 60, video: '' }])
     setMostrarForm(true)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   async function deletar(id) {
-    if (confirm('Deletar este template? Essa ação não pode ser desfeita.')) {
-      await remove(ref(db, 'personals/' + user.uid + '/meusTemplates/' + id))
+    if (confirm('Deletar este template?')) {
+      await remove(ref(db, `personals/${user.uid}/meusTemplates/${id}`))
     }
   }
 
-  const lista = Object.entries(templates).sort((a, b) => (b[1].criadoEm || 0) - (a[1].criadoEm || 0))
+  function limpar() {
+    setNome('')
+    setExercicios([{ nome: '', series: 3, reps: 12, carga: '', descanso: 60, video: '' }])
+    setEditando(null)
+    setMostrarForm(false)
+  }
 
   return (
-    <>
+    <div className="container">
       <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2>Meus templates de treino</h2>
-          <button className="btn btn-sm" onClick={() => { if (mostrarForm) { limparForm() } setMostrarForm(!mostrarForm) }}>
-            {mostrarForm ? 'Fechar' : 'Criar template'}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <h2>Meus Templates de Treino</h2>
+          <button className="btn btn-sm" onClick={() => { if (mostrarForm) limpar(); else setMostrarForm(true) }}>
+            {mostrarForm ? 'Fechar' : '+ Criar Template'}
           </button>
         </div>
-        <p className="muted" style={{ marginTop: 4 }}>
-          Crie modelos de treino prontos para reutilizar ao montar o treino dos seus alunos.
-        </p>
 
         {mostrarForm && (
-          <form onSubmit={salvarTemplate} style={{ marginTop: 14, borderTop: '1px solid #ececee', paddingTop: 14 }}>
-            <label>Nome do template</label>
-            <input value={novoNome} onChange={e => setNovoNome(e.target.value)} placeholder="Ex: Treino A - Peito e Tríceps" required />
+          <form onSubmit={salvar} style={{ borderTop: '1px solid #eee', paddingTop: 20, marginBottom: 20 }}>
+            <label>Nome do Template</label>
+            <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Treino A - Peito" required />
 
-            <h3 style={{ margin: '18px 0 6px' }}>Exercícios</h3>
-            <p className="muted" style={{ marginBottom: 10 }}>Digite ou escolha o exercício na lista. O link do YouTube é opcional.</p>
-
-            <datalist id="lista-exercicios-template">
+            <h3 style={{ margin: '20px 0 10px' }}>Exercícios</h3>
+            <datalist id="exercicios-list">
               {BIBLIOTECA_EXERCICIOS.map(ex => <option key={ex} value={ex} />)}
             </datalist>
 
             {exercicios.map((ex, i) => (
-              <div className="exercicio-editor" key={i}>
-                <div className="exercicio-editor-topo">
+              <div key={i} style={{ background: '#f9f9f9', padding: 15, borderRadius: 8, marginBottom: 15 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
                   <strong>Exercício {i + 1}</strong>
-                  <button type="button" className="remove-btn" onClick={() => setExercicios(exercicios.filter((_, idx) => idx !== i))}>Remover</button>
+                  <button type="button" className="remove-btn" onClick={() => removerExercicio(i)}>Remover</button>
                 </div>
-                <div className="linha-2">
-                  <div>
-                    <label>Nome do exercício</label>
-                    <input list="lista-exercicios-template" value={ex.nome} onChange={e => mudar(i, 'nome', e.target.value)} placeholder="Digite ou escolha" />
-                  </div>
-                  <div>
-                    <label>Vídeo do YouTube (opcional)</label>
-                    <input value={ex.video || ''} onChange={e => mudar(i, 'video', e.target.value)} placeholder="https://youtube.com/..." />
-                  </div>
-                </div>
-                <div className="linha-4">
+
+                <label>Nome</label>
+                <input list="exercicios-list" value={ex.nome} onChange={e => mudarExercicio(i, 'nome', e.target.value)} placeholder="Digite ou escolha" required />
+
+                <label>Vídeo YouTube (opcional)</label>
+                <input value={ex.video} onChange={e => mudarExercicio(i, 'video', e.target.value)} placeholder="https://youtube.com/..." />
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
                   <div>
                     <label>Séries</label>
-                    <input type="number" min="1" value={ex.series} onChange={e => mudar(i, 'series', Number(e.target.value))} />
+                    <input type="number" min="1" value={ex.series} onChange={e => mudarExercicio(i, 'series', Number(e.target.value))} />
                   </div>
                   <div>
-                    <label>Repetições</label>
-                    <input type="number" min="1" value={ex.reps} onChange={e => mudar(i, 'reps', Number(e.target.value))} />
+                    <label>Reps</label>
+                    <input type="number" min="1" value={ex.reps} onChange={e => mudarExercicio(i, 'reps', Number(e.target.value))} />
                   </div>
                   <div>
                     <label>Carga (kg)</label>
-                    <input value={ex.carga} onChange={e => mudar(i, 'carga', e.target.value)} placeholder="kg" />
+                    <input value={ex.carga} onChange={e => mudarExercicio(i, 'carga', e.target.value)} />
                   </div>
                   <div>
                     <label>Descanso (seg)</label>
-                    <input type="number" min="0" value={ex.descanso} onChange={e => mudar(i, 'descanso', Number(e.target.value))} />
+                    <input type="number" min="0" value={ex.descanso} onChange={e => mudarExercicio(i, 'descanso', Number(e.target.value))} />
                   </div>
                 </div>
               </div>
             ))}
-            <button type="button" className="btn btn-sec" onClick={() => setExercicios([...exercicios, exercicioVazio()])}>Adicionar exercício</button>
-            <button className="btn">{editandoId ? 'Atualizar template' : 'Salvar template'}</button>
+
+            <button type="button" className="btn btn-sec" onClick={adicionarExercicio} style={{ marginBottom: 15 }}>+ Adicionar Exercício</button>
+            <button type="submit" className="btn">{editando ? 'Atualizar' : 'Criar'} Template</button>
           </form>
         )}
-
-        {salvo && <div className="ok" style={{ marginTop: 14 }}>Template salvo com sucesso.</div>}
       </div>
 
       <div className="card">
-        <h2>Templates criados ({lista.length})</h2>
-        {lista.length === 0 && <p className="muted">Nenhum template ainda. Clique em "Criar template" para começar.</p>}
-        {lista.map(([id, t]) => (
-          <div key={id} className="exercicio-card">
-            <div className="titulo">
-              <span>{t.nome}</span>
+        <h2>Templates Criados ({templates.length})</h2>
+        {templates.length === 0 && <p className="muted">Nenhum template ainda. Clique em "+ Criar Template" para começar.</p>}
+        
+        {templates.map(t => (
+          <div key={t.id} style={{ background: '#f9f9f9', padding: 15, borderRadius: 8, marginBottom: 15 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+              <strong>{t.nome}</strong>
               <span className="muted">{(t.exercicios || []).length} exercício(s)</span>
             </div>
+            
             {(t.exercicios || []).map((ex, i) => (
-              <div key={i} className="serie-row">
-                <span style={{ fontWeight: 600 }}>{ex.nome}</span>
-                <span>{ex.series}x{ex.reps}</span>
-                <span>{ex.carga ? ex.carga + ' kg' : ''}</span>
-                <span className="muted">descanso {ex.descanso}s</span>
+              <div key={i} style={{ fontSize: 13, padding: 8, borderLeft: '3px solid #610A13' }}>
+                <strong>{ex.nome}</strong> • {ex.series}x{ex.reps} {ex.carga && `• ${ex.carga}kg`}
               </div>
             ))}
-            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-              <button className="btn btn-sm" onClick={() => editar(id, t)}>Editar</button>
-              <button className="btn btn-sec btn-sm" onClick={() => deletar(id)}>Deletar</button>
+            
+            <div style={{ display: 'flex', gap: 10, marginTop: 15 }}>
+              <button className="btn btn-sm" onClick={() => editar(t)}>Editar</button>
+              <button className="btn btn-sec btn-sm" onClick={() => deletar(t.id)}>Deletar</button>
             </div>
           </div>
         ))}
       </div>
-    </>
+    </div>
   )
 }
