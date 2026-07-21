@@ -11,6 +11,16 @@ export default function Login() {
   const [senha, setSenha] = useState('')
   const [erro, setErro] = useState('')
   const [ok, setOk] = useState('')
+useEffect(() => {
+  const params = new URLSearchParams(window.location.search)
+  const modoURL = params.get('modo')
+  const codigoURL = params.get('codigo')
+  
+  if (modoURL === 'aluno') {
+    setModo('aluno')
+    if (codigoURL) setCodigo(codigoURL)
+  }
+}, [])
   const [enviando, setEnviando] = useState(false)
   const navigate = useNavigate()
 

@@ -4,7 +4,6 @@ import { ref, get, set, push } from 'firebase/database'
 import { db } from '../../firebase'
 import { BIBLIOTECA_EXERCICIOS } from '../../lib/exercicios'
 import { TEMPLATES } from '../../lib/templates'
-import { get } from 'firebase/database'
 import { notificar } from '../../lib/notify'
 
 const exercicioVazio = () => ({ nome: '', series: 3, reps: 12, carga: '', descanso: 60, video: '' })
