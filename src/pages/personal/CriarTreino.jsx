@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ref, get, set, push } from 'firebase/database'
+import { ref, get, set, push, remove } from 'firebase/database'
 import { db } from '../../firebase'
 import { BIBLIOTECA_EXERCICIOS } from '../../lib/exercicios'
 import { TEMPLATES } from '../../lib/templates'
@@ -90,7 +90,7 @@ function aplicarTemplate(idx) {
   onClick={() => {
     if (confirm('Deletar este treino?')) {
       remove(ref(db, 'treinos/' + alunoId))
-      navigate('/personal-aluno/' + alunoId)
+      navigate('/personal')
     }
   }}
 >
