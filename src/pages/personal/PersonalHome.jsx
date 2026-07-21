@@ -224,6 +224,8 @@ export default function PersonalHome({ user, perfil }) {
         </div>
       )}
 
+      {aba === 'templates' && <MeusTemplates user={user} />}
+
       {aba === 'config' && <Config user={user} perfil={perfil} />}
     </div>
   )
