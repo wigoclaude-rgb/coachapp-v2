@@ -453,6 +453,26 @@ input::placeholder { color: var(--secundaria); }
 .linha-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 .remove-btn { background: transparent; border: none; color: var(--alerta); cursor: pointer; font-size: 13px; font-weight: 600; }
 
+/* Abas de treinos (A/B/C) no editor */
+.dias-tabs { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.dia-tab {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--branco); border: 1.5px solid var(--borda); border-radius: 12px;
+  padding: 10px 14px; cursor: pointer; font-family: 'Inter'; color: var(--texto);
+  transition: border-color var(--t-rapida), background var(--t-rapida);
+}
+.dia-tab:hover { border-color: var(--secundaria); }
+.dia-tab.ativo { border-color: var(--primaria); background: var(--primaria-suave); }
+.dia-tab .dia-letra {
+  width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+  background: var(--fundo-2); color: var(--texto-2);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Archivo'; font-weight: 800; font-size: 15px;
+}
+.dia-tab.ativo .dia-letra { background: var(--primaria); color: #fff; }
+.dia-tab .dia-nome-tab { font-size: 13.5px; font-weight: 600; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dia-tab.add { border-style: dashed; color: var(--primaria); font-weight: 600; }
+
 /* ============================================================
    TREINO DO ALUNO (execução)
    ============================================================ */

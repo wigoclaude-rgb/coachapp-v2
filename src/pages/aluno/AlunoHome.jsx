@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { ref, onValue, push, update } from 'firebase/database'
 import { db } from '../../firebase'
 import { fmtData, fmtMoeda, vencida, youtubeId, beep } from '../../lib/util'
@@ -9,6 +9,8 @@ import LineChart from '../../components/LineChart.jsx'
 import Heatmap from '../../components/Heatmap.jsx'
 import Layout from '../../components/Layout.jsx'
 import { IcTreino, IcEvolucao, IcPagamentos, IcChat, IcConfig } from '../../components/Icones.jsx'
+
+const LETRAS = ['A', 'B', 'C', 'D', 'E', 'F']
 
 const TITULOS = {
   treino: { t: 'Meu Treino', s: 'Marque cada série ao concluir' },
@@ -123,6 +125,22 @@ export default function AlunoHome({ user, perfil, onSair }) {
     setPagCobId(null); setPagObs('')
   }
 
+  // Treino cíclico (A/B/C) com compatibilidade ao formato antigo (treino único)
+  const ciclico = treino && Array.isArray(treino.lista) && treino.lista.length > 0
+  const totalDias = ciclico ? treino.lista.length : 0
+  const idxAtual = ciclico ? (((Number(treino.indiceAtual) || 0) % totalDias) + totalDias) % totalDias : 0
+  const diaAtual = ciclico ? treino.lista[idxAtual] : null
+  const exerciciosHoje = ciclico ? (diaAtual?.exercicios || []) : (treino?.exercicios || [])
+  const nomeTreinoHoje = ciclico ? (diaAtual?.nome || treino.nome) : (treino?.nome || '')
+
+  async function concluirTreino() {
+    if (!ciclico) return
+    const prox = (idxAtual + 1) % totalDias
+    await update(ref(db, 'treinos/' + user.uid), { indiceAtual: prox })
+    setVideoAberto(null)
+    setPesos({})
+  }
+
   const itens = [
     { id: 'treino', label: 'Meu Treino', icone: <IcTreino /> },
     { id: 'evolucao', label: 'Evolução', icone: <IcEvolucao /> },
@@ -174,13 +192,30 @@ export default function AlunoHome({ user, perfil, onSair }) {
           )}
 
           {!bloqueado && treino && (
+            <>
+            {ciclico && (
+              <div className="treino-atual-card">
+                <div className="ciclo-progresso">
+                  {treino.lista.map((d, i) => (
+                    <Fragment key={i}>
+                      {i > 0 && <span className="ciclo-seta">→</span>}
+                      <span className={'ciclo-passo ' + (i === idxAtual ? 'ativo' : '')}>{LETRAS[i] || i + 1}</span>
+                    </Fragment>
+                  ))}
+                </div>
+                <h2>{nomeTreinoHoje}</h2>
+                <p className="ta-sub">
+                  {treino.nome} · Treino {idxAtual + 1} de {totalDias} · ao concluir, o próximo aparece automaticamente
+                </p>
+              </div>
+            )}
             <div className="card">
-              <h2>{treino.nome}</h2>
+              {!ciclico && <h2>{nomeTreinoHoje}</h2>}
               <p className="muted" style={{ marginBottom: 12 }}>
                 Atualizado em {treino.atualizadoEm ? fmtData(treino.atualizadoEm) : '-'} · marque cada série ao concluir.
               </p>
               {erroPeso && <div className="erro" style={{ marginBottom: 10 }}>{erroPeso}</div>}
-              {(treino.exercicios || []).map((ex, i) => {
+              {exerciciosHoje.map((ex, i) => {
                 const vid = youtubeId(ex.video)
                 return (
                   <div className="exercicio-card" key={i}>
@@ -225,7 +260,13 @@ export default function AlunoHome({ user, perfil, onSair }) {
                   </div>
                 )
               })}
+              {ciclico && (
+                <button className="btn" style={{ marginTop: 18 }} onClick={concluirTreino}>
+                  ✓ Concluir Treino {LETRAS[idxAtual]} · ir para o próximo
+                </button>
+              )}
             </div>
+            </>
           )}
         </>
       )}
