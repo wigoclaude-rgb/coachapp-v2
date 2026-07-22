@@ -3,7 +3,6 @@ import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import { ref, onValue } from 'firebase/database'
 import { auth, db } from './firebase'
-import Notificacoes from './components/Notificacoes.jsx'
 import Login from './pages/Login.jsx'
 import CadastroPersonal from './pages/CadastroPersonal.jsx'
 import PersonalHome from './pages/personal/PersonalHome.jsx'
@@ -46,20 +45,6 @@ export default function App() {
 
   return (
     <>
-      {logado && (
-        <header className="header">
-          <div className="header-inner">
-            <div className="brand">COACH<span>APP</span></div>
-            <div className="header-dir">
-              <Notificacoes uid={user.uid} />
-              {perfil.foto
-                ? <img src={perfil.foto} className="header-foto" alt="perfil" />
-                : <span className="header-nome">{perfil.nome}</span>}
-              <button onClick={sair}>Sair</button>
-            </div>
-          </div>
-        </header>
-      )}
       <Routes>
         <Route path="/" element={
           !logado ? <Login /> :
@@ -68,7 +53,7 @@ export default function App() {
         <Route path="/cadastro-personal" element={<CadastroPersonal />} />
         <Route path="/personal/*" element={
           logado && perfil.role === 'personal'
-            ? <PersonalHome user={user} perfil={perfil} />
+            ? <PersonalHome user={user} perfil={perfil} onSair={sair} />
             : <Navigate to="/" />
         } />
         <Route path="/personal-aluno/:alunoId" element={
@@ -83,7 +68,7 @@ export default function App() {
         } />
         <Route path="/aluno/*" element={
           logado && perfil.role === 'aluno'
-            ? <AlunoHome user={user} perfil={perfil} />
+            ? <AlunoHome user={user} perfil={perfil} onSair={sair} />
             : <Navigate to="/" />
         } />
         <Route path="*" element={<Navigate to="/" />} />

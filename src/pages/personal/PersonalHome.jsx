@@ -10,6 +10,8 @@ import Chat from '../../components/Chat.jsx'
 import Config from '../Config.jsx'
 import MeusTemplates from './MeusTemplates.jsx'
 import Financeiro from './Financeiro.jsx'
+import Layout from '../../components/Layout.jsx'
+import { IcInicio, IcAlunos, IcFinanceiro, IcChat, IcTemplates, IcConfig, IcRaio, IcRelogio } from '../../components/Icones.jsx'
 
 function gerarCodigo() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -18,7 +20,16 @@ function gerarCodigo() {
   return c
 }
 
-export default function PersonalHome({ user, perfil }) {
+const TITULOS = {
+  inicio: { t: 'Início', s: 'Visão geral do seu negócio' },
+  alunos: { t: 'Alunos', s: 'Gerencie seus alunos' },
+  financeiro: { t: 'Financeiro', s: 'Cobranças e pagamentos' },
+  chat: { t: 'Chat', s: 'Converse com seus alunos' },
+  templates: { t: 'Meus Templates', s: 'Modelos de treino reutilizáveis' },
+  config: { t: 'Configurações', s: 'Sua conta e preferências' }
+}
+
+export default function PersonalHome({ user, perfil, onSair }) {
   const [aba, setAba] = useState('inicio')
   const [alunos, setAlunos] = useState({})
   const [execucoes, setExecucoes] = useState({})
@@ -96,53 +107,134 @@ export default function PersonalHome({ user, perfil }) {
     setCriando(false)
   }
 
-  return (
-    <div className="container">
-      <div className="tabs">
-        <button className={'tab ' + (aba === 'inicio' ? 'ativa' : '')} onClick={() => setAba('inicio')}>Início</button>
-        <button className={'tab ' + (aba === 'alunos' ? 'ativa' : '')} onClick={() => setAba('alunos')}>Alunos</button>
-        <button className={'tab ' + (aba === 'financeiro' ? 'ativa' : '')} onClick={() => setAba('financeiro')}>Financeiro</button>
-        <button className={'tab ' + (aba === 'chat' ? 'ativa' : '')} onClick={() => { setAba('chat'); setChatAluno(null) }}>Chat</button>
-<button className={'tab ' + (aba === 'templates' ? 'ativa' : '')} onClick={() => setAba('templates')}>Meus Templates</button>
-        <button className={'tab ' + (aba === 'config' ? 'ativa' : '')} onClick={() => setAba('config')}>Configurações</button>
-      </div>
+  const itens = [
+    { id: 'inicio', label: 'Início', icone: <IcInicio /> },
+    { id: 'alunos', label: 'Alunos', icone: <IcAlunos /> },
+    { id: 'financeiro', label: 'Financeiro', icone: <IcFinanceiro />, badge: emAnalise },
+    { id: 'chat', label: 'Chat', icone: <IcChat /> },
+    { id: 'templates', label: 'Meus Templates', icone: <IcTemplates /> },
+    { id: 'config', label: 'Configurações', icone: <IcConfig /> }
+  ]
 
+  const hojeData = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
+  const meta = TITULOS[aba] || TITULOS.inicio
+
+  function irPara(id) {
+    setAba(id)
+    if (id === 'chat') setChatAluno(null)
+  }
+
+  const inicial = (perfil?.nome || '?').trim().charAt(0).toUpperCase()
+
+  return (
+    <Layout
+      user={user}
+      perfil={perfil}
+      onSair={onSair}
+      itens={itens}
+      abaAtiva={aba}
+      onAba={irPara}
+      roleLabel="Personal Trainer"
+      titulo={meta.t}
+      subtitulo={meta.s}
+    >
+      {/* ===== INÍCIO ===== */}
       {aba === 'inicio' && (
         <>
-          <div className="stats-grid">
-            <div className="stat-card"><span className="stat-num">{totalAlunos}</span><span className="stat-label">Alunos ativos</span></div>
-            <div className="stat-card"><span className="stat-num">{execHoje}</span><span className="stat-label">Séries feitas hoje</span></div>
-            <div className="stat-card"><span className="stat-num">{fmtMoeda(aReceber)}</span><span className="stat-label">A receber</span></div>
-            <div className="stat-card"><span className="stat-num">{emAnalise}</span><span className="stat-label">Pagamentos p/ validar</span></div>
+          <div className="welcome">
+            <h1>Olá, {perfil?.nome?.split(' ')[0] || 'Personal'} 👋</h1>
+            <p className="sub">{hojeData}</p>
           </div>
+
+          <div className="stats-grid">
+            <div className="stat-card">
+              <div className="stat-topo">
+                <span className="stat-num">{totalAlunos}</span>
+                <span className="stat-icone"><IcAlunos /></span>
+              </div>
+              <span className="stat-label">Alunos ativos</span>
+            </div>
+            <div className="stat-card">
+              <div className="stat-topo">
+                <span className="stat-num">{execHoje}</span>
+                <span className="stat-icone verde"><IcRaio /></span>
+              </div>
+              <span className="stat-label">Séries feitas hoje</span>
+            </div>
+            <div className="stat-card">
+              <div className="stat-topo">
+                <span className="stat-num" style={{ fontSize: 22 }}>{fmtMoeda(aReceber)}</span>
+                <span className="stat-icone azul"><IcFinanceiro /></span>
+              </div>
+              <span className="stat-label">A receber</span>
+            </div>
+            <div className="stat-card">
+              <div className="stat-topo">
+                <span className="stat-num">{emAnalise}</span>
+                <span className="stat-icone amarelo"><IcRelogio /></span>
+              </div>
+              <span className="stat-label">Pagamentos p/ validar</span>
+            </div>
+          </div>
+
+          <div className="acoes-rapidas">
+            <button className="acao-card" onClick={() => { setAba('alunos'); setMostrarForm(true); setNOk(null) }}>
+              <span className="acao-icone"><IcAlunos /></span>
+              <span className="acao-txt">
+                <span className="acao-titulo">Cadastrar aluno</span>
+                <span className="acao-desc">Adicionar novo aluno</span>
+              </span>
+            </button>
+            <button className="acao-card" onClick={() => setAba('financeiro')}>
+              <span className="acao-icone"><IcFinanceiro /></span>
+              <span className="acao-txt">
+                <span className="acao-titulo">Financeiro</span>
+                <span className="acao-desc">Lançar cobrança</span>
+              </span>
+            </button>
+            <button className="acao-card" onClick={() => setAba('templates')}>
+              <span className="acao-icone"><IcTemplates /></span>
+              <span className="acao-txt">
+                <span className="acao-titulo">Templates</span>
+                <span className="acao-desc">Modelos de treino</span>
+              </span>
+            </button>
+          </div>
+
           <div className="card">
-            <h2>Últimas execuções</h2>
-            {ultimas.length === 0 && <p className="muted">Nenhuma série registrada ainda.</p>}
+            <div className="card-titulo"><h2>Últimas execuções</h2></div>
+            {ultimas.length === 0 && (
+              <div className="vazio-estado">
+                <div className="ve-icone">🏋️</div>
+                <p className="muted">Nenhuma série registrada ainda.</p>
+              </div>
+            )}
             {ultimas.map((e, i) => (
               <div key={i} className="serie-row">
                 <span style={{ fontWeight: 600, minWidth: 100 }}>{e.aluno}</span>
                 <span>{e.exercicio}</span>
                 <span>Série {e.serie}</span>
                 <span>{e.peso ? e.peso + ' kg' : ''}</span>
-                <span className="muted">{fmtData(e.ts)}</span>
+                <span className="muted" style={{ marginLeft: 'auto' }}>{fmtData(e.ts)}</span>
               </div>
             ))}
           </div>
         </>
       )}
 
+      {/* ===== ALUNOS ===== */}
       {aba === 'alunos' && (
         <>
           <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="card-titulo">
               <h2>Meus alunos</h2>
               <button className="btn btn-sm" onClick={() => { setMostrarForm(!mostrarForm); setNOk(null) }}>
-                {mostrarForm ? 'Fechar' : 'Cadastrar aluno'}
+                {mostrarForm ? 'Fechar' : '+ Cadastrar aluno'}
               </button>
             </div>
 
             {mostrarForm && (
-              <form onSubmit={cadastrarAluno} style={{ marginTop: 10, marginBottom: 16, borderBottom: '1px solid #ececee', paddingBottom: 16 }}>
+              <form onSubmit={cadastrarAluno} style={{ marginBottom: 16, borderBottom: '1px solid var(--borda-2)', paddingBottom: 16 }}>
                 <label>Nome do aluno</label>
                 <input value={nNome} onChange={e => setNNome(e.target.value)} required />
                 <label>E-mail do aluno (usado para recuperar senha)</label>
@@ -155,54 +247,69 @@ export default function PersonalHome({ user, perfil }) {
             )}
 
             {nOk && (
-  <div className="ok" style={{ marginBottom: 14 }}>
-    <div style={{ marginBottom: 10 }}>
-      Aluno {nOk.nome} cadastrado! Código: <strong>{nOk.codigo}</strong>
-    </div>
-    <button 
-      type="button"
-      className="btn btn-sm"
-      onClick={() => {
-        const link = `${window.location.origin}/?modo=aluno&codigo=${nOk.codigo}`
-        navigator.clipboard.writeText(link)
-        alert('Link copiado! Envie para ' + nOk.nome)
-      }}
-      style={{ width: 'auto', marginRight: 8 }}
-    >
-      📋 Copiar link do aluno
-    </button>
-    <div className="muted" style={{ marginTop: 8, fontSize: 12, wordBreak: 'break-all' }}>
-      {`${window.location.origin}/?modo=aluno&codigo=${nOk.codigo}`}
-    </div>
-  </div>
-)}
-
-            {listaAlunos.length === 0 && <p className="muted">Nenhum aluno ainda. Clique em "Cadastrar aluno".</p>}
-            {listaAlunos.map(([uid, a]) => (
-              <div key={uid} className="aluno-item">
-                <div>
-                  <div className="nome">{a.nome}</div>
-                  <div className="muted">Código: {a.codigo} · {a.email}</div>
+              <div className="ok" style={{ marginBottom: 14 }}>
+                <div style={{ marginBottom: 10 }}>
+                  Aluno {nOk.nome} cadastrado! Código: <strong>{nOk.codigo}</strong>
                 </div>
-                <div className="aluno-acoes">
-                  <Link to={'/personal-aluno/' + uid}><button className="btn btn-sec btn-sm">Perfil</button></Link>
-                  <Link to={'/personal-treino/' + uid}><button className="btn btn-sm">Treino</button></Link>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => {
+                    const link = `${window.location.origin}/?modo=aluno&codigo=${nOk.codigo}`
+                    navigator.clipboard.writeText(link)
+                    alert('Link copiado! Envie para ' + nOk.nome)
+                  }}
+                  style={{ width: 'auto', marginRight: 8 }}
+                >
+                  📋 Copiar link do aluno
+                </button>
+                <div className="muted" style={{ marginTop: 8, fontSize: 12, wordBreak: 'break-all' }}>
+                  {`${window.location.origin}/?modo=aluno&codigo=${nOk.codigo}`}
                 </div>
               </div>
-            ))}
+            )}
+
+            {listaAlunos.length === 0 && (
+              <div className="vazio-estado">
+                <div className="ve-icone">👥</div>
+                <p className="muted">Nenhum aluno ainda. Clique em "+ Cadastrar aluno".</p>
+              </div>
+            )}
           </div>
+
+          {listaAlunos.length > 0 && (
+            <div className="alunos-grid">
+              {listaAlunos.map(([uid, a]) => (
+                <div key={uid} className="aluno-card">
+                  <div className="aluno-card-topo">
+                    <div className="ava">{(a.nome || '?').charAt(0).toUpperCase()}</div>
+                    <div style={{ minWidth: 0 }}>
+                      <div className="a-nome">{a.nome}</div>
+                      <div className="a-meta">Código: {a.codigo}</div>
+                    </div>
+                  </div>
+                  <div className="aluno-card-acoes">
+                    <Link to={'/personal-aluno/' + uid}><button className="btn btn-ghost btn-sm">Perfil</button></Link>
+                    <Link to={'/personal-treino/' + uid}><button className="btn btn-sm">Treino</button></Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </>
       )}
 
+      {/* ===== FINANCEIRO ===== */}
       {aba === 'financeiro' && (
         <Financeiro user={user} alunos={alunos} cobrancas={cobrancas} />
       )}
 
+      {/* ===== CHAT ===== */}
       {aba === 'chat' && (
         <div className="card">
           {!chatAluno && (
             <>
-              <h2>Conversas</h2>
+              <div className="card-titulo"><h2>Conversas</h2></div>
               {listaAlunos.length === 0 && <p className="muted">Nenhum aluno ainda.</p>}
               {listaAlunos.map(([uid, a]) => (
                 <div key={uid} className="aluno-item">
@@ -214,7 +321,7 @@ export default function PersonalHome({ user, perfil }) {
           )}
           {chatAluno && (
             <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div className="card-titulo">
                 <h2>Chat com {chatAluno.nome}</h2>
                 <button className="btn btn-sec btn-sm" onClick={() => setChatAluno(null)}>Voltar</button>
               </div>
@@ -224,9 +331,11 @@ export default function PersonalHome({ user, perfil }) {
         </div>
       )}
 
+      {/* ===== TEMPLATES ===== */}
       {aba === 'templates' && <MeusTemplates user={user} />}
 
+      {/* ===== CONFIG ===== */}
       {aba === 'config' && <Config user={user} perfil={perfil} />}
-    </div>
+    </Layout>
   )
 }

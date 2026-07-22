@@ -7,8 +7,18 @@ import Chat from '../../components/Chat.jsx'
 import Config from '../Config.jsx'
 import LineChart from '../../components/LineChart.jsx'
 import Heatmap from '../../components/Heatmap.jsx'
+import Layout from '../../components/Layout.jsx'
+import { IcTreino, IcEvolucao, IcPagamentos, IcChat, IcConfig } from '../../components/Icones.jsx'
 
-export default function AlunoHome({ user, perfil }) {
+const TITULOS = {
+  treino: { t: 'Meu Treino', s: 'Marque cada série ao concluir' },
+  evolucao: { t: 'Evolução', s: 'Acompanhe seu progresso' },
+  pagamentos: { t: 'Pagamentos', s: 'Suas cobranças' },
+  chat: { t: 'Chat', s: 'Fale com seu personal' },
+  config: { t: 'Configurações', s: 'Sua conta e preferências' }
+}
+
+export default function AlunoHome({ user, perfil, onSair }) {
   const [aba, setAba] = useState('treino')
   const [treino, setTreino] = useState(null)
   const [feitas, setFeitas] = useState({})
@@ -113,16 +123,28 @@ export default function AlunoHome({ user, perfil }) {
     setPagCobId(null); setPagObs('')
   }
 
-  return (
-    <div className="container">
-      <div className="tabs">
-        <button className={'tab ' + (aba === 'treino' ? 'ativa' : '')} onClick={() => setAba('treino')}>Meu treino</button>
-        <button className={'tab ' + (aba === 'evolucao' ? 'ativa' : '')} onClick={() => setAba('evolucao')}>Evolução</button>
-        <button className={'tab ' + (aba === 'pagamentos' ? 'ativa' : '')} onClick={() => setAba('pagamentos')}>Pagamentos {bloqueado ? '(!)' : ''}</button>
-        <button className={'tab ' + (aba === 'chat' ? 'ativa' : '')} onClick={() => setAba('chat')}>Chat</button>
-        <button className={'tab ' + (aba === 'config' ? 'ativa' : '')} onClick={() => setAba('config')}>Configurações</button>
-      </div>
+  const itens = [
+    { id: 'treino', label: 'Meu Treino', icone: <IcTreino /> },
+    { id: 'evolucao', label: 'Evolução', icone: <IcEvolucao /> },
+    { id: 'pagamentos', label: 'Pagamentos', icone: <IcPagamentos />, badge: vencidas.length },
+    { id: 'chat', label: 'Chat', icone: <IcChat /> },
+    { id: 'config', label: 'Configurações', icone: <IcConfig /> }
+  ]
 
+  const meta = TITULOS[aba] || TITULOS.treino
+
+  return (
+    <Layout
+      user={user}
+      perfil={perfil}
+      onSair={onSair}
+      itens={itens}
+      abaAtiva={aba}
+      onAba={setAba}
+      roleLabel="Aluno"
+      titulo={meta.t}
+      subtitulo={meta.s}
+    >
       {descanso && (
         <div className="descanso-flutuante">
           <span>Descanso</span>
@@ -131,6 +153,7 @@ export default function AlunoHome({ user, perfil }) {
         </div>
       )}
 
+      {/* ===== TREINO ===== */}
       {aba === 'treino' && (
         <>
           {bloqueado && (
@@ -142,15 +165,18 @@ export default function AlunoHome({ user, perfil }) {
 
           {!bloqueado && !treino && (
             <div className="card">
-              <h2>Nenhum treino ainda</h2>
-              <p className="muted">Seu personal ainda não montou o seu treino. Fale com ele pelo chat.</p>
+              <div className="vazio-estado">
+                <div className="ve-icone">🏋️</div>
+                <h2>Nenhum treino ainda</h2>
+                <p className="muted">Seu personal ainda não montou o seu treino. Fale com ele pelo chat.</p>
+              </div>
             </div>
           )}
 
           {!bloqueado && treino && (
             <div className="card">
               <h2>{treino.nome}</h2>
-              <p className="muted" style={{ marginBottom: 6 }}>
+              <p className="muted" style={{ marginBottom: 12 }}>
                 Atualizado em {treino.atualizadoEm ? fmtData(treino.atualizadoEm) : '-'} · marque cada série ao concluir.
               </p>
               {erroPeso && <div className="erro" style={{ marginBottom: 10 }}>{erroPeso}</div>}
@@ -204,14 +230,15 @@ export default function AlunoHome({ user, perfil }) {
         </>
       )}
 
+      {/* ===== EVOLUÇÃO ===== */}
       {aba === 'evolucao' && (
         <>
           <div className="card">
-            <h2>Calendário de treinos</h2>
+            <div className="card-titulo"><h2>Calendário de treinos</h2></div>
             <Heatmap diasTreinados={diasTreinados} />
           </div>
           <div className="card">
-            <h2>Evolução das medidas</h2>
+            <div className="card-titulo"><h2>Evolução das medidas</h2></div>
             {listaAval.length === 0 && <p className="muted">Seu personal ainda não registrou avaliações físicas.</p>}
             {listaAval.length > 0 && (
               <>
@@ -228,7 +255,7 @@ export default function AlunoHome({ user, perfil }) {
             )}
           </div>
           <div className="card">
-            <h2>Treinos anteriores</h2>
+            <div className="card-titulo"><h2>Treinos anteriores</h2></div>
             {listaHist.length === 0 && <p className="muted">Nenhum treino antigo ainda.</p>}
             {listaHist.map(t => (
               <div key={t.id} className="exercicio-card">
@@ -249,18 +276,19 @@ export default function AlunoHome({ user, perfil }) {
         </>
       )}
 
+      {/* ===== PAGAMENTOS ===== */}
       {aba === 'pagamentos' && (
         <>
           {personal && personal.chavePix && (
             <div className="card">
-              <h2>Chave PIX do personal</h2>
+              <div className="card-titulo"><h2>Chave PIX do personal</h2></div>
               <div className="codigo-box" style={{ fontSize: 16, letterSpacing: 1 }}>{personal.chavePix}</div>
               <p className="muted" style={{ marginTop: 8 }}>Pague pelo seu banco e depois registre o pagamento abaixo.</p>
             </div>
           )}
 
           <div className="card">
-            <h2>Cobranças em aberto</h2>
+            <div className="card-titulo"><h2>Cobranças em aberto</h2></div>
             {pendentes.length === 0 && emAnalise.length === 0 && <p className="muted">Nenhuma cobrança em aberto.</p>}
             {pendentes.map(c => (
               <div key={c.id} className="cobranca-item">
@@ -286,7 +314,7 @@ export default function AlunoHome({ user, perfil }) {
 
           {pagCobId && (
             <div className="card destaque-card">
-              <h2>Registrar pagamento</h2>
+              <div className="card-titulo"><h2>Registrar pagamento</h2></div>
               <form onSubmit={registrarPagamento}>
                 <label>Observação (opcional — ex: "PIX feito às 14h em nome de João")</label>
                 <input value={pagObs} onChange={e => setPagObs(e.target.value)} placeholder="Detalhe que ajude o personal a identificar" />
@@ -299,7 +327,7 @@ export default function AlunoHome({ user, perfil }) {
           )}
 
           <div className="card">
-            <h2>Histórico de pagamentos</h2>
+            <div className="card-titulo"><h2>Histórico de pagamentos</h2></div>
             {pagas.length === 0 && <p className="muted">Nenhum pagamento validado ainda.</p>}
             {pagas.map(c => (
               <div key={c.id} className="cobranca-item">
@@ -314,14 +342,16 @@ export default function AlunoHome({ user, perfil }) {
         </>
       )}
 
+      {/* ===== CHAT ===== */}
       {aba === 'chat' && (
         <div className="card">
-          <h2>Chat com o personal</h2>
+          <div className="card-titulo"><h2>Chat com o personal</h2></div>
           <Chat chatId={perfil.personalId + '_' + user.uid} meuUid={user.uid} outroUid={perfil.personalId} rotaNotif="/personal" />
         </div>
       )}
 
+      {/* ===== CONFIG ===== */}
       {aba === 'config' && <Config user={user} perfil={perfil} />}
-    </div>
+    </Layout>
   )
 }
