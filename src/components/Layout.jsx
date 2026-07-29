@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Notificacoes from './Notificacoes.jsx'
+import { IcHalter, IcMenu, IcSair } from './Icones.jsx'
 
 /*
   Layout com sidebar lateral + topbar.
@@ -30,8 +31,8 @@ export default function Layout({ user, perfil, onSair, itens, abaAtiva, onAba, r
       {/* Sidebar */}
       <aside className={'sidebar ' + (menuAberto ? 'aberta' : '')}>
         <div className="sidebar-brand">
-          <span className="logo-mark">💪</span>
-          <span style={{ color: '#fff' }}>COACH<span>APP</span></span>
+          <span className="logo-mark"><IcHalter /></span>
+          <span>Coach<em>App</em></span>
         </div>
 
         <nav className="sidebar-nav">
@@ -58,7 +59,7 @@ export default function Layout({ user, perfil, onSair, itens, abaAtiva, onAba, r
               <div className="u-role">{roleLabel}</div>
             </div>
           </div>
-          <button className="btn-sair" onClick={onSair}>Sair da conta</button>
+          <button className="btn-sair" onClick={onSair}><IcSair /> Sair da conta</button>
         </div>
       </aside>
 
@@ -66,11 +67,7 @@ export default function Layout({ user, perfil, onSair, itens, abaAtiva, onAba, r
       <div className="main-area">
         <header className="topbar">
           <button className="btn-menu" onClick={() => setMenuAberto(true)} aria-label="Abrir menu">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <line x1="3" y1="12" x2="21" y2="12" />
-              <line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
+            <IcMenu />
           </button>
           <div className="topbar-titulo">
             <h1>{titulo}</h1>

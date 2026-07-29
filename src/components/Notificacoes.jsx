@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ref, onValue, update } from 'firebase/database'
 import { db } from '../firebase'
 import { fmtData, fmtHora } from '../lib/util'
+import { IcSino } from './Icones.jsx'
 
 export default function Notificacoes({ uid }) {
   const [lista, setLista] = useState([])
@@ -35,10 +36,7 @@ export default function Notificacoes({ uid }) {
   return (
     <div className="notif-wrap">
       <button className="notif-sino" onClick={() => setAberto(!aberto)} title="Notificações">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
-          <path d="M13.7 21a2 2 0 0 1-3.4 0" />
-        </svg>
+        <IcSino />
         {naoLidas > 0 && <span className="notif-badge">{naoLidas}</span>}
       </button>
       {aberto && (

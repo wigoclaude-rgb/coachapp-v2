@@ -5,11 +5,11 @@ import { db } from '../../firebase'
 import { BIBLIOTECA_EXERCICIOS } from '../../lib/exercicios'
 import { TEMPLATES } from '../../lib/templates'
 import { notificar } from '../../lib/notify'
-
-const exercicioVazio = () => ({ nome: '', series: 3, reps: 12, carga: '', descanso: 60, video: '' })
-const LETRAS = ['A', 'B', 'C', 'D', 'E', 'F']
-const MAX_DIAS = 6
-const diaVazio = (i) => ({ nome: 'Treino ' + (LETRAS[i] || (i + 1)), exercicios: [exercicioVazio()] })
+import {
+  LETRAS, MAX_DIAS, exercicioVazio, diaVazio,
+  normalizarPlano, normalizarTemplate, normalizarExercicios
+} from '../../lib/treinoModel'
+import { IcVoltar, IcMais, IcLixeira, IcCheck } from '../../components/Icones.jsx'
 
 export default function CriarTreino({ user }) {
   const { alunoId } = useParams()
@@ -32,35 +32,24 @@ export default function CriarTreino({ user }) {
       if (s.exists()) setMeusTemplates(s.val())
     })
     get(ref(db, 'treinos/' + alunoId)).then(s => {
-      if (s.exists()) {
-        const t = s.val()
-        setTreinoExistente(t)
-        setPlanoNome(t.nome || '')
-        if (Array.isArray(t.lista) && t.lista.length > 0) {
-          // Formato novo (cíclico)
-          setDias(t.lista.map(d => ({
-            nome: d.nome || '',
-            exercicios: (d.exercicios || [exercicioVazio()]).map(ex => ({ ...exercicioVazio(), ...ex }))
-          })))
-          setIndiceAtualExistente(Number(t.indiceAtual) || 0)
-        } else {
-          // Formato antigo (treino único) → converte em um dia
-          setDias([{
-            nome: t.nome || 'Treino A',
-            exercicios: (t.exercicios || [exercicioVazio()]).map(ex => ({ ...exercicioVazio(), ...ex }))
-          }])
-        }
-      }
+      if (!s.exists()) return
+      const bruto = s.val()
+      setTreinoExistente(bruto)
+      const plano = normalizarPlano(bruto)
+      if (!plano) return
+      setPlanoNome(bruto.nome || '')
+      setDias(plano.lista)
+      setIndiceAtualExistente(plano.indiceAtual)
     })
   }, [alunoId, user.uid])
 
   const dia = dias[diaAtivo] || dias[0]
 
   function atualizarExercicios(fn) {
-    setDias(ds => ds.map((d, i) => i === diaAtivo ? { ...d, exercicios: fn(d.exercicios) } : d))
+    setDias(ds => ds.map((d, i) => (i === diaAtivo ? { ...d, exercicios: fn(d.exercicios) } : d)))
   }
   function mudar(i, campo, valor) {
-    atualizarExercicios(exs => exs.map((ex, idx) => idx === i ? { ...ex, [campo]: valor } : ex))
+    atualizarExercicios(exs => exs.map((ex, idx) => (idx === i ? { ...ex, [campo]: valor } : ex)))
   }
   function addExercicio() {
     atualizarExercicios(exs => [...exs, exercicioVazio()])
@@ -69,7 +58,7 @@ export default function CriarTreino({ user }) {
     atualizarExercicios(exs => exs.filter((_, idx) => idx !== i))
   }
   function mudarNomeDia(valor) {
-    setDias(ds => ds.map((d, i) => i === diaAtivo ? { ...d, nome: valor } : d))
+    setDias(ds => ds.map((d, i) => (i === diaAtivo ? { ...d, nome: valor } : d)))
   }
 
   function addDia() {
@@ -88,39 +77,54 @@ export default function CriarTreino({ user }) {
     if (alvo < 0 || alvo >= dias.length) return
     setDias(ds => {
       const novo = [...ds]
-      const tmp = novo[idx]; novo[idx] = novo[alvo]; novo[alvo] = tmp
+      ;[novo[idx], novo[alvo]] = [novo[alvo], novo[idx]]
       return novo
     })
     setDiaAtivo(alvo)
   }
 
-  function aplicarTemplate(idx) {
-    if (idx === '') return
-    let template
-    if (idx.startsWith('pessoal_')) {
-      const templateId = idx.replace('pessoal_', '')
-      template = meusTemplates[templateId]
-    } else {
-      template = TEMPLATES[Number(idx)]
+  const temConteudo = dias.some(d => d.exercicios.some(ex => (ex.nome || '').trim() !== ''))
+
+  function aplicarTemplate(valor) {
+    if (!valor) return
+    let bruto
+    if (valor.startsWith('pessoal_')) bruto = meusTemplates[valor.replace('pessoal_', '')]
+    else bruto = TEMPLATES[Number(valor)]
+    if (!bruto) return
+
+    const tpl = normalizarTemplate(bruto)
+
+    // Template com vários treinos → substitui o plano inteiro.
+    if (tpl.lista.length > 1) {
+      if (temConteudo && !confirm(
+        `Aplicar o template "${tpl.nome}"?\n\nIsso substitui o plano inteiro por ${tpl.lista.length} treinos (${tpl.lista.map((d, i) => LETRAS[i] || i + 1).join(', ')}).`
+      )) return
+      setDias(tpl.lista.map(d => ({ nome: d.nome, exercicios: normalizarExercicios(d.exercicios) })))
+      setDiaAtivo(0)
+      if (!planoNome.trim()) setPlanoNome(tpl.nome)
+      return
     }
-    if (!template) return
-    if (dia.exercicios.some(ex => ex.nome) && !confirm('Substituir os exercícios de "' + (dia.nome || 'este treino') + '" pelo template "' + template.nome + '"?')) return
-    setDias(ds => ds.map((d, i) => i === diaAtivo
-      ? { nome: d.nome || template.nome, exercicios: (template.exercicios || []).map(ex => ({ ...exercicioVazio(), ...ex })) }
-      : d))
+
+    // Template de um treino só → preenche apenas o treino aberto.
+    const unico = tpl.lista[0]
+    if (dia.exercicios.some(ex => ex.nome) && !confirm(
+      `Substituir os exercícios de "${dia.nome || 'este treino'}" pelo template "${tpl.nome}"?`
+    )) return
+    setDias(ds => ds.map((d, i) => (i === diaAtivo
+      ? { nome: d.nome || unico.nome, exercicios: normalizarExercicios(unico.exercicios) }
+      : d)))
   }
 
   async function salvar(e) {
     e.preventDefault()
     setEnviando(true)
 
-    // arquivar treino anterior no histórico
     if (treinoExistente) {
       await push(ref(db, 'treinosHistorico/' + alunoId), { ...treinoExistente, arquivadoEm: Date.now() })
     }
 
     const lista = dias
-      .map(d => ({ nome: d.nome || 'Treino', exercicios: (d.exercicios || []).filter(ex => ex.nome.trim() !== '') }))
+      .map(d => ({ nome: d.nome || 'Treino', exercicios: (d.exercicios || []).filter(ex => (ex.nome || '').trim() !== '') }))
       .filter(d => d.exercicios.length > 0)
 
     if (lista.length === 0) {
@@ -146,13 +150,15 @@ export default function CriarTreino({ user }) {
     setTimeout(() => setSalvo(false), 3000)
   }
 
+  const templatesPessoais = Object.entries(meusTemplates).map(([id, t]) => ({ id, ...normalizarTemplate(t) }))
+
   return (
     <div className="container">
       <div className="subrota-topo">
-        <button className="btn btn-sec btn-sm" onClick={() => navigate('/personal')}>← Voltar</button>
+        <button className="btn btn-sec btn-sm" onClick={() => navigate('/personal')}><IcVoltar /> Voltar</button>
         <h2 style={{ flex: 1 }}>Treino de {nomeAluno || 'aluno'}</h2>
         <button
-          className="btn btn-perigo btn-sm"
+          className="btn btn-perigo-sutil btn-sm"
           onClick={() => {
             if (confirm('Deletar TODO o treino deste aluno?')) {
               remove(ref(db, 'treinos/' + alunoId))
@@ -160,67 +166,68 @@ export default function CriarTreino({ user }) {
             }
           }}
         >
-          Deletar
+          <IcLixeira /> Deletar plano
         </button>
       </div>
 
       <div className="card">
-        <label>Nome do plano (opcional)</label>
-        <input value={planoNome} onChange={e => setPlanoNome(e.target.value)} placeholder="Ex: ABC Split, Treino de Hipertrofia" />
-        <p className="muted" style={{ marginTop: 6 }}>
-          Crie um ou mais treinos (A, B, C...). O aluno faz um por vez e, ao concluir, o próximo aparece automaticamente — reiniciando o ciclo no fim.
+        <label>Nome do plano</label>
+        <input value={planoNome} onChange={e => setPlanoNome(e.target.value)} placeholder="Ex: ABC Split — Hipertrofia" />
+
+        <label>Aplicar um template</label>
+        <select defaultValue="" onChange={e => { aplicarTemplate(e.target.value); e.target.value = '' }}>
+          <option value="">Escolher template...</option>
+          {templatesPessoais.length > 0 && (
+            <optgroup label="Meus templates">
+              {templatesPessoais.map(t => (
+                <option key={t.id} value={'pessoal_' + t.id}>
+                  {t.nome} · {t.lista.length} treino{t.lista.length === 1 ? '' : 's'}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          <optgroup label="Templates padrão">
+            {TEMPLATES.map((t, i) => <option key={i} value={i}>{t.nome}</option>)}
+          </optgroup>
+        </select>
+        <p className="mini" style={{ marginTop: 6 }}>
+          Template com vários treinos substitui o plano inteiro. Template de um treino só preenche o treino aberto.
         </p>
 
-        {/* Seletor de dias/treinos */}
+        <hr className="divisor" />
+
         <div className="dias-tabs">
           {dias.map((d, i) => (
-            <button
-              key={i}
-              className={'dia-tab ' + (diaAtivo === i ? 'ativo' : '')}
-              onClick={() => setDiaAtivo(i)}
-              type="button"
-            >
+            <button key={i} type="button" className={'dia-tab ' + (diaAtivo === i ? 'ativo' : '')} onClick={() => setDiaAtivo(i)}>
               <span className="dia-letra">{LETRAS[i] || i + 1}</span>
               <span className="dia-nome-tab">{d.nome || 'Treino'}</span>
             </button>
           ))}
           {dias.length < MAX_DIAS && (
-            <button className="dia-tab add" onClick={addDia} type="button">+ Treino</button>
+            <button className="dia-tab add" onClick={addDia} type="button"><IcMais /> Treino</button>
           )}
         </div>
+        <p className="mini" style={{ marginTop: 8 }}>
+          O aluno faz um treino por vez. Ao concluir, o próximo aparece e o ciclo reinicia no fim.
+        </p>
       </div>
 
-      {/* Editor do dia ativo */}
       <div className="card">
         <div className="card-titulo">
           <h2>Treino {LETRAS[diaAtivo] || diaAtivo + 1}</h2>
           <div style={{ display: 'flex', gap: 6 }}>
-            <button className="btn btn-ghost btn-sm" type="button" onClick={() => moverDia(diaAtivo, -1)} disabled={diaAtivo === 0} title="Mover para cima">↑</button>
-            <button className="btn btn-ghost btn-sm" type="button" onClick={() => moverDia(diaAtivo, 1)} disabled={diaAtivo === dias.length - 1} title="Mover para baixo">↓</button>
-            {dias.length > 1 && <button className="btn btn-sec btn-sm" type="button" onClick={() => removerDia(diaAtivo)}>Remover</button>}
+            <button className="btn btn-ghost btn-sm" type="button" onClick={() => moverDia(diaAtivo, -1)} disabled={diaAtivo === 0} title="Mover para a esquerda">←</button>
+            <button className="btn btn-ghost btn-sm" type="button" onClick={() => moverDia(diaAtivo, 1)} disabled={diaAtivo === dias.length - 1} title="Mover para a direita">→</button>
+            {dias.length > 1 && (
+              <button className="btn btn-perigo-sutil btn-sm" type="button" onClick={() => removerDia(diaAtivo)}><IcLixeira /> Remover</button>
+            )}
           </div>
         </div>
 
         <label>Nome deste treino</label>
-        <input value={dia.nome} onChange={e => mudarNomeDia(e.target.value)} placeholder="Ex: Treino A - Peito e Tríceps" />
+        <input value={dia.nome} onChange={e => mudarNomeDia(e.target.value)} placeholder="Ex: Treino A — Peito e Tríceps" />
 
-        <label>Começar por um modelo (opcional)</label>
-        <select defaultValue="" onChange={e => { aplicarTemplate(e.target.value); e.target.value = '' }}>
-          <option value="">Escolher template de treino...</option>
-          {Object.keys(meusTemplates).length > 0 && <optgroup label="Meus Templates">
-            {Object.entries(meusTemplates).map(([id, t]) => (
-              <option key={id} value={'pessoal_' + id}>{t.nome}</option>
-            ))}
-          </optgroup>}
-          <optgroup label="Templates Padrão">
-            {TEMPLATES.map((t, i) => <option key={i} value={i}>{t.nome}</option>)}
-          </optgroup>
-        </select>
-
-        <h3 style={{ margin: '20px 0 6px' }}>Exercícios</h3>
-        <p className="muted" style={{ marginBottom: 10 }}>
-          Digite ou escolha o exercício na lista. O link do YouTube mostra a execução para o aluno.
-        </p>
+        <label>Exercícios</label>
 
         <datalist id="lista-exercicios">
           {BIBLIOTECA_EXERCICIOS.map(ex => <option key={ex} value={ex} />)}
@@ -230,7 +237,9 @@ export default function CriarTreino({ user }) {
           <div className="exercicio-editor" key={i}>
             <div className="exercicio-editor-topo">
               <strong>Exercício {i + 1}</strong>
-              <button type="button" className="remove-btn" onClick={() => removerExercicio(i)}>Remover</button>
+              {dia.exercicios.length > 1 && (
+                <button type="button" className="remove-btn" onClick={() => removerExercicio(i)}>Remover</button>
+              )}
             </div>
             <div className="linha-2">
               <div>
@@ -238,7 +247,7 @@ export default function CriarTreino({ user }) {
                 <input list="lista-exercicios" value={ex.nome} onChange={e => mudar(i, 'nome', e.target.value)} placeholder="Digite ou escolha" />
               </div>
               <div>
-                <label>Vídeo do YouTube (link)</label>
+                <label>Vídeo do YouTube</label>
                 <input value={ex.video || ''} onChange={e => mudar(i, 'video', e.target.value)} placeholder="https://youtube.com/..." />
               </div>
             </div>
@@ -256,16 +265,16 @@ export default function CriarTreino({ user }) {
                 <input value={ex.carga} onChange={e => mudar(i, 'carga', e.target.value)} placeholder="kg" />
               </div>
               <div>
-                <label>Descanso (seg)</label>
+                <label>Descanso (s)</label>
                 <input type="number" min="0" value={ex.descanso} onChange={e => mudar(i, 'descanso', Number(e.target.value))} />
               </div>
             </div>
           </div>
         ))}
-        <button type="button" className="btn btn-sec" onClick={addExercicio}>+ Adicionar exercício</button>
+        <button type="button" className="btn btn-sec btn-sm" onClick={addExercicio}><IcMais /> Adicionar exercício</button>
 
-        {salvo && <div className="ok">Treino salvo. O aluno foi notificado e o treino anterior ficou no histórico.</div>}
-        <button className="btn" disabled={enviando} onClick={salvar}>{enviando ? 'Salvando...' : 'Salvar treino'}</button>
+        {salvo && <div className="ok"><IcCheck /> Treino salvo. O aluno foi notificado e o plano anterior ficou no histórico.</div>}
+        <button className="btn" disabled={enviando} onClick={salvar}>{enviando ? 'Salvando...' : 'Salvar plano de treino'}</button>
       </div>
     </div>
   )

@@ -1,187 +1,257 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ref, onValue, push, update, remove } from 'firebase/database'
 import { db } from '../../firebase'
 import { BIBLIOTECA_EXERCICIOS } from '../../lib/exercicios'
-import { IcTemplates } from '../../components/Icones.jsx'
+import { normalizarTemplate, LETRAS, MAX_DIAS, exercicioVazio, diaVazio } from '../../lib/treinoModel'
+import { IcTemplates, IcBusca, IcMais, IcEditar, IcLixeira, IcDuplicar } from '../../components/Icones.jsx'
 
 export default function MeusTemplates({ user }) {
   const [templates, setTemplates] = useState([])
+  const [busca, setBusca] = useState('')
   const [nome, setNome] = useState('')
-  const [exercicios, setExercicios] = useState([{ nome: '', series: 3, reps: 12, carga: '', descanso: 60, video: '' }])
+  const [dias, setDias] = useState([diaVazio(0)])
+  const [diaAtivo, setDiaAtivo] = useState(0)
   const [editando, setEditando] = useState(null)
   const [mostrarForm, setMostrarForm] = useState(false)
 
   useEffect(() => {
     if (!user?.uid) return
-    
-    const unsub = onValue(ref(db, `personals/${user.uid}/meusTemplates`), (snap) => {
-      if (snap.exists()) {
-        const dados = snap.val()
-        const lista = Object.entries(dados).map(([id, dados]) => ({ id, ...dados }))
-        setTemplates(lista)
-      } else {
-        setTemplates([])
-      }
+    return onValue(ref(db, `personals/${user.uid}/meusTemplates`), snap => {
+      const dados = snap.val() || {}
+      setTemplates(Object.entries(dados).map(([id, t]) => ({ id, ...normalizarTemplate(t) })))
     })
-    
-    return unsub
   }, [user?.uid])
 
-  function adicionarExercicio() {
-    setExercicios([...exercicios, { nome: '', series: 3, reps: 12, carga: '', descanso: 60, video: '' }])
-  }
+  const visiveis = useMemo(() => {
+    const q = busca.trim().toLowerCase()
+    if (!q) return templates
+    return templates.filter(t =>
+      t.nome.toLowerCase().includes(q) ||
+      t.lista.some(d => d.nome.toLowerCase().includes(q) || d.exercicios.some(ex => (ex.nome || '').toLowerCase().includes(q)))
+    )
+  }, [templates, busca])
 
-  function removerExercicio(idx) {
-    setExercicios(exercicios.filter((_, i) => i !== idx))
-  }
+  const dia = dias[diaAtivo] || dias[0]
 
+  function atualizarDia(fn) {
+    setDias(ds => ds.map((d, i) => (i === diaAtivo ? fn(d) : d)))
+  }
   function mudarExercicio(idx, campo, valor) {
-    const novo = [...exercicios]
-    novo[idx][campo] = valor
-    setExercicios(novo)
+    atualizarDia(d => ({ ...d, exercicios: d.exercicios.map((ex, i) => (i === idx ? { ...ex, [campo]: valor } : ex)) }))
+  }
+  function adicionarExercicio() {
+    atualizarDia(d => ({ ...d, exercicios: [...d.exercicios, exercicioVazio()] }))
+  }
+  function removerExercicio(idx) {
+    atualizarDia(d => ({ ...d, exercicios: d.exercicios.filter((_, i) => i !== idx) }))
+  }
+
+  function addDia() {
+    if (dias.length >= MAX_DIAS) return
+    setDias(ds => [...ds, diaVazio(ds.length)])
+    setDiaAtivo(dias.length)
+  }
+  function removerDia(idx) {
+    if (dias.length <= 1) return
+    if (!confirm(`Remover "${dias[idx].nome || 'este treino'}" do template?`)) return
+    setDias(ds => ds.filter((_, i) => i !== idx))
+    setDiaAtivo(a => Math.max(0, a >= idx ? a - 1 : a))
   }
 
   async function salvar(e) {
     e.preventDefault()
-    if (!nome.trim() || exercicios.filter(ex => ex.nome).length === 0) {
-      alert('Preencha o nome e adicione pelo menos um exercício')
+    const lista = dias
+      .map(d => ({ nome: d.nome || 'Treino', exercicios: (d.exercicios || []).filter(ex => (ex.nome || '').trim() !== '') }))
+      .filter(d => d.exercicios.length > 0)
+
+    if (!nome.trim() || lista.length === 0) {
+      alert('Dê um nome ao template e adicione pelo menos um exercício.')
       return
     }
 
-    const template = {
-      nome,
-      exercicios: exercicios.filter(ex => ex.nome),
-      criadoEm: Date.now()
-    }
+    const payload = { nome: nome.trim(), lista, exercicios: null, criadoEm: Date.now() }
 
-    if (editando) {
-      await update(ref(db, `personals/${user.uid}/meusTemplates/${editando}`), template)
-      setEditando(null)
-    } else {
-      await push(ref(db, `personals/${user.uid}/meusTemplates`), template)
-    }
+    if (editando) await update(ref(db, `personals/${user.uid}/meusTemplates/${editando}`), payload)
+    else await push(ref(db, `personals/${user.uid}/meusTemplates`), payload)
 
-    setNome('')
-    setExercicios([{ nome: '', series: 3, reps: 12, carga: '', descanso: 60, video: '' }])
-    setMostrarForm(false)
+    limpar()
   }
 
-  function editar(template) {
-    setEditando(template.id)
-    setNome(template.nome)
-    setExercicios(template.exercicios || [{ nome: '', series: 3, reps: 12, carga: '', descanso: 60, video: '' }])
+  function editar(t) {
+    setEditando(t.id)
+    setNome(t.nome)
+    setDias(t.lista.map(d => ({ nome: d.nome, exercicios: d.exercicios.length ? d.exercicios : [exercicioVazio()] })))
+    setDiaAtivo(0)
     setMostrarForm(true)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  async function duplicar(t) {
+    await push(ref(db, `personals/${user.uid}/meusTemplates`), {
+      nome: `${t.nome} (cópia)`, lista: t.lista, criadoEm: Date.now()
+    })
   }
 
   async function deletar(id) {
-    if (confirm('Deletar este template?')) {
-      await remove(ref(db, `personals/${user.uid}/meusTemplates/${id}`))
-    }
+    if (confirm('Deletar este template?')) await remove(ref(db, `personals/${user.uid}/meusTemplates/${id}`))
   }
 
   function limpar() {
     setNome('')
-    setExercicios([{ nome: '', series: 3, reps: 12, carga: '', descanso: 60, video: '' }])
+    setDias([diaVazio(0)])
+    setDiaAtivo(0)
     setEditando(null)
     setMostrarForm(false)
   }
 
   return (
     <>
-      <div className="card">
-        <div className="card-titulo">
-          <h2>Meus Templates de Treino</h2>
-          <button className="btn btn-sm" onClick={() => { if (mostrarForm) limpar(); else setMostrarForm(true) }}>
-            {mostrarForm ? 'Fechar' : '+ Criar Template'}
-          </button>
+      <div className="barra-filtros">
+        <div className="campo-busca">
+          <IcBusca />
+          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar template ou exercício" />
         </div>
+        <button className="btn btn-sm" onClick={() => (mostrarForm ? limpar() : setMostrarForm(true))}>
+          {mostrarForm ? 'Fechar' : <><IcMais /> Novo template</>}
+        </button>
+      </div>
 
-        {mostrarForm && (
-          <form onSubmit={salvar} style={{ borderTop: '1px solid #eee', paddingTop: 20, marginBottom: 20 }}>
-            <label>Nome do Template</label>
-            <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Treino A - Peito" required />
+      {mostrarForm && (
+        <div className="card">
+          <div className="card-titulo">
+            <h2>{editando ? 'Editar template' : 'Novo template'}</h2>
+          </div>
+          <form onSubmit={salvar}>
+            <label>Nome do template</label>
+            <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: ABC Split — Hipertrofia" required />
+            <p className="mini" style={{ marginTop: 6 }}>
+              Um template guarda o plano inteiro. Adicione os treinos A, B, C… e ao aplicar num aluno todos entram de uma vez.
+            </p>
 
-            <h3 style={{ margin: '20px 0 10px' }}>Exercícios</h3>
+            <div className="dias-tabs">
+              {dias.map((d, i) => (
+                <button key={i} type="button" className={'dia-tab ' + (diaAtivo === i ? 'ativo' : '')} onClick={() => setDiaAtivo(i)}>
+                  <span className="dia-letra">{LETRAS[i] || i + 1}</span>
+                  <span className="dia-nome-tab">{d.nome || 'Treino'}</span>
+                </button>
+              ))}
+              {dias.length < MAX_DIAS && (
+                <button type="button" className="dia-tab add" onClick={addDia}><IcMais /> Treino</button>
+              )}
+            </div>
+
+            <hr className="divisor" />
+
+            <div className="card-titulo" style={{ marginBottom: 0 }}>
+              <h3>Treino {LETRAS[diaAtivo] || diaAtivo + 1}</h3>
+              {dias.length > 1 && (
+                <button type="button" className="btn btn-perigo-sutil btn-sm" onClick={() => removerDia(diaAtivo)}>
+                  <IcLixeira /> Remover treino
+                </button>
+              )}
+            </div>
+
+            <label>Nome deste treino</label>
+            <input value={dia.nome} onChange={e => atualizarDia(d => ({ ...d, nome: e.target.value }))} placeholder="Ex: Treino A — Peito e Tríceps" />
+
             <datalist id="exercicios-list">
               {BIBLIOTECA_EXERCICIOS.map(ex => <option key={ex} value={ex} />)}
             </datalist>
 
-            {exercicios.map((ex, i) => (
-              <div key={i} style={{ background: '#f9f9f9', padding: 15, borderRadius: 8, marginBottom: 15 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+            <label>Exercícios</label>
+            {dia.exercicios.map((ex, i) => (
+              <div key={i} className="exercicio-editor">
+                <div className="exercicio-editor-topo">
                   <strong>Exercício {i + 1}</strong>
-                  <button type="button" className="remove-btn" onClick={() => removerExercicio(i)}>Remover</button>
+                  {dia.exercicios.length > 1 && (
+                    <button type="button" className="remove-btn" onClick={() => removerExercicio(i)}>Remover</button>
+                  )}
                 </div>
-
-                <label>Nome</label>
-                <input list="exercicios-list" value={ex.nome} onChange={e => mudarExercicio(i, 'nome', e.target.value)} placeholder="Digite ou escolha" required />
-
-                <label>Vídeo YouTube (opcional)</label>
-                <input value={ex.video} onChange={e => mudarExercicio(i, 'video', e.target.value)} placeholder="https://youtube.com/..." />
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
+                <div className="linha-2">
+                  <div>
+                    <label>Nome</label>
+                    <input list="exercicios-list" value={ex.nome} onChange={e => mudarExercicio(i, 'nome', e.target.value)} placeholder="Digite ou escolha" />
+                  </div>
+                  <div>
+                    <label>Vídeo do YouTube</label>
+                    <input value={ex.video || ''} onChange={e => mudarExercicio(i, 'video', e.target.value)} placeholder="https://youtube.com/..." />
+                  </div>
+                </div>
+                <div className="linha-4">
                   <div>
                     <label>Séries</label>
                     <input type="number" min="1" value={ex.series} onChange={e => mudarExercicio(i, 'series', Number(e.target.value))} />
                   </div>
                   <div>
-                    <label>Reps</label>
+                    <label>Repetições</label>
                     <input type="number" min="1" value={ex.reps} onChange={e => mudarExercicio(i, 'reps', Number(e.target.value))} />
                   </div>
                   <div>
                     <label>Carga (kg)</label>
-                    <input value={ex.carga} onChange={e => mudarExercicio(i, 'carga', e.target.value)} />
+                    <input value={ex.carga} onChange={e => mudarExercicio(i, 'carga', e.target.value)} placeholder="kg" />
                   </div>
                   <div>
-                    <label>Descanso (seg)</label>
+                    <label>Descanso (s)</label>
                     <input type="number" min="0" value={ex.descanso} onChange={e => mudarExercicio(i, 'descanso', Number(e.target.value))} />
                   </div>
                 </div>
               </div>
             ))}
+            <button type="button" className="btn btn-sec btn-sm" onClick={adicionarExercicio}><IcMais /> Adicionar exercício</button>
 
-            <button type="button" className="btn btn-sec" onClick={adicionarExercicio} style={{ marginBottom: 15 }}>+ Adicionar Exercício</button>
-            <button type="submit" className="btn">{editando ? 'Atualizar' : 'Criar'} Template</button>
+            <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
+              <button type="submit" className="btn">{editando ? 'Salvar alterações' : 'Criar template'}</button>
+              <button type="button" className="btn btn-sec btn-auto" onClick={limpar}>Cancelar</button>
+            </div>
           </form>
-        )}
-      </div>
+        </div>
+      )}
 
-      <div className="section-title">Templates criados ({templates.length})</div>
-      {templates.length === 0 && (
+      <div className="section-title">Biblioteca · {visiveis.length} template{visiveis.length === 1 ? '' : 's'}</div>
+
+      {visiveis.length === 0 && (
         <div className="card">
           <div className="vazio-estado">
-            <div className="ve-icone">📋</div>
-            <p className="muted">Nenhum template ainda. Clique em "+ Criar Template" para começar.</p>
+            <div className="ve-icone"><IcTemplates /></div>
+            <h2>{busca ? 'Nada encontrado' : 'Nenhum template ainda'}</h2>
+            <p className="muted">
+              {busca ? 'Tente outro termo de busca.' : 'Crie um plano completo (A, B, C) e reutilize em quantos alunos quiser.'}
+            </p>
           </div>
         </div>
       )}
 
       <div className="templates-grid">
-        {templates.map(t => (
-          <div key={t.id} className="template-card">
-            <div className="template-card-topo">
-              <span className="t-icone"><IcTemplates /></span>
-              <div style={{ minWidth: 0 }}>
-                <div className="t-nome">{t.nome}</div>
-                <div className="t-qtd">{(t.exercicios || []).length} exercício(s)</div>
+        {visiveis.map(t => {
+          const totalEx = t.lista.reduce((s, d) => s + d.exercicios.length, 0)
+          return (
+            <div key={t.id} className="template-card">
+              <div className="template-card-topo">
+                <span className="t-icone"><IcTemplates /></span>
+                <div style={{ minWidth: 0 }}>
+                  <div className="t-nome">{t.nome}</div>
+                  <div className="t-qtd">{t.lista.length} treino{t.lista.length === 1 ? '' : 's'} · {totalEx} exercícios</div>
+                </div>
+              </div>
+
+              <div className="template-dias">
+                {t.lista.map((d, i) => (
+                  <div key={i} className="template-dia">
+                    <span className="td-letra">{LETRAS[i] || i + 1}</span>
+                    <span className="td-nome">{d.nome}</span>
+                    <span className="td-qtd">{d.exercicios.length} ex.</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="template-card-acoes">
+                <button className="btn btn-sec btn-sm" onClick={() => editar(t)}><IcEditar /> Editar</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => duplicar(t)} title="Duplicar"><IcDuplicar /></button>
+                <button className="btn btn-perigo-sutil btn-sm" onClick={() => deletar(t.id)} title="Deletar"><IcLixeira /></button>
               </div>
             </div>
-
-            {(t.exercicios || []).slice(0, 4).map((ex, i) => (
-              <div key={i} className="template-ex">
-                <strong>{ex.nome}</strong> · {ex.series}x{ex.reps}{ex.carga ? ` · ${ex.carga}kg` : ''}
-              </div>
-            ))}
-            {(t.exercicios || []).length > 4 && (
-              <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>+{(t.exercicios || []).length - 4} exercício(s)</div>
-            )}
-
-            <div className="template-card-acoes">
-              <button className="btn btn-ghost btn-sm" onClick={() => editar(t)}>Editar</button>
-              <button className="btn btn-sec btn-sm" onClick={() => deletar(t.id)}>Deletar</button>
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </>
   )
