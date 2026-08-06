@@ -3,7 +3,10 @@ import { ref, onValue, push, update } from 'firebase/database'
 import { db } from '../../firebase'
 import { fmtData, fmtMoeda, vencida } from '../../lib/util'
 import { notificar } from '../../lib/notify'
-import { LETRAS, normalizarPlano, indiceSeguro, duracaoEstimada, totalSeries } from '../../lib/treinoModel'
+import {
+  LETRAS, normalizarPlano, indiceSeguro, duracaoEstimada, totalSeries,
+  agruparBlocos, chaveSerie, resumoLinhas
+} from '../../lib/treinoModel'
 import Chat from '../../components/Chat.jsx'
 import Config from '../Config.jsx'
 import LineChart from '../../components/LineChart.jsx'
@@ -129,24 +132,23 @@ export default function AlunoHome({ user, perfil, onSair }) {
   const nomeTreinoHoje = diaAtual?.nome || plano?.nome || ''
   const ciclico = totalDias > 1
 
+  const blocosHoje = useMemo(() => agruparBlocos(exerciciosHoje), [exerciciosHoje])
   const minutos = duracaoEstimada(exerciciosHoje)
   const seriesDoDia = totalSeries(exerciciosHoje)
   const seriesFeitasHoje = exerciciosHoje.reduce((soma, e) => {
     let n = 0
-    for (let s = 1; s <= (Number(e.series) || 0); s++) if (feitas[e.nome + '_' + s]) n++
+    for (let s = 1; s <= e.linhas.length; s++) if (feitas[chaveSerie(e.nome, s)]) n++
     return soma + n
   }, 0)
-  const proximoExercicio = exerciciosHoje.find(e => {
-    for (let s = 1; s <= (Number(e.series) || 0); s++) if (!feitas[e.nome + '_' + s]) return true
-    return false
-  })
+  const proximoBloco = blocosHoje.find(b =>
+    b.exercicios.some(e => e.linhas.some((_, i) => !feitas[chaveSerie(e.nome, i + 1)]))
+  )
   const treinoDoDiaCompleto = seriesDoDia > 0 && seriesFeitasHoje >= seriesDoDia
 
   /** Registra uma série. Devolve mensagem de erro ou null. */
-  async function marcarSerie(ex, serie, pesoDigitado) {
-    const chave = ex.nome + '_' + serie
-    if (feitas[chave]) return null
-    const cargaAlvo = Number(ex.carga) || 0
+  async function marcarSerie(ex, serie, pesoDigitado, cargaLinha) {
+    if (feitas[chaveSerie(ex.nome, serie)]) return null
+    const cargaAlvo = Number(cargaLinha) || 0
     const peso = pesoDigitado !== undefined && pesoDigitado !== '' ? Number(pesoDigitado) : cargaAlvo
     if (cargaAlvo > 0 && peso < cargaAlvo) {
       return `A carga não pode ser menor que ${cargaAlvo} kg. Para reduzir, fale com o seu personal.`
@@ -275,10 +277,10 @@ export default function AlunoHome({ user, perfil, onSair }) {
                       )}
                     </div>
 
-                    {proximoExercicio && (
+                    {proximoBloco && (
                       <p className="hero-proximo">
-                        Próximo: <strong>{proximoExercicio.nome}</strong> · {proximoExercicio.series}×{proximoExercicio.reps}
-                        {proximoExercicio.carga ? ` · ${proximoExercicio.carga} kg` : ''}
+                        Próximo: <strong>{proximoBloco.titulo}</strong>
+                        {proximoBloco.combinado ? ' · bi-set' : ` · ${resumoLinhas(proximoBloco.exercicios[0].linhas)}`}
                       </p>
                     )}
 
@@ -336,20 +338,27 @@ export default function AlunoHome({ user, perfil, onSair }) {
                   )}
 
                   <div className="section-title">Exercícios de hoje</div>
-                  {exerciciosHoje.map((ex, i) => {
-                    let n = 0
-                    const total = Number(ex.series) || 0
-                    for (let s = 1; s <= total; s++) if (feitas[ex.nome + '_' + s]) n++
-                    return (
-                      <div key={i} className={'exercicio-linha ' + (n >= total && total > 0 ? 'completo' : '')}>
-                        <span className="el-num">{n >= total && total > 0 ? <IcCheck /> : i + 1}</span>
-                        <span className="el-nome">{ex.nome}</span>
-                        <span className="el-meta">
-                          {n}/{total} · {ex.reps} reps{ex.carga ? ` · ${ex.carga} kg` : ''}
-                        </span>
-                      </div>
-                    )
-                  })}
+                  {blocosHoje.map((b, i) => (
+                    <div key={i} className={'bloco-preview ' + (b.combinado ? 'combinado' : '')}>
+                      {b.combinado && <span className="badge primaria bloco-tag">Bi-set</span>}
+                      {b.exercicios.map((ex, k) => {
+                        const total = ex.linhas.length
+                        let n = 0
+                        for (let s = 1; s <= total; s++) if (feitas[chaveSerie(ex.nome, s)]) n++
+                        const completo = total > 0 && n >= total
+                        return (
+                          <div key={k} className={'exercicio-linha ' + (completo ? 'completo' : '')}>
+                            <span className="el-num">{completo ? <IcCheck /> : i + 1}</span>
+                            <div className="el-nome">
+                              {ex.nome}
+                              {ex.obs && <div className="el-obs">{ex.obs}</div>}
+                            </div>
+                            <span className="el-meta">{n}/{total} · {resumoLinhas(ex.linhas)}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ))}
 
                   <p className="mini" style={{ marginTop: 12 }}>
                     Plano {plano.nome} · atualizado em {plano.atualizadoEm ? fmtData(plano.atualizadoEm) : '—'}

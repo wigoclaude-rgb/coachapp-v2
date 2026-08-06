@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ref, get, set, push, remove } from 'firebase/database'
 import { db } from '../../firebase'
-import { BIBLIOTECA_EXERCICIOS } from '../../lib/exercicios'
 import { TEMPLATES } from '../../lib/templates'
 import { notificar } from '../../lib/notify'
 import {
-  LETRAS, MAX_DIAS, exercicioVazio, diaVazio,
+  LETRAS, MAX_DIAS, diaVazio,
   normalizarPlano, normalizarTemplate, normalizarExercicios
 } from '../../lib/treinoModel'
+import EditorExercicios from '../../components/EditorExercicios.jsx'
 import { IcVoltar, IcMais, IcLixeira, IcCheck } from '../../components/Icones.jsx'
 
 export default function CriarTreino({ user }) {
@@ -45,17 +45,8 @@ export default function CriarTreino({ user }) {
 
   const dia = dias[diaAtivo] || dias[0]
 
-  function atualizarExercicios(fn) {
-    setDias(ds => ds.map((d, i) => (i === diaAtivo ? { ...d, exercicios: fn(d.exercicios) } : d)))
-  }
-  function mudar(i, campo, valor) {
-    atualizarExercicios(exs => exs.map((ex, idx) => (idx === i ? { ...ex, [campo]: valor } : ex)))
-  }
-  function addExercicio() {
-    atualizarExercicios(exs => [...exs, exercicioVazio()])
-  }
-  function removerExercicio(i) {
-    atualizarExercicios(exs => exs.filter((_, idx) => idx !== i))
+  function setExercicios(novos) {
+    setDias(ds => ds.map((d, i) => (i === diaAtivo ? { ...d, exercicios: novos } : d)))
   }
   function mudarNomeDia(valor) {
     setDias(ds => ds.map((d, i) => (i === diaAtivo ? { ...d, nome: valor } : d)))
@@ -228,50 +219,12 @@ export default function CriarTreino({ user }) {
         <input value={dia.nome} onChange={e => mudarNomeDia(e.target.value)} placeholder="Ex: Treino A — Peito e Tríceps" />
 
         <label>Exercícios</label>
+        <p className="mini" style={{ marginBottom: 10 }}>
+          Cada linha é uma série — use várias linhas para progressão de carga (12 / 10 / 8).
+          Marque dois exercícios e clique em Combinar para montar um bi-set.
+        </p>
 
-        <datalist id="lista-exercicios">
-          {BIBLIOTECA_EXERCICIOS.map(ex => <option key={ex} value={ex} />)}
-        </datalist>
-
-        {dia.exercicios.map((ex, i) => (
-          <div className="exercicio-editor" key={i}>
-            <div className="exercicio-editor-topo">
-              <strong>Exercício {i + 1}</strong>
-              {dia.exercicios.length > 1 && (
-                <button type="button" className="remove-btn" onClick={() => removerExercicio(i)}>Remover</button>
-              )}
-            </div>
-            <div className="linha-2">
-              <div>
-                <label>Nome do exercício</label>
-                <input list="lista-exercicios" value={ex.nome} onChange={e => mudar(i, 'nome', e.target.value)} placeholder="Digite ou escolha" />
-              </div>
-              <div>
-                <label>Vídeo do YouTube</label>
-                <input value={ex.video || ''} onChange={e => mudar(i, 'video', e.target.value)} placeholder="https://youtube.com/..." />
-              </div>
-            </div>
-            <div className="linha-4">
-              <div>
-                <label>Séries</label>
-                <input type="number" min="1" value={ex.series} onChange={e => mudar(i, 'series', Number(e.target.value))} />
-              </div>
-              <div>
-                <label>Repetições</label>
-                <input type="number" min="1" value={ex.reps} onChange={e => mudar(i, 'reps', Number(e.target.value))} />
-              </div>
-              <div>
-                <label>Carga (kg)</label>
-                <input value={ex.carga} onChange={e => mudar(i, 'carga', e.target.value)} placeholder="kg" />
-              </div>
-              <div>
-                <label>Descanso (s)</label>
-                <input type="number" min="0" value={ex.descanso} onChange={e => mudar(i, 'descanso', Number(e.target.value))} />
-              </div>
-            </div>
-          </div>
-        ))}
-        <button type="button" className="btn btn-sec btn-sm" onClick={addExercicio}><IcMais /> Adicionar exercício</button>
+        <EditorExercicios exercicios={dia.exercicios} onChange={setExercicios} />
 
         {salvo && <div className="ok"><IcCheck /> Treino salvo. O aluno foi notificado e o plano anterior ficou no histórico.</div>}
         <button className="btn" disabled={enviando} onClick={salvar}>{enviando ? 'Salvando...' : 'Salvar plano de treino'}</button>

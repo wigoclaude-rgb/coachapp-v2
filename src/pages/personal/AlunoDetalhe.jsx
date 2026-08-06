@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ref, onValue, push, remove } from 'firebase/database'
 import { db } from '../../firebase'
 import { fmtData } from '../../lib/util'
+import { normalizarPlano, resumoLinhas, LETRAS } from '../../lib/treinoModel'
 import LineChart from '../../components/LineChart.jsx'
 import Heatmap from '../../components/Heatmap.jsx'
 import FotoInput from '../../components/FotoInput.jsx'
@@ -264,22 +265,33 @@ export default function AlunoDetalhe({ user }) {
         <div className="card">
           <h2>Treinos anteriores</h2>
           {listaHist.length === 0 && <p className="muted">Nenhum treino arquivado. Quando você salvar um novo treino, o anterior fica guardado aqui.</p>}
-          {listaHist.map(t => (
-            <div key={t.id} className="exercicio-card">
-              <div className="titulo">
-                <span>{t.nome}</span>
-                <span className="muted">arquivado em {t.arquivadoEm ? fmtData(t.arquivadoEm) : '-'}</span>
-              </div>
-              {(t.exercicios || []).map((ex, i) => (
-                <div key={i} className="serie-row">
-                  <span style={{ fontWeight: 600 }}>{ex.nome}</span>
-                  <span>{ex.series}x{ex.reps}</span>
-                  <span>{ex.carga ? ex.carga + ' kg' : ''}</span>
-                  <span className="muted">descanso {ex.descanso}s</span>
+          {listaHist.map(t => {
+            const antigo = normalizarPlano(t)
+            if (!antigo) return null
+            return (
+              <div key={t.id} className="exercicio-card">
+                <div className="titulo">
+                  <span>{antigo.nome}</span>
+                  <span className="mini">arquivado em {t.arquivadoEm ? fmtData(t.arquivadoEm) : '-'}</span>
                 </div>
-              ))}
-            </div>
-          ))}
+                {antigo.lista.map((d, i) => (
+                  <div key={i} style={{ marginTop: 10 }}>
+                    <div className="template-dia">
+                      <span className="td-letra">{LETRAS[i] || i + 1}</span>
+                      <span className="td-nome">{d.nome}</span>
+                      <span className="td-qtd">{d.exercicios.length} ex.</span>
+                    </div>
+                    {d.exercicios.map((ex, k) => (
+                      <div key={k} className="serie-row">
+                        <span style={{ fontWeight: 600, flex: 1 }}>{ex.nome}</span>
+                        <span className="mini">{resumoLinhas(ex.linhas)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>

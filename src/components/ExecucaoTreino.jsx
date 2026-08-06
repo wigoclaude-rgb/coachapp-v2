@@ -1,54 +1,59 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { youtubeId, beep } from '../lib/util'
+import { agruparBlocos, chaveSerie } from '../lib/treinoModel'
 import { IcCheck, IcVoltar, IcVideo, IcTrofeu, IcRelogio } from './Icones.jsx'
 
 const RAIO = 88
 const CIRC = 2 * Math.PI * RAIO
 
-function mmss(s) {
-  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0')
-}
+const mmss = s => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0')
+
+/** Linha de série de um exercício para uma dada série (1-based). */
+const linhaDe = (ex, serie) => ex.linhas[serie - 1] || null
 
 /**
- * Modo foco: um exercício por vez, uma série por vez.
- * Avança sozinho ao concluir cada série e ao terminar cada exercício.
+ * Modo foco: um bloco por vez (exercício simples ou bi-set).
+ * Avança sozinho ao concluir cada série e ao terminar cada bloco.
  */
 export default function ExecucaoTreino({ exercicios, feitas, nomeTreino, cargaAnterior, onMarcar, onFinalizar, onFechar }) {
-  const [idxEx, setIdxEx] = useState(0)
-  const [peso, setPeso] = useState('')
+  const blocos = useMemo(() => agruparBlocos(exercicios), [exercicios])
+
+  const [idxBloco, setIdxBloco] = useState(0)
+  const [pesos, setPesos] = useState({})
   const [erro, setErro] = useState('')
-  const [descanso, setDescanso] = useState(null) // { restante, total }
-  const [videoAberto, setVideoAberto] = useState(false)
+  const [descanso, setDescanso] = useState(null)
+  const [videoAberto, setVideoAberto] = useState(null)
   const [salvando, setSalvando] = useState(false)
   const timerRef = useRef(null)
 
-  const ex = exercicios[idxEx]
-  const totalSeries = Number(ex?.series) || 0
+  const bloco = blocos[idxBloco]
 
-  // primeira série ainda não concluída deste exercício
+  /** Primeira série ainda não concluída do bloco (todos os exercícios contam). */
   const serieAtual = useMemo(() => {
-    if (!ex) return 1
-    for (let s = 1; s <= totalSeries; s++) {
-      if (!feitas[ex.nome + '_' + s]) return s
+    if (!bloco) return 1
+    for (let s = 1; s <= bloco.series; s++) {
+      const pendente = bloco.exercicios.some(ex => linhaDe(ex, s) && !feitas[chaveSerie(ex.nome, s)])
+      if (pendente) return s
     }
-    return totalSeries + 1
-  }, [ex, totalSeries, feitas])
+    return bloco.series + 1
+  }, [bloco, feitas])
 
-  const exercicioCompleto = serieAtual > totalSeries
+  const blocoCompleto = bloco ? serieAtual > bloco.series : false
 
-  const feitasTotal = exercicios.reduce((soma, e) => {
-    let n = 0
-    for (let s = 1; s <= (Number(e.series) || 0); s++) if (feitas[e.nome + '_' + s]) n++
-    return soma + n
-  }, 0)
-  const seriesTotal = exercicios.reduce((s, e) => s + (Number(e.series) || 0), 0)
+  const { feitasTotal, seriesTotal } = useMemo(() => {
+    let f = 0, t = 0
+    exercicios.forEach(ex => {
+      t += ex.linhas.length
+      for (let s = 1; s <= ex.linhas.length; s++) if (feitas[chaveSerie(ex.nome, s)]) f++
+    })
+    return { feitasTotal: f, seriesTotal: t }
+  }, [exercicios, feitas])
+
   const progresso = seriesTotal ? Math.round((feitasTotal / seriesTotal) * 100) : 0
-  const treinoCompleto = feitasTotal >= seriesTotal && seriesTotal > 0
+  const treinoCompleto = seriesTotal > 0 && feitasTotal >= seriesTotal
 
-  // reset ao trocar de exercício
-  useEffect(() => { setPeso(''); setErro(''); setVideoAberto(false) }, [idxEx])
+  useEffect(() => { setPesos({}); setErro(''); setVideoAberto(null) }, [idxBloco])
 
-  // cronômetro de descanso
   useEffect(() => {
     if (!descanso) return
     timerRef.current = setInterval(() => {
@@ -67,32 +72,35 @@ export default function ExecucaoTreino({ exercicios, feitas, nomeTreino, cargaAn
   }
 
   async function concluirSerie() {
-    if (!ex || exercicioCompleto || salvando) return
+    if (!bloco || blocoCompleto || salvando) return
     setSalvando(true)
-    const msg = await onMarcar(ex, serieAtual, peso)
+
+    const alvos = bloco.exercicios
+      .map(ex => ({ ex, linha: linhaDe(ex, serieAtual) }))
+      .filter(a => a.linha && !feitas[chaveSerie(a.ex.nome, serieAtual)])
+
+    for (const { ex, linha } of alvos) {
+      const msg = await onMarcar(ex, serieAtual, pesos[ex.nome] ?? '', linha.carga)
+      if (msg) { setErro(msg); setSalvando(false); return }
+    }
     setSalvando(false)
-    if (msg) { setErro(msg); return }
-
     setErro('')
-    setPeso('')
+    setPesos({})
 
-    const eraUltima = serieAtual >= totalSeries
-    const temProximo = idxEx < exercicios.length - 1
+    const eraUltima = serieAtual >= bloco.series
+    const temProximo = idxBloco < blocos.length - 1
 
-    if (eraUltima && temProximo) {
-      setIdxEx(i => i + 1)
+    if (eraUltima) {
+      if (temProximo) setIdxBloco(i => i + 1)
       return
     }
-    if (!eraUltima && Number(ex.descanso) > 0) {
-      setDescanso({ restante: Number(ex.descanso), total: Number(ex.descanso) })
-    }
+
+    const espera = Math.max(...alvos.map(a => Number(a.linha.descanso) || 0), 0)
+    if (espera > 0) setDescanso({ restante: espera, total: espera })
   }
 
-  if (!ex) return null
+  if (!bloco) return null
 
-  const vid = youtubeId(ex.video)
-  const anterior = cargaAnterior ? cargaAnterior(ex.nome) : null
-  const alvo = ex.carga ? Number(ex.carga) : null
   const offset = descanso ? CIRC * (1 - descanso.restante / Math.max(1, descanso.total)) : 0
 
   return (
@@ -102,10 +110,7 @@ export default function ExecucaoTreino({ exercicios, feitas, nomeTreino, cargaAn
           <div className="descanso-anel">
             <svg viewBox="0 0 200 200">
               <circle className="trilha" cx="100" cy="100" r={RAIO} />
-              <circle
-                className="arco" cx="100" cy="100" r={RAIO}
-                strokeDasharray={CIRC} strokeDashoffset={offset}
-              />
+              <circle className="arco" cx="100" cy="100" r={RAIO} strokeDasharray={CIRC} strokeDashoffset={offset} />
             </svg>
             <div className="centro">
               <span className="tempo">{mmss(descanso.restante)}</span>
@@ -113,18 +118,18 @@ export default function ExecucaoTreino({ exercicios, feitas, nomeTreino, cargaAn
             </div>
           </div>
           <div className="descanso-info">
-            <strong>Próxima: série {serieAtual} de {totalSeries}</strong>
-            {ex.nome}
+            <strong>Próxima: série {serieAtual} de {bloco.series}</strong>
+            {bloco.titulo}
           </div>
           <button className="btn btn-sec btn-auto" onClick={pularDescanso}>Pular descanso</button>
         </div>
       )}
 
       <div className="exec-topo">
-        <button className="btn btn-ghost btn-sm" onClick={onFechar}><IcVoltar /></button>
+        <button className="btn btn-ghost btn-sm" onClick={onFechar} title="Voltar"><IcVoltar /></button>
         <div className="exec-info">
           <div className="exec-nome">{nomeTreino}</div>
-          <div className="exec-passo">Exercício {idxEx + 1} de {exercicios.length} · {feitasTotal}/{seriesTotal} séries</div>
+          <div className="exec-passo">Bloco {idxBloco + 1} de {blocos.length} · {feitasTotal}/{seriesTotal} séries</div>
         </div>
       </div>
 
@@ -140,68 +145,94 @@ export default function ExecucaoTreino({ exercicios, feitas, nomeTreino, cargaAn
           <button className="btn btn-lg" onClick={onFinalizar}><IcCheck /> Finalizar e liberar o próximo</button>
         </div>
       ) : (
-        <div className="exec-card" key={idxEx}>
-          <h2>{ex.nome}</h2>
-          <div className="exec-tags">
-            <span className="badge">{totalSeries} séries</span>
-            <span className="badge">{ex.reps} repetições</span>
-            {Number(ex.descanso) > 0 && <span className="badge"><IcRelogio /> {ex.descanso}s</span>}
+        <div className="exec-card" key={idxBloco}>
+          {bloco.combinado && <span className="badge primaria" style={{ marginBottom: 8 }}>Bi-set · alterne sem descanso</span>}
+
+          <div className="exec-serie-atual">
+            Série {serieAtual} de {bloco.series}
           </div>
 
-          {vid && (
-            <div style={{ marginTop: 14 }}>
-              {videoAberto ? (
-                <div className="video-wrap">
-                  <iframe
-                    src={'https://www.youtube.com/embed/' + vid}
-                    title={ex.nome}
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
+          {bloco.exercicios.map((ex, k) => {
+            const linha = linhaDe(ex, serieAtual)
+            const vid = youtubeId(ex.video)
+            const anterior = cargaAnterior ? cargaAnterior(ex.nome) : null
+            const jaFeita = feitas[chaveSerie(ex.nome, serieAtual)]
+
+            return (
+              <div className={'exec-exercicio ' + (linha ? '' : 'inativo')} key={k}>
+                <div className="exec-ex-topo">
+                  <h2>{ex.nome}</h2>
+                  {bloco.combinado && <span className="exec-ex-ordem">{k + 1}º</span>}
                 </div>
-              ) : (
-                <button className="btn btn-sec btn-sm" onClick={() => setVideoAberto(true)}><IcVideo /> Ver execução</button>
-              )}
-            </div>
-          )}
 
-          <div className="exec-numeros">
-            <div className="exec-numero">
-              <div className="en-label">Anterior</div>
-              <div className="en-valor">{anterior ? anterior + ' kg' : '—'}</div>
-            </div>
-            <div className="exec-numero destaque">
-              <div className="en-label">Alvo</div>
-              <div className="en-valor">{alvo ? alvo + ' kg' : 'Livre'}</div>
-            </div>
-            <div className="exec-numero">
-              <div className="en-label">Série</div>
-              <div className="en-valor">{serieAtual}/{totalSeries}</div>
-            </div>
-          </div>
+                {!linha ? (
+                  <p className="mini">Sem série {serieAtual} neste exercício.</p>
+                ) : (
+                  <>
+                    <div className="exec-numeros">
+                      <div className="exec-numero">
+                        <div className="en-label">Anterior</div>
+                        <div className="en-valor">{anterior ? anterior + ' kg' : '—'}</div>
+                      </div>
+                      <div className="exec-numero destaque">
+                        <div className="en-label">Reps</div>
+                        <div className="en-valor">{linha.reps || '—'}</div>
+                      </div>
+                      <div className="exec-numero">
+                        <div className="en-label">Alvo</div>
+                        <div className="en-valor">{linha.carga ? linha.carga + ' kg' : 'Livre'}</div>
+                      </div>
+                    </div>
 
-          <div className="series-pontos">
-            {Array.from({ length: totalSeries }, (_, i) => {
-              const s = i + 1
-              const done = feitas[ex.nome + '_' + s]
-              return (
-                <div key={s} className={'serie-ponto ' + (done ? 'feita' : s === serieAtual ? 'atual' : '')}>
-                  {done ? <IcCheck /> : s}
-                </div>
-              )
-            })}
-          </div>
+                    {ex.obs && <div className="exec-obs">{ex.obs}</div>}
 
-          <div className="exec-entrada">
-            <div>
-              <label>Carga usada (kg)</label>
-              <input
-                type="number" inputMode="decimal" value={peso}
-                onChange={e => setPeso(e.target.value)}
-                placeholder={alvo ? String(alvo) : 'kg'}
-              />
-            </div>
-          </div>
+                    <div className="series-pontos">
+                      {ex.linhas.map((l, i) => {
+                        const s = i + 1
+                        const done = feitas[chaveSerie(ex.nome, s)]
+                        return (
+                          <div key={s} className={'serie-ponto ' + (done ? 'feita' : s === serieAtual ? 'atual' : '')} title={`${l.reps} reps${l.carga ? ` · ${l.carga} kg` : ''}`}>
+                            {done ? <IcCheck /> : l.reps || s}
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {!jaFeita && (
+                      <div className="exec-entrada">
+                        <div>
+                          <label>Carga usada (kg)</label>
+                          <input
+                            type="number" inputMode="decimal"
+                            value={pesos[ex.nome] ?? ''}
+                            onChange={e => setPesos(p => ({ ...p, [ex.nome]: e.target.value }))}
+                            placeholder={linha.carga || 'kg'}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {vid && (
+                      <div style={{ marginTop: 10 }}>
+                        {videoAberto === k ? (
+                          <div className="video-wrap">
+                            <iframe
+                              src={'https://www.youtube.com/embed/' + vid}
+                              title={ex.nome}
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                            />
+                          </div>
+                        ) : (
+                          <button className="btn btn-ghost btn-sm" onClick={() => setVideoAberto(k)}><IcVideo /> Ver execução</button>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )
+          })}
 
           {erro && <div className="erro">{erro}</div>}
 
@@ -210,9 +241,9 @@ export default function ExecucaoTreino({ exercicios, feitas, nomeTreino, cargaAn
           </button>
 
           <div className="exec-rodape">
-            <button className="btn btn-sec btn-sm" onClick={() => setIdxEx(i => Math.max(0, i - 1))} disabled={idxEx === 0}>Anterior</button>
+            <button className="btn btn-sec btn-sm" onClick={() => setIdxBloco(i => Math.max(0, i - 1))} disabled={idxBloco === 0}>Anterior</button>
             <span className="espaco" />
-            <button className="btn btn-sec btn-sm" onClick={() => setIdxEx(i => Math.min(exercicios.length - 1, i + 1))} disabled={idxEx >= exercicios.length - 1}>Pular exercício</button>
+            <button className="btn btn-sec btn-sm" onClick={() => setIdxBloco(i => Math.min(blocos.length - 1, i + 1))} disabled={idxBloco >= blocos.length - 1}>Pular</button>
           </div>
         </div>
       )}

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ref, onValue, push, update, remove } from 'firebase/database'
 import { db } from '../../firebase'
-import { BIBLIOTECA_EXERCICIOS } from '../../lib/exercicios'
-import { normalizarTemplate, LETRAS, MAX_DIAS, exercicioVazio, diaVazio } from '../../lib/treinoModel'
+import { normalizarTemplate, LETRAS, MAX_DIAS, exercicioVazio, diaVazio, resumoLinhas } from '../../lib/treinoModel'
+import EditorExercicios from '../../components/EditorExercicios.jsx'
 import { IcTemplates, IcBusca, IcMais, IcEditar, IcLixeira, IcDuplicar } from '../../components/Icones.jsx'
 
 export default function MeusTemplates({ user }) {
@@ -35,15 +35,6 @@ export default function MeusTemplates({ user }) {
 
   function atualizarDia(fn) {
     setDias(ds => ds.map((d, i) => (i === diaAtivo ? fn(d) : d)))
-  }
-  function mudarExercicio(idx, campo, valor) {
-    atualizarDia(d => ({ ...d, exercicios: d.exercicios.map((ex, i) => (i === idx ? { ...ex, [campo]: valor } : ex)) }))
-  }
-  function adicionarExercicio() {
-    atualizarDia(d => ({ ...d, exercicios: [...d.exercicios, exercicioVazio()] }))
-  }
-  function removerExercicio(idx) {
-    atualizarDia(d => ({ ...d, exercicios: d.exercicios.filter((_, i) => i !== idx) }))
   }
 
   function addDia() {
@@ -154,50 +145,15 @@ export default function MeusTemplates({ user }) {
             <label>Nome deste treino</label>
             <input value={dia.nome} onChange={e => atualizarDia(d => ({ ...d, nome: e.target.value }))} placeholder="Ex: Treino A — Peito e Tríceps" />
 
-            <datalist id="exercicios-list">
-              {BIBLIOTECA_EXERCICIOS.map(ex => <option key={ex} value={ex} />)}
-            </datalist>
-
             <label>Exercícios</label>
-            {dia.exercicios.map((ex, i) => (
-              <div key={i} className="exercicio-editor">
-                <div className="exercicio-editor-topo">
-                  <strong>Exercício {i + 1}</strong>
-                  {dia.exercicios.length > 1 && (
-                    <button type="button" className="remove-btn" onClick={() => removerExercicio(i)}>Remover</button>
-                  )}
-                </div>
-                <div className="linha-2">
-                  <div>
-                    <label>Nome</label>
-                    <input list="exercicios-list" value={ex.nome} onChange={e => mudarExercicio(i, 'nome', e.target.value)} placeholder="Digite ou escolha" />
-                  </div>
-                  <div>
-                    <label>Vídeo do YouTube</label>
-                    <input value={ex.video || ''} onChange={e => mudarExercicio(i, 'video', e.target.value)} placeholder="https://youtube.com/..." />
-                  </div>
-                </div>
-                <div className="linha-4">
-                  <div>
-                    <label>Séries</label>
-                    <input type="number" min="1" value={ex.series} onChange={e => mudarExercicio(i, 'series', Number(e.target.value))} />
-                  </div>
-                  <div>
-                    <label>Repetições</label>
-                    <input type="number" min="1" value={ex.reps} onChange={e => mudarExercicio(i, 'reps', Number(e.target.value))} />
-                  </div>
-                  <div>
-                    <label>Carga (kg)</label>
-                    <input value={ex.carga} onChange={e => mudarExercicio(i, 'carga', e.target.value)} placeholder="kg" />
-                  </div>
-                  <div>
-                    <label>Descanso (s)</label>
-                    <input type="number" min="0" value={ex.descanso} onChange={e => mudarExercicio(i, 'descanso', Number(e.target.value))} />
-                  </div>
-                </div>
-              </div>
-            ))}
-            <button type="button" className="btn btn-sec btn-sm" onClick={adicionarExercicio}><IcMais /> Adicionar exercício</button>
+            <p className="mini" style={{ marginBottom: 10 }}>
+              Cada linha é uma série — use várias para progressão de carga. Marque dois e clique em Combinar para bi-set.
+            </p>
+
+            <EditorExercicios
+              exercicios={dia.exercicios}
+              onChange={novos => atualizarDia(d => ({ ...d, exercicios: novos }))}
+            />
 
             <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
               <button type="submit" className="btn">{editando ? 'Salvar alterações' : 'Criar template'}</button>
@@ -224,13 +180,17 @@ export default function MeusTemplates({ user }) {
       <div className="templates-grid">
         {visiveis.map(t => {
           const totalEx = t.lista.reduce((s, d) => s + d.exercicios.length, 0)
+          const temBiset = t.lista.some(d => d.exercicios.some(ex => ex.grupo))
           return (
             <div key={t.id} className="template-card">
               <div className="template-card-topo">
                 <span className="t-icone"><IcTemplates /></span>
                 <div style={{ minWidth: 0 }}>
                   <div className="t-nome">{t.nome}</div>
-                  <div className="t-qtd">{t.lista.length} treino{t.lista.length === 1 ? '' : 's'} · {totalEx} exercícios</div>
+                  <div className="t-qtd">
+                    {t.lista.length} treino{t.lista.length === 1 ? '' : 's'} · {totalEx} exercícios
+                    {temBiset ? ' · bi-set' : ''}
+                  </div>
                 </div>
               </div>
 
