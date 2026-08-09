@@ -38,10 +38,14 @@
     "diario": {
       "$alunoUid": {
         ".read": "auth != null && auth.uid === $alunoUid",
-        ".write": "auth != null && auth.uid === $alunoUid",
-        "$registroId": {
-          ".read": "auth != null && (auth.uid === $alunoUid || (data.child('compartilhado').val() === true && root.child('users/'+$alunoUid+'/personalId').val() === auth.uid))"
-        }
+        ".write": "auth != null && auth.uid === $alunoUid"
+      }
+    },
+
+    "diarioCompartilhado": {
+      "$alunoUid": {
+        ".read": "auth != null && (auth.uid === $alunoUid || root.child('users/'+$alunoUid+'/personalId').val() === auth.uid)",
+        ".write": "auth != null && auth.uid === $alunoUid"
       }
     },
 

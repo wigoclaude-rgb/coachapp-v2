@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ref, onValue, push, update, remove } from 'firebase/database'
+import { ref, onValue, push, set, update, remove } from 'firebase/database'
 import { db } from '../../firebase'
 import { fmtData } from '../../lib/util'
 import { apagarFoto } from '../../lib/fotos'
@@ -68,6 +68,21 @@ export default function Diario({ user, perfil }) {
     setCompartilhar(false); setMaisMedidas(false); setErro('')
   }
 
+  /*
+    O que é compartilhado vai para `diarioCompartilhado/{uid}`, um espelho que o
+    personal consegue ler. `diario/{uid}` continua fechado só para o aluno.
+
+    Separar em dois nós é o que faz a privacidade valer: as regras do Firebase
+    não filtram uma lista, elas liberam ou negam o caminho inteiro. Sem o espelho,
+    ou o personal lê tudo, ou não lê nada.
+  */
+  const caminhoEspelho = id => 'diarioCompartilhado/' + user.uid + '/' + id
+
+  const paraEspelho = r => ({
+    ts: r.ts, foto: r.foto || '', nota: r.nota || '', medidas: r.medidas || {},
+    alunoNome: perfil?.nome || '', personalId: perfil?.personalId || ''
+  })
+
   async function salvar(e) {
     e.preventDefault()
     const numeros = medidasPreenchidas(medidas)
@@ -80,15 +95,15 @@ export default function Diario({ user, perfil }) {
 
     setSalvando(true)
     try {
-      await push(ref(db, 'diario/' + user.uid), {
+      const registro = {
         ts: Date.now(),
         foto: foto || '',
         nota: texto,
         medidas: numeros,
-        compartilhado: compartilhar,
-        alunoNome: perfil?.nome || '',
-        personalId: perfil?.personalId || ''
-      })
+        compartilhado: compartilhar
+      }
+      const criado = await push(ref(db, 'diario/' + user.uid), registro)
+      if (compartilhar) await set(ref(db, caminhoEspelho(criado.key)), paraEspelho(registro))
       limpar()
       setAberto(false)
     } catch (err) {
@@ -99,12 +114,16 @@ export default function Diario({ user, perfil }) {
   }
 
   async function alternarCompartilhar(r) {
-    await update(ref(db, 'diario/' + user.uid + '/' + r.id), { compartilhado: !r.compartilhado })
+    const agora = !r.compartilhado
+    await update(ref(db, 'diario/' + user.uid + '/' + r.id), { compartilhado: agora })
+    if (agora) await set(ref(db, caminhoEspelho(r.id)), paraEspelho(r))
+    else await remove(ref(db, caminhoEspelho(r.id)))
   }
 
   async function apagar(r) {
     if (!confirm('Apagar este registro? Não dá para desfazer.')) return
     await remove(ref(db, 'diario/' + user.uid + '/' + r.id))
+    await remove(ref(db, caminhoEspelho(r.id)))
     await apagarFoto(r.foto)
   }
 

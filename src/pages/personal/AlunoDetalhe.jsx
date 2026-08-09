@@ -33,7 +33,8 @@ export default function AlunoDetalhe({ user }) {
     const u3 = onValue(ref(db, 'avaliacoes/' + alunoId), s => setAvaliacoes(s.val() || {}))
     const u4 = onValue(ref(db, 'fotosProgresso/' + alunoId), s => setFotos(s.val() || {}))
     const u5 = onValue(ref(db, 'treinosHistorico/' + alunoId), s => setHistorico(s.val() || {}))
-    const u6 = onValue(ref(db, 'diario/' + alunoId), s => setDiario(s.val() || {}))
+    // Só o espelho do que o aluno compartilhou — `diario/` é privado dele.
+    const u6 = onValue(ref(db, 'diarioCompartilhado/' + alunoId), s => setDiario(s.val() || {}))
     return () => { u1(); u2(); u3(); u4(); u5(); u6() }
   }, [alunoId])
 
@@ -43,10 +44,8 @@ export default function AlunoDetalhe({ user }) {
   const listaAval = Object.entries(avaliacoes).map(([id, a]) => ({ id, ...a })).sort((a, b) => a.ts - b.ts)
   const listaFotos = Object.entries(fotos).map(([id, f]) => ({ id, ...f })).sort((a, b) => b.ts - a.ts)
   const listaHist = Object.entries(historico).map(([id, t]) => ({ id, ...t })).sort((a, b) => (b.arquivadoEm || 0) - (a.arquivadoEm || 0))
-  // Só o que o aluno marcou como compartilhado. O resto é privado dele.
   const listaDiario = Object.entries(diario)
     .map(([id, r]) => ({ id, ...r }))
-    .filter(r => r.compartilhado)
     .sort((a, b) => (b.ts || 0) - (a.ts || 0))
 
   // Evolução de carga por exercício
