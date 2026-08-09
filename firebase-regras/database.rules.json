@@ -99,6 +99,13 @@
       }
     },
 
+    "presenca": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
     "chats": {
       "$conversaId": {
         ".read": "auth != null && $conversaId.contains(auth.uid)",
