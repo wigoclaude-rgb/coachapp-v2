@@ -7,6 +7,7 @@ import { normalizarPlano, resumoLinhas, LETRAS } from '../../lib/treinoModel'
 import LineChart from '../../components/LineChart.jsx'
 import Heatmap from '../../components/Heatmap.jsx'
 import FotoInput from '../../components/FotoInput.jsx'
+import { apagarFoto as apagarDoStorage } from '../../lib/fotos'
 
 const CAMPOS_MEDIDAS = [
   ['peso', 'Peso (kg)'], ['altura', 'Altura (cm)'], ['pescoco', 'Pescoço (cm)'],
@@ -86,8 +87,10 @@ export default function AlunoDetalhe({ user }) {
     await push(ref(db, 'fotosProgresso/' + alunoId), { ts: Date.now(), tipo: tipoFoto, img })
   }
 
-  async function apagarFoto(id) {
-    if (confirm('Apagar esta foto?')) await remove(ref(db, 'fotosProgresso/' + alunoId + '/' + id))
+  async function apagarFoto(id, img) {
+    if (!confirm('Apagar esta foto?')) return
+    await remove(ref(db, 'fotosProgresso/' + alunoId + '/' + id))
+    await apagarDoStorage(img)
   }
 
   const ganhoKg = (() => {
@@ -216,7 +219,7 @@ export default function AlunoDetalhe({ user }) {
             <option value="costas">Costas</option>
           </select>
           <div style={{ marginTop: 12 }}>
-            <FotoInput atual={null} onFoto={salvarFoto} rotulo="Adicionar foto" />
+            <FotoInput atual={null} onFoto={salvarFoto} rotulo="Adicionar foto" pasta={'progresso/' + alunoId} />
           </div>
           <div className="galeria">
             {listaFotos.map(f => (
@@ -224,7 +227,7 @@ export default function AlunoDetalhe({ user }) {
                 <img src={f.img} alt={f.tipo} />
                 <div className="galeria-info">
                   <span>{f.tipo} · {fmtData(f.ts)}</span>
-                  <button onClick={() => apagarFoto(f.id)}>Apagar</button>
+                  <button onClick={() => apagarFoto(f.id, f.img)}>Apagar</button>
                 </div>
               </div>
             ))}

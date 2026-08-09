@@ -3,6 +3,7 @@ import { updatePassword, updateEmail } from 'firebase/auth'
 import { ref, update } from 'firebase/database'
 import { auth, db } from '../firebase'
 import FotoInput from '../components/FotoInput.jsx'
+import { apagarFoto } from '../lib/fotos'
 
 export default function Config({ user, perfil }) {
   const [nome, setNome] = useState(perfil.nome || '')
@@ -26,6 +27,7 @@ export default function Config({ user, perfil }) {
   }
 
   async function salvarFoto(img) {
+    await apagarFoto(perfil.foto)
     await update(ref(db, 'users/' + user.uid), { foto: img })
   }
 
@@ -58,7 +60,14 @@ export default function Config({ user, perfil }) {
     <>
       <div className="card">
         <h2>Foto do perfil</h2>
-        <FotoInput atual={perfil.foto} onFoto={salvarFoto} circular rotulo="Trocar foto" />
+        <FotoInput
+          atual={perfil.foto}
+          onFoto={salvarFoto}
+          circular
+          rotulo="Trocar foto"
+          pasta={'perfil/' + user.uid}
+          maxLado={512}
+        />
       </div>
 
       <div className="card">

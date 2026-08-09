@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { createUserWithEmailAndPassword, signOut, getAuth } from 'firebase/auth'
 import { initializeApp, getApps } from 'firebase/app'
-import { ref, onValue, set } from 'firebase/database'
+import { ref, onValue, set, push, update, remove } from 'firebase/database'
 import { db, firebaseConfig } from '../../firebase'
 import { fmtData, fmtMoeda, vencida } from '../../lib/util'
+import { CAMPOS_FICHA, fichaParaAluno, fichaParaMedidas } from '../../lib/ficha'
 import Chat from '../../components/Chat.jsx'
 import Config from '../Config.jsx'
 import MeusTemplates from './MeusTemplates.jsx'
@@ -15,11 +16,26 @@ import {
   IcRaio, IcRelogio, IcMais, IcBusca, IcHalter, IcAlerta, IcCopiar, IcCheck
 } from '../../components/Icones.jsx'
 
-function gerarCodigo() {
+// Sem I, O, 0 e 1 — some a chance do aluno digitar errado o que veio na mensagem.
+function gerarCodigo(tamanho = 6) {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
   let c = ''
-  for (let i = 0; i < 6; i++) c += chars[Math.floor(Math.random() * chars.length)]
+  for (let i = 0; i < tamanho; i++) c += chars[Math.floor(Math.random() * chars.length)]
   return c
+}
+
+/** Mensagem pronta de acesso, no formato que vai para o WhatsApp. */
+function mensagemAcesso({ nome, codigo, senha }) {
+  const primeiro = (nome || '').trim().split(' ')[0] || 'tudo bem'
+  return [
+    `Olá, ${primeiro}! Seu acesso ao CoachApp:`,
+    `${window.location.origin}/?modo=aluno&codigo=${codigo}`,
+    '',
+    `Código de acesso: ${codigo}`,
+    `Senha: ${senha}`,
+    '',
+    'No primeiro acesso o app vai pedir para você criar a sua própria senha.'
+  ].join('\n')
 }
 
 const TITULOS = {
@@ -54,19 +70,49 @@ export default function PersonalHome({ user, perfil, onSair }) {
 
   const [nNome, setNNome] = useState('')
   const [nEmail, setNEmail] = useState('')
-  const [nSenha, setNSenha] = useState('')
   const [nErro, setNErro] = useState('')
   const [nOk, setNOk] = useState(null)
   const [criando, setCriando] = useState(false)
   const [mostrarForm, setMostrarForm] = useState(false)
+  const [copiado, setCopiado] = useState('')
+
+  const [fichasRecebidas, setFichasRecebidas] = useState({})
+  const [codigoFicha, setCodigoFicha] = useState('')
 
   useEffect(() => {
     const u1 = onValue(ref(db, 'personals/' + user.uid + '/alunos'), s => setAlunos(s.val() || {}))
     const u2 = onValue(ref(db, 'execucoes'), s => setExecucoes(s.val() || {}))
     const u3 = onValue(ref(db, 'cobrancas'), s => setCobrancas(s.val() || {}))
     const u4 = onValue(ref(db, 'treinos'), s => setTreinos(s.val() || {}))
-    return () => { u1(); u2(); u3(); u4() }
+    const u5 = onValue(ref(db, 'fichas/' + user.uid), s => setFichasRecebidas(s.val() || {}))
+    const u6 = onValue(ref(db, 'personals/' + user.uid + '/codigoFicha'), s => setCodigoFicha(s.val() || ''))
+    return () => { u1(); u2(); u3(); u4(); u5(); u6() }
   }, [user.uid])
+
+  /** Cria (uma vez) o código curto do link público da ficha. */
+  async function garantirCodigoFicha() {
+    if (codigoFicha) return codigoFicha
+    const cod = gerarCodigo(8)
+    await set(ref(db, 'linksFicha/' + cod), {
+      personalId: user.uid, nome: perfil.nome || 'seu personal', criadoEm: Date.now()
+    })
+    await set(ref(db, 'personals/' + user.uid + '/codigoFicha'), cod)
+    return cod
+  }
+
+  async function copiarLinkFicha() {
+    const cod = await garantirCodigoFicha()
+    await navigator.clipboard.writeText(`${window.location.origin}/ficha/${cod}`)
+    setCopiado('ficha')
+    setTimeout(() => setCopiado(''), 2500)
+  }
+
+  const listaFichas = useMemo(() => (
+    Object.entries(fichasRecebidas)
+      .map(([id, f]) => ({ id, ...f }))
+      .filter(f => f.status !== 'usada')
+      .sort((a, b) => (b.ts || 0) - (a.ts || 0))
+  ), [fichasRecebidas])
 
   /* ---------- Consolidação por aluno ---------- */
   const fichas = useMemo(() => {
@@ -136,33 +182,83 @@ export default function PersonalHome({ user, perfil, onSair }) {
       })
   }, [fichas, busca, filtro])
 
+  /**
+   * Cria a conta do aluno com senha temporária. O personal não escolhe a senha,
+   * e o aluno é obrigado a trocá-la no primeiro acesso (`precisaTrocarSenha`).
+   */
+  async function criarConta({ nome, email, extras = {}, medidas = null, fichaId = null }) {
+    // App secundário para não deslogar o personal ao criar o usuário.
+    const nomeSec = 'secundario'
+    const secApp = getApps().find(a => a.name === nomeSec) || initializeApp(firebaseConfig, nomeSec)
+    const secAuth = getAuth(secApp)
+
+    const senha = gerarCodigo(8)
+    const cred = await createUserWithEmailAndPassword(secAuth, email, senha)
+    const alunoUid = cred.user.uid
+    await signOut(secAuth)
+
+    const codigo = gerarCodigo()
+    await set(ref(db, 'users/' + alunoUid), {
+      role: 'aluno', nome, email, personalId: user.uid, codigo,
+      foto: '', objetivo: '', telefone: '',
+      ...extras,
+      precisaTrocarSenha: true,
+      criadoEm: Date.now()
+    })
+    await set(ref(db, 'codigos/' + codigo), { alunoUid, email, personalId: user.uid })
+    await set(ref(db, 'personals/' + user.uid + '/alunos/' + alunoUid), { nome, email, codigo })
+
+    if (medidas && Object.keys(medidas).length) {
+      await push(ref(db, 'avaliacoes/' + alunoUid), { ts: Date.now(), medidas, origem: 'ficha' })
+    }
+    if (fichaId) {
+      await update(ref(db, 'fichas/' + user.uid + '/' + fichaId), { status: 'usada', alunoUid })
+    }
+
+    return { nome, codigo, senha }
+  }
+
+  function traduzirErro(err) {
+    if (err?.code === 'auth/email-already-in-use') return 'Este e-mail já está em uso por outra conta.'
+    if (err?.code === 'auth/invalid-email') return 'E-mail inválido. Confira o que foi digitado.'
+    return 'Não foi possível cadastrar. Tente novamente.'
+  }
+
   async function cadastrarAluno(e) {
     e.preventDefault()
     setNErro(''); setNOk(null); setCriando(true)
     try {
-      const nomeSec = 'secundario'
-      const secApp = getApps().find(a => a.name === nomeSec) || initializeApp(firebaseConfig, nomeSec)
-      const secAuth = getAuth(secApp)
-      const cred = await createUserWithEmailAndPassword(secAuth, nEmail, nSenha)
-      const alunoUid = cred.user.uid
-      await signOut(secAuth)
-
-      const codigo = gerarCodigo()
-      await set(ref(db, 'users/' + alunoUid), {
-        role: 'aluno', nome: nNome, email: nEmail, personalId: user.uid,
-        codigo, foto: '', objetivo: '', telefone: ''
-      })
-      await set(ref(db, 'codigos/' + codigo), { alunoUid, email: nEmail, personalId: user.uid })
-      await set(ref(db, 'personals/' + user.uid + '/alunos/' + alunoUid), { nome: nNome, email: nEmail, codigo })
-
-      setNOk({ nome: nNome, codigo })
-      setNNome(''); setNEmail(''); setNSenha('')
+      const dados = await criarConta({ nome: nNome.trim(), email: nEmail.trim().toLowerCase() })
+      setNOk(dados)
+      setNNome(''); setNEmail(''); setMostrarForm(false)
     } catch (err) {
-      if (err.code === 'auth/email-already-in-use') setNErro('Este e-mail já está em uso.')
-      else if (err.code === 'auth/weak-password') setNErro('A senha precisa ter pelo menos 6 caracteres.')
-      else setNErro('Não foi possível cadastrar. Tente novamente.')
+      setNErro(traduzirErro(err))
+      console.warn('Falha ao cadastrar aluno:', err)
     }
     setCriando(false)
+  }
+
+  async function criarDaFicha(ficha) {
+    setNErro(''); setNOk(null); setCriando(true)
+    try {
+      const perfilAluno = fichaParaAluno(ficha.respostas)
+      const { nome, email, ...extras } = perfilAluno
+      const dados = await criarConta({
+        nome, email, extras,
+        medidas: fichaParaMedidas(ficha.respostas),
+        fichaId: ficha.id
+      })
+      setNOk(dados)
+    } catch (err) {
+      setNErro(traduzirErro(err))
+      console.warn('Falha ao criar aluno da ficha:', err)
+    }
+    setCriando(false)
+  }
+
+  async function descartarFicha(id) {
+    if (!confirm('Descartar esta ficha? Os dados enviados serão apagados.')) return
+    await remove(ref(db, 'fichas/' + user.uid + '/' + id))
   }
 
   const itens = [
@@ -339,6 +435,9 @@ export default function PersonalHome({ user, perfil, onSair }) {
               <IcBusca />
               <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por nome ou código" />
             </div>
+            <button className="btn btn-sec btn-sm" onClick={copiarLinkFicha}>
+              {copiado === 'ficha' ? <><IcCheck /> Link copiado</> : <><IcCopiar /> Link da ficha</>}
+            </button>
             <button className="btn btn-sm" onClick={() => { setMostrarForm(!mostrarForm); setNOk(null) }}>
               {mostrarForm ? 'Fechar' : <><IcMais /> Cadastrar aluno</>}
             </button>
@@ -366,29 +465,78 @@ export default function PersonalHome({ user, perfil, onSair }) {
                     <input type="email" value={nEmail} onChange={e => setNEmail(e.target.value)} required />
                   </div>
                 </div>
-                <label>Senha inicial (o aluno pode trocar depois)</label>
-                <input value={nSenha} onChange={e => setNSenha(e.target.value)} required minLength={6} />
+                <p className="mini">
+                  A senha é gerada pelo app e o aluno troca no primeiro acesso — você não precisa inventar uma.
+                </p>
                 {nErro && <div className="erro">{nErro}</div>}
                 <button className="btn" disabled={criando}>{criando ? 'Cadastrando...' : 'Cadastrar aluno'}</button>
               </form>
             </div>
           )}
 
+          {nErro && !mostrarForm && <div className="erro">{nErro}</div>}
+
           {nOk && (
             <div className="card destaque-card">
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>{nOk.nome} cadastrado</div>
-              <p className="mini">Envie o link abaixo — o código já vem preenchido no login.</p>
-              <div className="codigo-box">{nOk.codigo}</div>
+              <div className="card-titulo">
+                <h2>{nOk.nome} cadastrado</h2>
+                <button className="btn btn-ghost btn-sm" onClick={() => setNOk(null)}>Fechar</button>
+              </div>
+              <p className="mini">Mande esta mensagem para o aluno. A senha vale só até ele criar a dele.</p>
+              <pre className="mensagem-acesso">{mensagemAcesso(nOk)}</pre>
               <button
-                type="button" className="btn btn-sec btn-sm" style={{ marginTop: 12 }}
+                type="button" className="btn btn-sm"
                 onClick={() => {
-                  navigator.clipboard.writeText(`${window.location.origin}/?modo=aluno&codigo=${nOk.codigo}`)
-                  alert('Link copiado. Envie para ' + nOk.nome)
+                  navigator.clipboard.writeText(mensagemAcesso(nOk))
+                  setCopiado('acesso')
+                  setTimeout(() => setCopiado(''), 2500)
                 }}
               >
-                <IcCopiar /> Copiar link de acesso
+                {copiado === 'acesso' ? <><IcCheck /> Copiado</> : <><IcCopiar /> Copiar mensagem de acesso</>}
               </button>
             </div>
+          )}
+
+          {listaFichas.length > 0 && (
+            <>
+              <div className="section-title">
+                Fichas recebidas · {listaFichas.length}
+              </div>
+              {listaFichas.map(f => {
+                const r = f.respostas || {}
+                return (
+                  <div key={f.id} className="card ficha-recebida">
+                    <div className="card-titulo">
+                      <div style={{ minWidth: 0 }}>
+                        <h2>{r.nome || 'Sem nome'}</h2>
+                        <p className="mini">{r.email} · enviada em {fmtData(f.ts)}</p>
+                      </div>
+                      <span className="badge primaria">Nova</span>
+                    </div>
+
+                    <div className="ficha-resumo">
+                      {CAMPOS_FICHA
+                        .filter(c => !['nome', 'email'].includes(c.id) && String(r[c.id] ?? '').trim())
+                        .map(c => (
+                          <div key={c.id} className="ficha-item">
+                            <span className="fi-rotulo">{c.rotulo}</span>
+                            <span className="fi-valor">{r[c.id]}</span>
+                          </div>
+                        ))}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+                      <button className="btn btn-sm" disabled={criando} onClick={() => criarDaFicha(f)}>
+                        {criando ? 'Criando...' : <><IcMais /> Criar aluno com estes dados</>}
+                      </button>
+                      <button className="btn btn-perigo-sutil btn-sm" onClick={() => descartarFicha(f.id)}>
+                        Descartar
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </>
           )}
 
           {visiveis.length === 0 ? (

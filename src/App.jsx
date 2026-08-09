@@ -5,6 +5,8 @@ import { ref, onValue } from 'firebase/database'
 import { auth, db } from './firebase'
 import Login from './pages/Login.jsx'
 import CadastroPersonal from './pages/CadastroPersonal.jsx'
+import FichaPublica from './pages/FichaPublica.jsx'
+import CriarSenha from './pages/CriarSenha.jsx'
 import PersonalHome from './pages/personal/PersonalHome.jsx'
 import AlunoDetalhe from './pages/personal/AlunoDetalhe.jsx'
 import CriarTreino from './pages/personal/CriarTreino.jsx'
@@ -43,6 +45,11 @@ export default function App() {
 
   const logado = user && perfil
 
+  // Primeiro acesso com senha temporária: só sai daqui depois de criar a senha.
+  if (logado && perfil.precisaTrocarSenha) {
+    return <CriarSenha user={user} perfil={perfil} />
+  }
+
   return (
     <>
       <Routes>
@@ -51,6 +58,7 @@ export default function App() {
           perfil.role === 'personal' ? <Navigate to="/personal" /> : <Navigate to="/aluno" />
         } />
         <Route path="/cadastro-personal" element={<CadastroPersonal />} />
+        <Route path="/ficha/:codigo" element={<FichaPublica />} />
         <Route path="/personal/*" element={
           logado && perfil.role === 'personal'
             ? <PersonalHome user={user} perfil={perfil} onSair={sair} />

@@ -32,7 +32,8 @@ export function beep() {
     osc.stop(ctx.currentTime + 0.6)
   } catch (e) { /* sem som */ }
 }
-export function redimensionarImagem(file, maxLado = 480) {
+/** Lê o arquivo e devolve um canvas já redimensionado (lado maior = maxLado). */
+function desenharRedimensionado(file, maxLado) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => {
@@ -43,7 +44,7 @@ export function redimensionarImagem(file, maxLado = 480) {
         canvas.width = Math.round(img.width * escala)
         canvas.height = Math.round(img.height * escala)
         canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
-        resolve(canvas.toDataURL('image/jpeg', 0.7))
+        resolve(canvas)
       }
       img.onerror = reject
       img.src = reader.result
@@ -51,4 +52,18 @@ export function redimensionarImagem(file, maxLado = 480) {
     reader.onerror = reject
     reader.readAsDataURL(file)
   })
+}
+
+/** Data URL base64 — formato antigo, guardado direto no banco. */
+export async function redimensionarImagem(file, maxLado = 480) {
+  const canvas = await desenharRedimensionado(file, maxLado)
+  return canvas.toDataURL('image/jpeg', 0.7)
+}
+
+/** Blob para enviar ao Storage. Aceita resolução maior porque não pesa no banco. */
+export async function redimensionarParaBlob(file, maxLado = 1080, qualidade = 0.82) {
+  const canvas = await desenharRedimensionado(file, maxLado)
+  const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', qualidade))
+  if (!blob) throw new Error('Não foi possível processar a imagem.')
+  return blob
 }

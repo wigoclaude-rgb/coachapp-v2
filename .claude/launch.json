@@ -6,6 +6,14 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 5173
+    },
+    {
+      "name": "wigo-local",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "C:/Users/Willyam/AppData/Local/Temp/claude/C--Users-Willyam-OneDrive-Documentos-coachapp-v2-coachapp-v2/4072d3dd-e7b9-48c0-85a5-d918cb8ae0e4/scratchpad/serve-wigo.js"
+      ],
+      "port": 4321
     }
   ]
 }
