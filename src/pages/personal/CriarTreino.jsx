@@ -224,7 +224,11 @@ export default function CriarTreino({ user }) {
           Marque dois exercícios e clique em Combinar para montar um bi-set.
         </p>
 
-        <EditorExercicios exercicios={dia.exercicios} onChange={setExercicios} />
+        <EditorExercicios
+          exercicios={dia.exercicios}
+          onChange={setExercicios}
+          pastaFotos={'exercicios/' + user.uid}
+        />
 
         {salvo && <div className="ok"><IcCheck /> Treino salvo. O aluno foi notificado e o plano anterior ficou no histórico.</div>}
         <button className="btn" disabled={enviando} onClick={salvar}>{enviando ? 'Salvando...' : 'Salvar plano de treino'}</button>

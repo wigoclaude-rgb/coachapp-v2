@@ -153,6 +153,7 @@ export default function MeusTemplates({ user }) {
             <EditorExercicios
               exercicios={dia.exercicios}
               onChange={novos => atualizarDia(d => ({ ...d, exercicios: novos }))}
+              pastaFotos={'exercicios/' + user.uid}
             />
 
             <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>

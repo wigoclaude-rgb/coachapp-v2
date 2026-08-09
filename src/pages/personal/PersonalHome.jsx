@@ -81,13 +81,42 @@ export default function PersonalHome({ user, perfil, onSair }) {
 
   useEffect(() => {
     const u1 = onValue(ref(db, 'personals/' + user.uid + '/alunos'), s => setAlunos(s.val() || {}))
-    const u2 = onValue(ref(db, 'execucoes'), s => setExecucoes(s.val() || {}))
-    const u3 = onValue(ref(db, 'cobrancas'), s => setCobrancas(s.val() || {}))
-    const u4 = onValue(ref(db, 'treinos'), s => setTreinos(s.val() || {}))
-    const u5 = onValue(ref(db, 'fichas/' + user.uid), s => setFichasRecebidas(s.val() || {}))
-    const u6 = onValue(ref(db, 'personals/' + user.uid + '/codigoFicha'), s => setCodigoFicha(s.val() || ''))
-    return () => { u1(); u2(); u3(); u4(); u5(); u6() }
+    const u2 = onValue(ref(db, 'fichas/' + user.uid), s => setFichasRecebidas(s.val() || {}))
+    const u3 = onValue(ref(db, 'personals/' + user.uid + '/codigoFicha'), s => setCodigoFicha(s.val() || ''))
+    return () => { u1(); u2(); u3() }
   }, [user.uid])
+
+  const idsAlunos = useMemo(() => Object.keys(alunos).sort().join(','), [alunos])
+
+  /*
+    Assina execuções, cobranças e treinos por aluno.
+    Ler os nós inteiros (`execucoes`, `cobrancas`, `treinos`) traria os dados de
+    todos os personais do app e impediria fechar as regras do banco.
+  */
+  useEffect(() => {
+    const uids = idsAlunos ? idsAlunos.split(',') : []
+    if (uids.length === 0) {
+      setExecucoes({}); setCobrancas({}); setTreinos({})
+      return
+    }
+
+    const guardar = setar => (uid, valor) =>
+      setar(anterior => (valor ? { ...anterior, [uid]: valor } : (() => {
+        const { [uid]: _, ...resto } = anterior
+        return resto
+      })()))
+
+    const porExec = guardar(setExecucoes)
+    const porCob = guardar(setCobrancas)
+    const porTreino = guardar(setTreinos)
+
+    const inscricoes = uids.flatMap(uid => [
+      onValue(ref(db, 'execucoes/' + uid), s => porExec(uid, s.val())),
+      onValue(ref(db, 'cobrancas/' + uid), s => porCob(uid, s.val())),
+      onValue(ref(db, 'treinos/' + uid), s => porTreino(uid, s.val()))
+    ])
+    return () => inscricoes.forEach(cancelar => cancelar())
+  }, [idsAlunos])
 
   /** Cria (uma vez) o código curto do link público da ficha. */
   async function garantirCodigoFicha() {

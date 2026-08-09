@@ -1,0 +1,49 @@
+rules_version = '2';
+
+// Fotos do CoachApp. O banco guarda só a URL; os arquivos ficam aqui.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Só imagem, no máximo 5 MB.
+    function imagemValida() {
+      return request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Foto de perfil: cada um mexe na sua; qualquer logado consegue ver.
+    match /perfil/{uid}/{arquivo} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid && imagemValida();
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Diário do aluno. Só o dono escreve.
+    // A leitura é liberada para quem tem o link do arquivo, porque as regras do
+    // Storage não enxergam o campo `compartilhado`, que fica no Realtime Database.
+    // Quem controla quem vê o quê é a regra de `diario` lá — sem a URL, ninguém
+    // chega no arquivo, e a URL só sai para quem pode ler o registro.
+    match /diario/{uid}/{arquivo} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid && imagemValida();
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Fotos de progresso tiradas pelo personal.
+    match /progresso/{alunoUid}/{arquivo} {
+      allow read: if request.auth != null;
+      allow write, delete: if request.auth != null && imagemValida();
+    }
+
+    // Imagens de demonstração dos exercícios, por personal.
+    match /exercicios/{personalUid}/{arquivo} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == personalUid && imagemValida();
+      allow delete: if request.auth != null && request.auth.uid == personalUid;
+    }
+
+    // Nada além do que está acima.
+    match /{caminho=**} {
+      allow read, write: if false;
+    }
+  }
+}

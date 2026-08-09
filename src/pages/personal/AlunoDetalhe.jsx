@@ -4,20 +4,12 @@ import { ref, onValue, push, remove } from 'firebase/database'
 import { db } from '../../firebase'
 import { fmtData } from '../../lib/util'
 import { normalizarPlano, resumoLinhas, LETRAS } from '../../lib/treinoModel'
+import { CAMPOS_MEDIDAS, rotuloMedida } from '../../lib/medidas'
+import { IcEvolucao } from '../../components/Icones.jsx'
 import LineChart from '../../components/LineChart.jsx'
 import Heatmap from '../../components/Heatmap.jsx'
 import FotoInput from '../../components/FotoInput.jsx'
 import { apagarFoto as apagarDoStorage } from '../../lib/fotos'
-
-const CAMPOS_MEDIDAS = [
-  ['peso', 'Peso (kg)'], ['altura', 'Altura (cm)'], ['pescoco', 'Pescoço (cm)'],
-  ['ombro', 'Ombro (cm)'], ['peito', 'Peito (cm)'], ['cintura', 'Cintura (cm)'],
-  ['abdomen', 'Abdômen (cm)'], ['quadril', 'Quadril (cm)'],
-  ['bracoD', 'Braço dir. (cm)'], ['bracoE', 'Braço esq. (cm)'],
-  ['antebracoD', 'Antebraço dir. (cm)'], ['antebracoE', 'Antebraço esq. (cm)'],
-  ['coxaD', 'Coxa dir. (cm)'], ['coxaE', 'Coxa esq. (cm)'],
-  ['panturrilhaD', 'Panturrilha dir. (cm)'], ['panturrilhaE', 'Panturrilha esq. (cm)']
-]
 
 export default function AlunoDetalhe({ user }) {
   const { alunoId } = useParams()
@@ -27,6 +19,7 @@ export default function AlunoDetalhe({ user }) {
   const [execucoes, setExecucoes] = useState({})
   const [avaliacoes, setAvaliacoes] = useState({})
   const [fotos, setFotos] = useState({})
+  const [diario, setDiario] = useState({})
   const [historico, setHistorico] = useState({})
   const [medidas, setMedidas] = useState({})
   const [medMsg, setMedMsg] = useState('')
@@ -40,7 +33,8 @@ export default function AlunoDetalhe({ user }) {
     const u3 = onValue(ref(db, 'avaliacoes/' + alunoId), s => setAvaliacoes(s.val() || {}))
     const u4 = onValue(ref(db, 'fotosProgresso/' + alunoId), s => setFotos(s.val() || {}))
     const u5 = onValue(ref(db, 'treinosHistorico/' + alunoId), s => setHistorico(s.val() || {}))
-    return () => { u1(); u2(); u3(); u4(); u5() }
+    const u6 = onValue(ref(db, 'diario/' + alunoId), s => setDiario(s.val() || {}))
+    return () => { u1(); u2(); u3(); u4(); u5(); u6() }
   }, [alunoId])
 
   if (!aluno) return <div className="loading">Carregando...</div>
@@ -49,6 +43,11 @@ export default function AlunoDetalhe({ user }) {
   const listaAval = Object.entries(avaliacoes).map(([id, a]) => ({ id, ...a })).sort((a, b) => a.ts - b.ts)
   const listaFotos = Object.entries(fotos).map(([id, f]) => ({ id, ...f })).sort((a, b) => b.ts - a.ts)
   const listaHist = Object.entries(historico).map(([id, t]) => ({ id, ...t })).sort((a, b) => (b.arquivadoEm || 0) - (a.arquivadoEm || 0))
+  // Só o que o aluno marcou como compartilhado. O resto é privado dele.
+  const listaDiario = Object.entries(diario)
+    .map(([id, r]) => ({ id, ...r }))
+    .filter(r => r.compartilhado)
+    .sort((a, b) => (b.ts || 0) - (a.ts || 0))
 
   // Evolução de carga por exercício
   const exercicios = [...new Set(listaExec.map(e => e.exercicio))]
@@ -136,6 +135,9 @@ export default function AlunoDetalhe({ user }) {
         <button className={'tab ' + (aba === 'perfil' ? 'ativa' : '')} onClick={() => setAba('perfil')}>Perfil</button>
         <button className={'tab ' + (aba === 'avaliacao' ? 'ativa' : '')} onClick={() => setAba('avaliacao')}>Avaliação física</button>
         <button className={'tab ' + (aba === 'fotos' ? 'ativa' : '')} onClick={() => setAba('fotos')}>Fotos</button>
+        <button className={'tab ' + (aba === 'diario' ? 'ativa' : '')} onClick={() => setAba('diario')}>
+          Diário{listaDiario.length > 0 ? ` (${listaDiario.length})` : ''}
+        </button>
         <button className={'tab ' + (aba === 'relatorios' ? 'ativa' : '')} onClick={() => setAba('relatorios')}>Relatórios</button>
         <button className={'tab ' + (aba === 'historico' ? 'ativa' : '')} onClick={() => setAba('historico')}>Treinos antigos</button>
       </div>
@@ -233,6 +235,45 @@ export default function AlunoDetalhe({ user }) {
             ))}
           </div>
           {listaFotos.length === 0 && <p className="muted" style={{ marginTop: 12 }}>Nenhuma foto ainda.</p>}
+        </div>
+      )}
+
+      {aba === 'diario' && (
+        <div className="card">
+          <div className="card-titulo">
+            <div style={{ minWidth: 0 }}>
+              <h2>Diário do aluno</h2>
+              <p className="mini">Só aparece o que {aluno.nome?.split(' ')[0] || 'o aluno'} escolheu compartilhar.</p>
+            </div>
+          </div>
+
+          {listaDiario.length === 0 ? (
+            <div className="vazio-estado">
+              <div className="ve-icone"><IcEvolucao /></div>
+              <h2>Nada compartilhado</h2>
+              <p className="muted">
+                O diário é privado do aluno. Quando ele marcar um registro como compartilhado, aparece aqui.
+              </p>
+            </div>
+          ) : listaDiario.map(r => (
+            <div key={r.id} className="diario-registro">
+              <div className="dr-topo">
+                <span className="dr-data">{fmtData(r.ts)}</span>
+              </div>
+              {r.foto && <img src={r.foto} alt="" className="dr-foto" loading="lazy" />}
+              {r.nota && <p className="dr-nota">{r.nota}</p>}
+              {r.medidas && Object.keys(r.medidas).length > 0 && (
+                <div className="dr-medidas">
+                  {Object.entries(r.medidas).map(([campo, valor]) => (
+                    <span key={campo} className="dr-medida">
+                      <span className="dm-rotulo">{rotuloMedida(campo).replace(/\s*\(.*\)/, '')}</span>
+                      <span className="dm-valor">{valor}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
 

@@ -7,6 +7,7 @@
   Exercício (canônico, desde Jul/2026):
     {
       nome, video, obs,
+      imagem: string,           // URL no Storage; vazio cai na capa do vídeo
       grupo: string | null,     // exercícios vizinhos com o mesmo grupo formam um bi-set
       linhas: [{ reps, carga, descanso }]   // uma linha por série
     }
@@ -26,7 +27,7 @@ export const linhaVazia = (base = {}) => ({
 })
 
 export const exercicioVazio = () => ({
-  nome: '', video: '', obs: '', grupo: null, linhas: [linhaVazia()]
+  nome: '', video: '', obs: '', imagem: '', grupo: null, linhas: [linhaVazia()]
 })
 
 export const diaVazio = (i = 0) => ({
@@ -60,6 +61,7 @@ export function normalizarExercicio(ex) {
     nome: ex.nome || '',
     video: ex.video || '',
     obs: ex.obs || '',
+    imagem: ex.imagem || '',
     grupo: ex.grupo || null,
     linhas
   }

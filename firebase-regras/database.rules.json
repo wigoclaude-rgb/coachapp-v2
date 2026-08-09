@@ -1,0 +1,112 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "users": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('users/'+$uid+'/personalId').val() === auth.uid)",
+        ".write": "auth != null && (auth.uid === $uid || root.child('users/'+$uid+'/personalId').val() === auth.uid)"
+      }
+    },
+
+    "codigos": {
+      "$codigo": {
+        ".read": true,
+        ".write": "auth != null"
+      }
+    },
+
+    "linksFicha": {
+      "$codigo": {
+        ".read": true,
+        ".write": "auth != null && (!data.exists() || data.child('personalId').val() === auth.uid)",
+        ".validate": "newData.hasChildren(['personalId', 'nome'])"
+      }
+    },
+
+    "fichas": {
+      "$personalId": {
+        ".read": "auth != null && auth.uid === $personalId",
+        "$fichaId": {
+          ".write": "(!data.exists() && newData.exists()) || (auth != null && auth.uid === $personalId)",
+          ".validate": "newData.hasChildren(['respostas', 'ts'])"
+        }
+      }
+    },
+
+    "diario": {
+      "$alunoUid": {
+        ".read": "auth != null && auth.uid === $alunoUid",
+        ".write": "auth != null && auth.uid === $alunoUid",
+        "$registroId": {
+          ".read": "auth != null && (auth.uid === $alunoUid || (data.child('compartilhado').val() === true && root.child('users/'+$alunoUid+'/personalId').val() === auth.uid))"
+        }
+      }
+    },
+
+    "personals": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        "codigoFicha": { ".read": true }
+      }
+    },
+
+    "treinos": {
+      "$alunoUid": {
+        ".read": "auth != null && (auth.uid === $alunoUid || root.child('users/'+$alunoUid+'/personalId').val() === auth.uid)",
+        ".write": "auth != null && (auth.uid === $alunoUid || root.child('users/'+$alunoUid+'/personalId').val() === auth.uid)"
+      }
+    },
+
+    "treinosHistorico": {
+      "$alunoUid": {
+        ".read": "auth != null && (auth.uid === $alunoUid || root.child('users/'+$alunoUid+'/personalId').val() === auth.uid)",
+        ".write": "auth != null && root.child('users/'+$alunoUid+'/personalId').val() === auth.uid"
+      }
+    },
+
+    "execucoes": {
+      "$alunoUid": {
+        ".read": "auth != null && (auth.uid === $alunoUid || root.child('users/'+$alunoUid+'/personalId').val() === auth.uid)",
+        ".write": "auth != null && auth.uid === $alunoUid"
+      }
+    },
+
+    "avaliacoes": {
+      "$alunoUid": {
+        ".read": "auth != null && (auth.uid === $alunoUid || root.child('users/'+$alunoUid+'/personalId').val() === auth.uid)",
+        ".write": "auth != null && root.child('users/'+$alunoUid+'/personalId').val() === auth.uid"
+      }
+    },
+
+    "fotosProgresso": {
+      "$alunoUid": {
+        ".read": "auth != null && (auth.uid === $alunoUid || root.child('users/'+$alunoUid+'/personalId').val() === auth.uid)",
+        ".write": "auth != null && root.child('users/'+$alunoUid+'/personalId').val() === auth.uid"
+      }
+    },
+
+    "cobrancas": {
+      "$alunoUid": {
+        ".read": "auth != null && (auth.uid === $alunoUid || root.child('users/'+$alunoUid+'/personalId').val() === auth.uid)",
+        ".write": "auth != null && (auth.uid === $alunoUid || root.child('users/'+$alunoUid+'/personalId').val() === auth.uid)"
+      }
+    },
+
+    "chats": {
+      "$conversaId": {
+        ".read": "auth != null && $conversaId.contains(auth.uid)",
+        ".write": "auth != null && $conversaId.contains(auth.uid)"
+      }
+    },
+
+    "notificacoes": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null"
+      }
+    }
+  }
+}

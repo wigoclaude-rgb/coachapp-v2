@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { youtubeId, beep } from '../lib/util'
+import { youtubeId, beep, imagemExercicio } from '../lib/util'
 import { agruparBlocos, chaveSerie } from '../lib/treinoModel'
 import { IcCheck, IcVoltar, IcVideo, IcTrofeu, IcRelogio } from './Icones.jsx'
 
@@ -155,6 +155,7 @@ export default function ExecucaoTreino({ exercicios, feitas, nomeTreino, cargaAn
           {bloco.exercicios.map((ex, k) => {
             const linha = linhaDe(ex, serieAtual)
             const vid = youtubeId(ex.video)
+            const img = imagemExercicio(ex)
             const anterior = cargaAnterior ? cargaAnterior(ex.nome) : null
             const jaFeita = feitas[chaveSerie(ex.nome, serieAtual)]
 
@@ -164,6 +165,14 @@ export default function ExecucaoTreino({ exercicios, feitas, nomeTreino, cargaAn
                   <h2>{ex.nome}</h2>
                   {bloco.combinado && <span className="exec-ex-ordem">{k + 1}º</span>}
                 </div>
+
+                {img && videoAberto !== k && (
+                  <img
+                    src={img} alt={'Demonstração de ' + ex.nome}
+                    className="exec-imagem" loading="lazy"
+                    onError={e => { e.currentTarget.style.display = 'none' }}
+                  />
+                )}
 
                 {!linha ? (
                   <p className="mini">Sem série {serieAtual} neste exercício.</p>

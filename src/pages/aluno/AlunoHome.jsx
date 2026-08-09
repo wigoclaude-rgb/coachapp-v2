@@ -1,13 +1,14 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { ref, onValue, push, update } from 'firebase/database'
 import { db } from '../../firebase'
-import { fmtData, fmtMoeda, vencida } from '../../lib/util'
+import { fmtData, fmtMoeda, vencida, imagemExercicio } from '../../lib/util'
 import { notificar } from '../../lib/notify'
 import {
   LETRAS, normalizarPlano, indiceSeguro, duracaoEstimada, totalSeries,
   agruparBlocos, chaveSerie, resumoLinhas
 } from '../../lib/treinoModel'
 import Chat from '../../components/Chat.jsx'
+import Diario from './Diario.jsx'
 import Config from '../Config.jsx'
 import LineChart from '../../components/LineChart.jsx'
 import Heatmap from '../../components/Heatmap.jsx'
@@ -21,6 +22,7 @@ import {
 const TITULOS = {
   treino: { t: 'Meu Treino', s: 'Seu plano de hoje' },
   evolucao: { t: 'Evolução', s: 'Acompanhe seu progresso' },
+  diario: { t: 'Meu diário', s: 'Privado — só você vê' },
   pagamentos: { t: 'Pagamentos', s: 'Suas cobranças' },
   chat: { t: 'Chat', s: 'Fale com seu personal' },
   config: { t: 'Configurações', s: 'Sua conta e preferências' }
@@ -178,6 +180,7 @@ export default function AlunoHome({ user, perfil, onSair }) {
   const itens = [
     { id: 'treino', label: 'Meu Treino', icone: <IcTreino /> },
     { id: 'evolucao', label: 'Evolução', icone: <IcEvolucao /> },
+    { id: 'diario', label: 'Meu diário', icone: <IcCalendario /> },
     { id: 'pagamentos', label: 'Pagamentos', icone: <IcPagamentos />, badge: vencidas.length },
     { id: 'chat', label: 'Chat', icone: <IcChat /> },
     { id: 'config', label: 'Configurações', icone: <IcConfig /> }
@@ -346,9 +349,15 @@ export default function AlunoHome({ user, perfil, onSair }) {
                         let n = 0
                         for (let s = 1; s <= total; s++) if (feitas[chaveSerie(ex.nome, s)]) n++
                         const completo = total > 0 && n >= total
+                        const img = imagemExercicio(ex)
                         return (
                           <div key={k} className={'exercicio-linha ' + (completo ? 'completo' : '')}>
-                            <span className="el-num">{completo ? <IcCheck /> : i + 1}</span>
+                            {img
+                              ? <img
+                                  src={img} alt="" className="el-miniatura" loading="lazy"
+                                  onError={e => { e.currentTarget.style.visibility = 'hidden' }}
+                                />
+                              : <span className="el-num">{completo ? <IcCheck /> : i + 1}</span>}
                             <div className="el-nome">
                               {ex.nome}
                               {ex.obs && <div className="el-obs">{ex.obs}</div>}
@@ -528,6 +537,8 @@ export default function AlunoHome({ user, perfil, onSair }) {
       )}
 
       {/* ===== CONFIG ===== */}
+      {aba === 'diario' && <Diario user={user} perfil={perfil} />}
+
       {aba === 'config' && <Config user={user} perfil={perfil} />}
     </Layout>
   )

@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react'
 import { BIBLIOTECA_EXERCICIOS } from '../lib/exercicios'
 import { exercicioVazio, linhaVazia, normalizarExercicios } from '../lib/treinoModel'
+import { imagemExercicio } from '../lib/util'
+import { apagarFoto } from '../lib/fotos'
+import FotoInput from './FotoInput.jsx'
 import { IcMais, IcLixeira, IcCheck, IcFechar } from './Icones.jsx'
 
 /**
@@ -9,9 +12,11 @@ import { IcMais, IcLixeira, IcCheck, IcFechar } from './Icones.jsx'
  *  - seleção por checkbox para combinar exercícios em bi-set
  *  - campo de observações por exercício
  *
- * Props: exercicios (array canônico), onChange(novaLista)
+ *  - imagem de demonstração por exercício (envia, troca ou remove)
+ *
+ * Props: exercicios (array canônico), onChange(novaLista), pastaFotos
  */
-export default function EditorExercicios({ exercicios, onChange }) {
+export default function EditorExercicios({ exercicios, onChange, pastaFotos = 'exercicios' }) {
   const [sel, setSel] = useState(() => new Set())
 
   const segmentos = useMemo(() => {
@@ -89,6 +94,19 @@ export default function EditorExercicios({ exercicios, onChange }) {
       : ex)))
   }
 
+  /** Troca a imagem do exercício e apaga a anterior do Storage. */
+  async function trocarImagem(i, url) {
+    const antiga = exercicios[i].imagem
+    mudar(i, 'imagem', url)
+    if (antiga && antiga !== url) await apagarFoto(antiga)
+  }
+
+  async function removerImagem(i) {
+    const antiga = exercicios[i].imagem
+    mudar(i, 'imagem', '')
+    await apagarFoto(antiga)
+  }
+
   function addExercicio() {
     aplicar([...exercicios, exercicioVazio()])
   }
@@ -100,6 +118,7 @@ export default function EditorExercicios({ exercicios, onChange }) {
   }
 
   function cartao({ ex, i }, dentroDeGrupo) {
+    const previa = imagemExercicio(ex)
     return (
       <div className={'ex-editor ' + (sel.has(i) ? 'selecionado' : '')} key={i}>
         <div className="ex-editor-topo">
@@ -164,6 +183,34 @@ export default function EditorExercicios({ exercicios, onChange }) {
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => addLinha(i)}>
             <IcMais /> Série
           </button>
+        </div>
+
+        <div className="ex-imagem">
+          <label>Imagem de demonstração</label>
+          <div className="ex-imagem-linha">
+            {previa ? (
+              <img src={previa} alt="" className="ex-imagem-previa" />
+            ) : (
+              <div className="ex-imagem-previa vazia">Sem imagem</div>
+            )}
+            <div className="ex-imagem-acoes">
+              <FotoInput
+                atual={null}
+                onFoto={url => trocarImagem(i, url)}
+                rotulo={ex.imagem ? 'Trocar imagem' : 'Enviar imagem'}
+                pasta={pastaFotos}
+                maxLado={800}
+              />
+              {ex.imagem && (
+                <button type="button" className="btn btn-perigo-sutil btn-sm" onClick={() => removerImagem(i)}>
+                  Remover
+                </button>
+              )}
+            </div>
+          </div>
+          {!ex.imagem && previa && (
+            <p className="mini">Usando a capa do vídeo do YouTube. Envie uma imagem para substituir.</p>
+          )}
         </div>
 
         <div className="linha-2" style={{ marginTop: 12 }}>

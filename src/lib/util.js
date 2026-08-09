@@ -20,6 +20,15 @@ export function youtubeId(url) {
   const m = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{11})/)
   return m ? m[1] : null
 }
+
+/** Capa do vídeo do YouTube — usada quando o exercício não tem imagem própria. */
+export const capaYoutube = id => (id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : null)
+
+/**
+ * Imagem de demonstração do exercício.
+ * Prioridade: a que o personal enviou, senão a capa do vídeo, senão nada.
+ */
+export const imagemExercicio = ex => ex?.imagem || capaYoutube(youtubeId(ex?.video)) || null
 export function beep() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)()

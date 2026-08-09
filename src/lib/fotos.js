@@ -41,8 +41,3 @@ export async function apagarFoto(url) {
     }
   }
 }
-
-/** Capa do vídeo do YouTube, usada quando o exercício não tem imagem própria. */
-export function capaYoutube(videoId) {
-  return videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null
-}
