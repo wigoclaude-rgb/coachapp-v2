@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import { ref, onValue } from 'firebase/database'
 import { auth, db } from './firebase'
+import { conectarPresenca } from './lib/presenca'
 import Login from './pages/Login.jsx'
 import CadastroPersonal from './pages/CadastroPersonal.jsx'
 import FichaPublica from './pages/FichaPublica.jsx'
@@ -35,6 +36,9 @@ export default function App() {
     })
     return () => { unsubAuth(); if (unsubPerfil) unsubPerfil() }
   }, [])
+
+  // Marca presença enquanto estiver logado; o Firebase derruba sozinho ao cair.
+  useEffect(() => (user ? conectarPresenca(user.uid) : undefined), [user?.uid])
 
   async function sair() {
     await signOut(auth)

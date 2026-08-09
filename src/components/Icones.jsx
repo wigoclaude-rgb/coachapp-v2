@@ -103,3 +103,6 @@ export const IcVideo = () => (
 export const IcTrofeu = () => (
   <svg {...base}><path d="M7 4h10v5a5 5 0 0 1-10 0z" /><path d="M7 5.5H4.5V7a3 3 0 0 0 3 3M17 5.5h2.5V7a3 3 0 0 1-3 3" /><path d="M12 14v3.5M8.5 21h7l-.5-3.5h-6z" /></svg>
 )
+export const IcEnviar = () => (
+  <svg {...base}><path d="M21.5 2.5 11 13" /><path d="M21.5 2.5 15 21.5l-4-8.5-8.5-4z" /></svg>
+)

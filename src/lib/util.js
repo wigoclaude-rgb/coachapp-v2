@@ -7,6 +7,33 @@ export function fmtHora(ts) {
 export function fmtMoeda(v) {
   return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
+
+/** Data por extenso, com "Hoje" e "Ontem" — separador das conversas. */
+export function fmtDataLonga(ts) {
+  const d = new Date(ts)
+  const zerar = x => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  const dias = Math.round((zerar(new Date()) - zerar(d)) / 86400000)
+  if (dias === 0) return 'Hoje'
+  if (dias === 1) return 'Ontem'
+  return d.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+/** Hora se for hoje, "Ontem" se for ontem, senão dd/mm — usado na lista de conversas. */
+export function fmtQuando(ts) {
+  if (!ts) return ''
+  const rotulo = fmtDataLonga(ts)
+  if (rotulo === 'Hoje') return fmtHora(ts)
+  if (rotulo === 'Ontem') return 'Ontem'
+  return new Date(ts).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+}
+
+/** Iniciais para o avatar quando não há foto. */
+export function iniciais(nome) {
+  const partes = String(nome || '').trim().split(/\s+/).filter(Boolean)
+  if (partes.length === 0) return '?'
+  if (partes.length === 1) return partes[0][0].toUpperCase()
+  return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase()
+}
 export function hojeISO() {
   const d = new Date()
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')

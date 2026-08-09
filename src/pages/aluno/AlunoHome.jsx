@@ -530,9 +530,15 @@ export default function AlunoHome({ user, perfil, onSair }) {
 
       {/* ===== CHAT ===== */}
       {aba === 'chat' && (
-        <div className="card">
-          <div className="card-titulo"><h2>Chat com o personal</h2></div>
-          <Chat chatId={perfil.personalId + '_' + user.uid} meuUid={user.uid} outroUid={perfil.personalId} rotaNotif="/personal" />
+        <div className="card sem-padding">
+          <Chat
+            chatId={perfil.personalId + '_' + user.uid}
+            meuUid={user.uid}
+            outroUid={perfil.personalId}
+            outroNome={personal?.nome || 'Seu personal'}
+            outroFoto={personal?.foto}
+            rotaNotif="/personal"
+          />
         </div>
       )}
 

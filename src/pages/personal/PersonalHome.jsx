@@ -7,13 +7,14 @@ import { db, firebaseConfig } from '../../firebase'
 import { fmtData, fmtMoeda, vencida } from '../../lib/util'
 import { CAMPOS_FICHA, fichaParaAluno, fichaParaMedidas } from '../../lib/ficha'
 import Chat from '../../components/Chat.jsx'
+import Avatar from '../../components/Avatar.jsx'
 import Config from '../Config.jsx'
 import MeusTemplates from './MeusTemplates.jsx'
 import Financeiro from './Financeiro.jsx'
 import Layout from '../../components/Layout.jsx'
 import {
   IcInicio, IcAlunos, IcFinanceiro, IcChat, IcTemplates, IcConfig,
-  IcRaio, IcRelogio, IcMais, IcBusca, IcHalter, IcAlerta, IcCopiar, IcCheck
+  IcRaio, IcRelogio, IcMais, IcBusca, IcHalter, IcAlerta, IcCopiar, IcCheck, IcVoltar
 } from '../../components/Icones.jsx'
 
 // Sem I, O, 0 e 1 — some a chance do aluno digitar errado o que veio na mensagem.
@@ -620,31 +621,38 @@ export default function PersonalHome({ user, perfil, onSair }) {
 
       {/* ===== CHAT ===== */}
       {aba === 'chat' && (
-        <div className="card">
-          {!chatAluno ? (
-            <>
-              <div className="card-titulo"><h2>Conversas</h2></div>
-              {fichas.length === 0 && <p className="muted">Nenhum aluno ainda.</p>}
-              {fichas.map(f => (
-                <div key={f.uid} className="conversa-item" onClick={() => setChatAluno({ uid: f.uid, nome: f.nome })}>
-                  <span className="ava">{(f.nome || '?').charAt(0).toUpperCase()}</span>
-                  <div className="cv-txt">
-                    <div className="cv-nome">{f.nome}</div>
-                    <div className="cv-previa">{rotuloUltimo(f)}</div>
-                  </div>
+        !chatAluno ? (
+          <div className="card">
+            <div className="card-titulo"><h2>Conversas</h2></div>
+            {fichas.length === 0 && <p className="muted">Nenhum aluno ainda.</p>}
+            {fichas.map(f => (
+              <div
+                key={f.uid} className="conversa-item"
+                onClick={() => setChatAluno({ uid: f.uid, nome: f.nome, foto: f.foto })}
+              >
+                <Avatar foto={f.foto} nome={f.nome} tamanho={44} />
+                <div className="cv-txt">
+                  <div className="cv-nome">{f.nome}</div>
+                  <div className="cv-previa">{rotuloUltimo(f)}</div>
                 </div>
-              ))}
-            </>
-          ) : (
-            <>
-              <div className="card-titulo">
-                <h2>{chatAluno.nome}</h2>
-                <button className="btn btn-sec btn-sm" onClick={() => setChatAluno(null)}>Voltar</button>
               </div>
-              <Chat chatId={user.uid + '_' + chatAluno.uid} meuUid={user.uid} outroUid={chatAluno.uid} rotaNotif="/aluno" />
-            </>
-          )}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="card sem-padding">
+            <button className="btn btn-ghost btn-sm chat-voltar" onClick={() => setChatAluno(null)}>
+              <IcVoltar /> Conversas
+            </button>
+            <Chat
+              chatId={user.uid + '_' + chatAluno.uid}
+              meuUid={user.uid}
+              outroUid={chatAluno.uid}
+              outroNome={chatAluno.nome}
+              outroFoto={chatAluno.foto}
+              rotaNotif="/aluno"
+            />
+          </div>
+        )
       )}
 
       {/* ===== TEMPLATES ===== */}
