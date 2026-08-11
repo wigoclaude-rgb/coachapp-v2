@@ -232,8 +232,26 @@ export default function PersonalHome({ user, perfil, onSair }) {
     const secAuth = getAuth(secApp)
 
     const senha = gerarCodigo(8)
-    const cred = await createUserWithEmailAndPassword(secAuth, email, senha)
+    const codigo = gerarCodigo()
+
+    /*
+      O Firebase Auth exige e-mail único, mas quem trava o cadastro aqui é o CPF.
+      Sem e-mail, ou com um e-mail que já pertence a outra conta (casal que divide
+      o mesmo), caímos num endereço interno. O aluno entra pelo código de qualquer
+      jeito; o e-mail digitado fica guardado como contato.
+    */
+    const emailInterno = `aluno-${codigo.toLowerCase()}@coachapp.local`
+    let emailLogin = email || emailInterno
+    let cred
+    try {
+      cred = await createUserWithEmailAndPassword(secAuth, emailLogin, senha)
+    } catch (err) {
+      if (err?.code !== 'auth/email-already-in-use' && err?.code !== 'auth/invalid-email') throw err
+      emailLogin = emailInterno
+      cred = await createUserWithEmailAndPassword(secAuth, emailLogin, senha)
+    }
     const alunoUid = cred.user.uid
+    const semRecuperacao = emailLogin === emailInterno
 
     /*
       A partir daqui a conta de login já existe. Se qualquer gravação falhar,
@@ -241,19 +259,23 @@ export default function PersonalHome({ user, perfil, onSair }) {
       perfil e toda tentativa seguinte responde "e-mail já está em uso".
     */
     try {
-      const codigo = gerarCodigo()
       const digitos = soDigitos(cpf)
 
       await set(ref(db, 'users/' + alunoUid), {
-        role: 'aluno', nome, email, personalId: user.uid, codigo,
+        role: 'aluno', nome, personalId: user.uid, codigo,
+        email: emailLogin,          // o que autentica no Firebase
+        emailContato: email || '',  // o que a pessoa digitou, para você falar com ela
+        semRecuperacao,             // true quando o login usa o e-mail interno
         foto: '', objetivo: '', telefone: '', cpf: digitos,
         ...extras,
         precisaTrocarSenha: true,
         criadoEm: Date.now()
       })
-      await set(ref(db, 'codigos/' + codigo), { alunoUid, email, personalId: user.uid })
+      await set(ref(db, 'codigos/' + codigo), { alunoUid, email: emailLogin, personalId: user.uid })
       if (digitos) await set(ref(db, 'cpfs/' + digitos), { alunoUid, personalId: user.uid })
-      await set(ref(db, 'personals/' + user.uid + '/alunos/' + alunoUid), { nome, email, codigo })
+      await set(ref(db, 'personals/' + user.uid + '/alunos/' + alunoUid), {
+        nome, email: email || '', codigo
+      })
 
       if (medidas && Object.keys(medidas).length) {
         await push(ref(db, 'avaliacoes/' + alunoUid), { ts: Date.now(), medidas, origem: 'ficha' })
@@ -263,7 +285,7 @@ export default function PersonalHome({ user, perfil, onSair }) {
       }
 
       await signOut(secAuth)
-      return { nome, codigo, senha }
+      return { nome, codigo, senha, semRecuperacao }
     } catch (err) {
       await deleteUser(cred.user).catch(() => {})
       await signOut(secAuth).catch(() => {})
@@ -274,8 +296,6 @@ export default function PersonalHome({ user, perfil, onSair }) {
   function traduzirErro(err) {
     if (err?.message === 'CPF_INVALIDO') return 'CPF inválido. Confira os números digitados.'
     if (err?.message === 'CPF_EM_USO') return 'Já existe um aluno cadastrado com este CPF.'
-    if (err?.code === 'auth/email-already-in-use') return 'Este e-mail já está em uso por outra conta.'
-    if (err?.code === 'auth/invalid-email') return 'E-mail inválido. Confira o que foi digitado.'
     if (err?.code === 'PERMISSION_DENIED' || err?.message?.includes('permission_denied')) {
       return 'O banco recusou a gravação. Confira as regras do Firebase — nada foi salvo.'
     }
@@ -523,8 +543,8 @@ export default function PersonalHome({ user, perfil, onSair }) {
                     <input value={nNome} onChange={e => setNNome(e.target.value)} required />
                   </div>
                   <div>
-                    <label>E-mail</label>
-                    <input type="email" value={nEmail} onChange={e => setNEmail(e.target.value)} required />
+                    <label>E-mail (opcional)</label>
+                    <input type="email" value={nEmail} onChange={e => setNEmail(e.target.value)} />
                   </div>
                 </div>
                 <label>CPF (opcional)</label>
@@ -554,6 +574,13 @@ export default function PersonalHome({ user, perfil, onSair }) {
               </div>
               <p className="mini">Mande esta mensagem para o aluno. A senha vale só até ele criar a dele.</p>
               <pre className="mensagem-acesso">{mensagemAcesso(nOk)}</pre>
+              {nOk.semRecuperacao && (
+                <p className="aviso-sutil">
+                  Sem e-mail próprio, este aluno não consegue usar o "Esqueci a senha".
+                  Se ele perder a senha, você precisa cadastrá-lo de novo. Peça um e-mail
+                  quando puder e atualize em Configurações.
+                </p>
+              )}
               <button
                 type="button" className="btn btn-sm"
                 onClick={() => {

@@ -12,8 +12,8 @@ import { cpfValido, soDigitos } from './cpf'
 /** Campos da ficha. `secao` agrupa na tela; `obrigatorio` valida no envio. */
 export const CAMPOS_FICHA = [
   { id: 'nome', rotulo: 'Nome completo', tipo: 'texto', secao: 'Seus dados', obrigatorio: true },
-  { id: 'email', rotulo: 'E-mail', tipo: 'email', secao: 'Seus dados', obrigatorio: true, ajuda: 'Vai ser usado para recuperar a senha.' },
   { id: 'cpf', rotulo: 'CPF', tipo: 'cpf', secao: 'Seus dados', obrigatorio: true, ajuda: 'Usado só para não duplicar o seu cadastro.' },
+  { id: 'email', rotulo: 'E-mail (opcional)', tipo: 'email', secao: 'Seus dados', ajuda: 'Serve para recuperar a senha sozinho, se você esquecer.' },
   { id: 'telefone', rotulo: 'Telefone / WhatsApp', tipo: 'tel', secao: 'Seus dados' },
   { id: 'nascimento', rotulo: 'Data de nascimento', tipo: 'data', secao: 'Seus dados' },
   { id: 'sexo', rotulo: 'Sexo', tipo: 'opcoes', secao: 'Seus dados', opcoes: ['Feminino', 'Masculino', 'Prefiro não informar'] },
