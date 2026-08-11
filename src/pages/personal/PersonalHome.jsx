@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { createUserWithEmailAndPassword, signOut, getAuth, deleteUser } from 'firebase/auth'
 import { initializeApp, getApps } from 'firebase/app'
-import { ref, onValue, set, push, update, remove, get } from 'firebase/database'
+import { ref, onValue, set, push, update, remove, get, getDatabase } from 'firebase/database'
 import { db, firebaseConfig } from '../../firebase'
 import { fmtData, fmtMoeda, vencida } from '../../lib/util'
 import { CAMPOS_FICHA, fichaParaAluno, fichaParaMedidas } from '../../lib/ficha'
@@ -261,7 +261,14 @@ export default function PersonalHome({ user, perfil, onSair }) {
     try {
       const digitos = soDigitos(cpf)
 
-      await set(ref(db, 'users/' + alunoUid), {
+      /*
+        O perfil é gravado pelo banco do app secundário, onde quem está logado é
+        o próprio aluno recém-criado. Assim a regra `auth.uid === $uid` aprova.
+        Pelo app principal a gravação seria negada: quem está logado é o personal,
+        e a regra pede um personalId que só passa a existir depois desta linha.
+      */
+      const secDb = getDatabase(secApp)
+      await set(ref(secDb, 'users/' + alunoUid), {
         role: 'aluno', nome, personalId: user.uid, codigo,
         email: emailLogin,          // o que autentica no Firebase
         emailContato: email || '',  // o que a pessoa digitou, para você falar com ela
