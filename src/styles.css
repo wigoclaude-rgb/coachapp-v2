@@ -695,6 +695,8 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 .ficha-campo label { display: block; margin-bottom: 6px; font-weight: 500; }
 .ficha-campo .obrigatorio { color: var(--erro); }
 .ficha-campo .mini { margin-top: 4px; }
+.ficha-campo .erro-inline { color: var(--erro); font-weight: 500; }
+.ficha-campo input[aria-invalid="true"] { border-color: var(--erro); }
 
 .opcoes-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip-opcao {

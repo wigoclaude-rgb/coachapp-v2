@@ -7,10 +7,13 @@
     3. personal abre "Fichas recebidas" e clica em Criar aluno com estes dados
 */
 
+import { cpfValido, soDigitos } from './cpf'
+
 /** Campos da ficha. `secao` agrupa na tela; `obrigatorio` valida no envio. */
 export const CAMPOS_FICHA = [
   { id: 'nome', rotulo: 'Nome completo', tipo: 'texto', secao: 'Seus dados', obrigatorio: true },
   { id: 'email', rotulo: 'E-mail', tipo: 'email', secao: 'Seus dados', obrigatorio: true, ajuda: 'Vai ser usado para recuperar a senha.' },
+  { id: 'cpf', rotulo: 'CPF', tipo: 'cpf', secao: 'Seus dados', obrigatorio: true, ajuda: 'Usado só para não duplicar o seu cadastro.' },
   { id: 'telefone', rotulo: 'Telefone / WhatsApp', tipo: 'tel', secao: 'Seus dados' },
   { id: 'nascimento', rotulo: 'Data de nascimento', tipo: 'data', secao: 'Seus dados' },
   { id: 'sexo', rotulo: 'Sexo', tipo: 'opcoes', secao: 'Seus dados', opcoes: ['Feminino', 'Masculino', 'Prefiro não informar'] },
@@ -39,11 +42,19 @@ export const SECOES_FICHA = [...new Set(CAMPOS_FICHA.map(c => c.secao))]
 export const respostasVazias = () =>
   Object.fromEntries(CAMPOS_FICHA.map(c => [c.id, '']))
 
-/** Lista de rótulos que faltam preencher. Vazia = pode enviar. */
+/**
+ * Problemas que impedem o envio. Vazio = pode enviar.
+ * Devolve texto pronto para mostrar, não só o nome do campo.
+ */
 export function validarFicha(respostas) {
-  return CAMPOS_FICHA
+  const problemas = CAMPOS_FICHA
     .filter(c => c.obrigatorio && !String(respostas[c.id] ?? '').trim())
     .map(c => c.rotulo)
+
+  const cpf = String(respostas?.cpf ?? '').trim()
+  if (cpf && !cpfValido(cpf)) problemas.push('CPF inválido')
+
+  return problemas
 }
 
 /**
@@ -65,6 +76,7 @@ export function fichaParaAluno(respostas) {
   return {
     nome: String(r.nome || '').trim(),
     email: String(r.email || '').trim().toLowerCase(),
+    cpf: soDigitos(r.cpf),
     telefone: String(r.telefone || '').trim(),
     nascimento: String(r.nascimento || '').trim(),
     sexo: String(r.sexo || '').trim(),

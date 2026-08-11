@@ -1,4 +1,8 @@
 import { CAMPOS_FICHA, SECOES_FICHA } from '../lib/ficha'
+import { formatarCPF, cpfValido, soDigitos } from '../lib/cpf'
+
+/** true quando já tem 11 dígitos mas os verificadores não fecham. */
+const cpfIncompleto = valor => soDigitos(valor).length === 11 && !cpfValido(valor)
 
 /**
  * Corpo do formulário da ficha. Não conhece Firebase — só recebe as respostas
@@ -38,6 +42,14 @@ export default function FormularioFicha({
                     </button>
                   ))}
                 </div>
+              ) : campo.tipo === 'cpf' ? (
+                <input
+                  id={campo.id} inputMode="numeric" autoComplete="off"
+                  value={formatarCPF(respostas[campo.id])}
+                  onChange={e => onMudar(campo.id, formatarCPF(e.target.value))}
+                  placeholder="000.000.000-00"
+                  aria-invalid={cpfIncompleto(respostas[campo.id]) || undefined}
+                />
               ) : campo.tipo === 'longo' ? (
                 <textarea
                   id={campo.id} rows={2}
@@ -55,7 +67,9 @@ export default function FormularioFicha({
                 />
               )}
 
-              {campo.ajuda && <p className="mini">{campo.ajuda}</p>}
+              {campo.tipo === 'cpf' && cpfIncompleto(respostas[campo.id])
+                ? <p className="mini erro-inline">Esse CPF não confere. Verifique os números.</p>
+                : campo.ajuda && <p className="mini">{campo.ajuda}</p>}
             </div>
           ))}
         </section>

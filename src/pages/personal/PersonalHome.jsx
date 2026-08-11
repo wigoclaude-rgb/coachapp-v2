@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { createUserWithEmailAndPassword, signOut, getAuth } from 'firebase/auth'
+import { createUserWithEmailAndPassword, signOut, getAuth, deleteUser } from 'firebase/auth'
 import { initializeApp, getApps } from 'firebase/app'
-import { ref, onValue, set, push, update, remove } from 'firebase/database'
+import { ref, onValue, set, push, update, remove, get } from 'firebase/database'
 import { db, firebaseConfig } from '../../firebase'
 import { fmtData, fmtMoeda, vencida } from '../../lib/util'
 import { CAMPOS_FICHA, fichaParaAluno, fichaParaMedidas } from '../../lib/ficha'
+import { cpfValido, soDigitos, formatarCPF } from '../../lib/cpf'
 import Chat from '../../components/Chat.jsx'
 import Avatar from '../../components/Avatar.jsx'
 import Config from '../Config.jsx'
@@ -71,6 +72,7 @@ export default function PersonalHome({ user, perfil, onSair }) {
 
   const [nNome, setNNome] = useState('')
   const [nEmail, setNEmail] = useState('')
+  const [nCpf, setNCpf] = useState('')
   const [nErro, setNErro] = useState('')
   const [nOk, setNOk] = useState(null)
   const [criando, setCriando] = useState(false)
@@ -216,7 +218,14 @@ export default function PersonalHome({ user, perfil, onSair }) {
    * Cria a conta do aluno com senha temporária. O personal não escolhe a senha,
    * e o aluno é obrigado a trocá-la no primeiro acesso (`precisaTrocarSenha`).
    */
-  async function criarConta({ nome, email, extras = {}, medidas = null, fichaId = null }) {
+  async function criarConta({ nome, email, cpf = '', extras = {}, medidas = null, fichaId = null }) {
+    // O CPF é a chave que impede a mesma pessoa entrar duas vezes com e-mails diferentes.
+    if (cpf) {
+      if (!cpfValido(cpf)) throw new Error('CPF_INVALIDO')
+      const jaTem = await get(ref(db, 'cpfs/' + soDigitos(cpf)))
+      if (jaTem.exists()) throw new Error('CPF_EM_USO')
+    }
+
     // App secundário para não deslogar o personal ao criar o usuário.
     const nomeSec = 'secundario'
     const secApp = getApps().find(a => a.name === nomeSec) || initializeApp(firebaseConfig, nomeSec)
@@ -225,42 +234,65 @@ export default function PersonalHome({ user, perfil, onSair }) {
     const senha = gerarCodigo(8)
     const cred = await createUserWithEmailAndPassword(secAuth, email, senha)
     const alunoUid = cred.user.uid
-    await signOut(secAuth)
 
-    const codigo = gerarCodigo()
-    await set(ref(db, 'users/' + alunoUid), {
-      role: 'aluno', nome, email, personalId: user.uid, codigo,
-      foto: '', objetivo: '', telefone: '',
-      ...extras,
-      precisaTrocarSenha: true,
-      criadoEm: Date.now()
-    })
-    await set(ref(db, 'codigos/' + codigo), { alunoUid, email, personalId: user.uid })
-    await set(ref(db, 'personals/' + user.uid + '/alunos/' + alunoUid), { nome, email, codigo })
+    /*
+      A partir daqui a conta de login já existe. Se qualquer gravação falhar,
+      apagamos a conta antes de sair — senão o e-mail fica preso numa conta sem
+      perfil e toda tentativa seguinte responde "e-mail já está em uso".
+    */
+    try {
+      const codigo = gerarCodigo()
+      const digitos = soDigitos(cpf)
 
-    if (medidas && Object.keys(medidas).length) {
-      await push(ref(db, 'avaliacoes/' + alunoUid), { ts: Date.now(), medidas, origem: 'ficha' })
+      await set(ref(db, 'users/' + alunoUid), {
+        role: 'aluno', nome, email, personalId: user.uid, codigo,
+        foto: '', objetivo: '', telefone: '', cpf: digitos,
+        ...extras,
+        precisaTrocarSenha: true,
+        criadoEm: Date.now()
+      })
+      await set(ref(db, 'codigos/' + codigo), { alunoUid, email, personalId: user.uid })
+      if (digitos) await set(ref(db, 'cpfs/' + digitos), { alunoUid, personalId: user.uid })
+      await set(ref(db, 'personals/' + user.uid + '/alunos/' + alunoUid), { nome, email, codigo })
+
+      if (medidas && Object.keys(medidas).length) {
+        await push(ref(db, 'avaliacoes/' + alunoUid), { ts: Date.now(), medidas, origem: 'ficha' })
+      }
+      if (fichaId) {
+        await update(ref(db, 'fichas/' + user.uid + '/' + fichaId), { status: 'usada', alunoUid })
+      }
+
+      await signOut(secAuth)
+      return { nome, codigo, senha }
+    } catch (err) {
+      await deleteUser(cred.user).catch(() => {})
+      await signOut(secAuth).catch(() => {})
+      throw err
     }
-    if (fichaId) {
-      await update(ref(db, 'fichas/' + user.uid + '/' + fichaId), { status: 'usada', alunoUid })
-    }
-
-    return { nome, codigo, senha }
   }
 
   function traduzirErro(err) {
+    if (err?.message === 'CPF_INVALIDO') return 'CPF inválido. Confira os números digitados.'
+    if (err?.message === 'CPF_EM_USO') return 'Já existe um aluno cadastrado com este CPF.'
     if (err?.code === 'auth/email-already-in-use') return 'Este e-mail já está em uso por outra conta.'
     if (err?.code === 'auth/invalid-email') return 'E-mail inválido. Confira o que foi digitado.'
-    return 'Não foi possível cadastrar. Tente novamente.'
+    if (err?.code === 'PERMISSION_DENIED' || err?.message?.includes('permission_denied')) {
+      return 'O banco recusou a gravação. Confira as regras do Firebase — nada foi salvo.'
+    }
+    return 'Não foi possível cadastrar. Nada foi salvo, pode tentar de novo.'
   }
 
   async function cadastrarAluno(e) {
     e.preventDefault()
     setNErro(''); setNOk(null); setCriando(true)
     try {
-      const dados = await criarConta({ nome: nNome.trim(), email: nEmail.trim().toLowerCase() })
+      const dados = await criarConta({
+        nome: nNome.trim(),
+        email: nEmail.trim().toLowerCase(),
+        cpf: nCpf
+      })
       setNOk(dados)
-      setNNome(''); setNEmail(''); setMostrarForm(false)
+      setNNome(''); setNEmail(''); setNCpf(''); setMostrarForm(false)
     } catch (err) {
       setNErro(traduzirErro(err))
       console.warn('Falha ao cadastrar aluno:', err)
@@ -272,9 +304,9 @@ export default function PersonalHome({ user, perfil, onSair }) {
     setNErro(''); setNOk(null); setCriando(true)
     try {
       const perfilAluno = fichaParaAluno(ficha.respostas)
-      const { nome, email, ...extras } = perfilAluno
+      const { nome, email, cpf, ...extras } = perfilAluno
       const dados = await criarConta({
-        nome, email, extras,
+        nome, email, cpf, extras,
         medidas: fichaParaMedidas(ficha.respostas),
         fichaId: ficha.id
       })
@@ -495,8 +527,16 @@ export default function PersonalHome({ user, perfil, onSair }) {
                     <input type="email" value={nEmail} onChange={e => setNEmail(e.target.value)} required />
                   </div>
                 </div>
+                <label>CPF (opcional)</label>
+                <input
+                  value={formatarCPF(nCpf)}
+                  onChange={e => setNCpf(formatarCPF(e.target.value))}
+                  inputMode="numeric"
+                  placeholder="000.000.000-00"
+                />
                 <p className="mini">
-                  A senha é gerada pelo app e o aluno troca no primeiro acesso — você não precisa inventar uma.
+                  O CPF evita cadastrar a mesma pessoa duas vezes. A senha é gerada pelo app
+                  e o aluno troca no primeiro acesso — você não precisa inventar uma.
                 </p>
                 {nErro && <div className="erro">{nErro}</div>}
                 <button className="btn" disabled={criando}>{criando ? 'Cadastrando...' : 'Cadastrar aluno'}</button>

@@ -6,7 +6,7 @@
     "users": {
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || root.child('users/'+$uid+'/personalId').val() === auth.uid)",
-        ".write": "auth != null && (auth.uid === $uid || root.child('users/'+$uid+'/personalId').val() === auth.uid)"
+        ".write": "auth != null && (auth.uid === $uid || root.child('users/'+$uid+'/personalId').val() === auth.uid || (!data.exists() && newData.child('personalId').val() === auth.uid))"
       }
     },
 
@@ -14,6 +14,13 @@
       "$codigo": {
         ".read": true,
         ".write": "auth != null"
+      }
+    },
+
+    "cpfs": {
+      "$cpf": {
+        ".read": "auth != null",
+        ".write": "auth != null && (!data.exists() || data.child('personalId').val() === auth.uid)"
       }
     },
 
