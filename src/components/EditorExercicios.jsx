@@ -3,6 +3,7 @@ import { BIBLIOTECA_EXERCICIOS } from '../lib/exercicios'
 import { exercicioVazio, linhaVazia, normalizarExercicios } from '../lib/treinoModel'
 import { imagemExercicio } from '../lib/util'
 import { apagarFoto } from '../lib/fotos'
+import InputComAutoComplete from './InputComAutoComplete.jsx'
 import FotoInput from './FotoInput.jsx'
 import { IcMais, IcLixeira, IcCheck, IcFechar } from './Icones.jsx'
 
@@ -143,11 +144,11 @@ export default function EditorExercicios({ exercicios, onChange, pastaFotos = 'e
             />
             <span className="ex-check-caixa" aria-hidden="true"><IcCheck /></span>
           </label>
-          <input
+          <InputComAutoComplete
             className="ex-nome-input"
-            list="lista-exercicios"
             value={ex.nome}
-            onChange={e => mudar(i, 'nome', e.target.value)}
+            onChange={valor => mudar(i, 'nome', valor)}
+            sugestoes={sugestoesExercicios}
             placeholder="Nome do exercício"
           />
           <button type="button" className="remove-btn" onClick={() => removerExercicio(i)} title="Remover exercício">
@@ -246,10 +247,6 @@ export default function EditorExercicios({ exercicios, onChange, pastaFotos = 'e
 
   return (
     <>
-      <datalist id="lista-exercicios">
-        {sugestoesExercicios.map(ex => <option key={ex} value={ex} />)}
-      </datalist>
-
       {sel.size > 0 && (
         <div className="barra-selecao">
           <span>{sel.size} selecionado{sel.size === 1 ? '' : 's'}</span>
