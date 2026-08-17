@@ -31,6 +31,19 @@ export default function MeusTemplates({ user }) {
     )
   }, [templates, busca])
 
+  // Coleta todos os nomes de exercícios já criados (sem duplicatas) para autocomplete
+  const exerciciosCriados = useMemo(() => {
+    const nomes = new Set()
+    templates.forEach(t => {
+      t.lista.forEach(d => {
+        d.exercicios.forEach(ex => {
+          if (ex.nome?.trim()) nomes.add(ex.nome.trim())
+        })
+      })
+    })
+    return Array.from(nomes).sort()
+  }, [templates])
+
   const dia = dias[diaAtivo] || dias[0]
 
   function atualizarDia(fn) {
@@ -154,6 +167,7 @@ export default function MeusTemplates({ user }) {
               exercicios={dia.exercicios}
               onChange={novos => atualizarDia(d => ({ ...d, exercicios: novos }))}
               pastaFotos={'exercicios/' + user.uid}
+              exerciciosCriados={exerciciosCriados}
             />
 
             <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>

@@ -11,13 +11,25 @@ import { IcMais, IcLixeira, IcCheck, IcFechar } from './Icones.jsx'
  *  - linhas de série (reps livre + carga + intervalo) para progressão de carga
  *  - seleção por checkbox para combinar exercícios em bi-set
  *  - campo de observações por exercício
- *
+ *  - autocomplete de exercícios já criados pelo personal
  *  - imagem de demonstração por exercício (envia, troca ou remove)
  *
- * Props: exercicios (array canônico), onChange(novaLista), pastaFotos
+ * Props: exercicios (array canônico), onChange(novaLista), pastaFotos, exerciciosCriados (array de nomes únicos já usados)
  */
-export default function EditorExercicios({ exercicios, onChange, pastaFotos = 'exercicios' }) {
+export default function EditorExercicios({ exercicios, onChange, pastaFotos = 'exercicios', exerciciosCriados = [] }) {
   const [sel, setSel] = useState(() => new Set())
+
+  // Combina biblioteca genérica com exercícios já criados, remove duplicatas, ordena por frequência
+  const sugestoesExercicios = useMemo(() => {
+    const todos = new Set([...BIBLIOTECA_EXERCICIOS, ...exerciciosCriados])
+    return Array.from(todos).sort((a, b) => {
+      // Exercícios criados aparecem primeiro
+      const aCriado = exerciciosCriados.includes(a)
+      const bCriado = exerciciosCriados.includes(b)
+      if (aCriado !== bCriado) return aCriado ? -1 : 1
+      return a.localeCompare(b)
+    })
+  }, [exerciciosCriados])
 
   const segmentos = useMemo(() => {
     const segs = []
@@ -235,7 +247,7 @@ export default function EditorExercicios({ exercicios, onChange, pastaFotos = 'e
   return (
     <>
       <datalist id="lista-exercicios">
-        {BIBLIOTECA_EXERCICIOS.map(ex => <option key={ex} value={ex} />)}
+        {sugestoesExercicios.map(ex => <option key={ex} value={ex} />)}
       </datalist>
 
       {sel.size > 0 && (

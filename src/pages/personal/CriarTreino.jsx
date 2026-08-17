@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ref, get, set, push, remove } from 'firebase/database'
 import { db } from '../../firebase'
@@ -44,6 +44,19 @@ export default function CriarTreino({ user }) {
   }, [alunoId, user.uid])
 
   const dia = dias[diaAtivo] || dias[0]
+
+  // Coleta exercícios já criados nos templates para autocomplete
+  const exerciciosCriados = useMemo(() => {
+    const nomes = new Set()
+    Object.values(meusTemplates).forEach(t => {
+      (t.lista || []).forEach(d => {
+        (d.exercicios || []).forEach(ex => {
+          if (ex.nome?.trim()) nomes.add(ex.nome.trim())
+        })
+      })
+    })
+    return Array.from(nomes).sort()
+  }, [meusTemplates])
 
   function setExercicios(novos) {
     setDias(ds => ds.map((d, i) => (i === diaAtivo ? { ...d, exercicios: novos } : d)))
@@ -228,6 +241,7 @@ export default function CriarTreino({ user }) {
           exercicios={dia.exercicios}
           onChange={setExercicios}
           pastaFotos={'exercicios/' + user.uid}
+          exerciciosCriados={exerciciosCriados}
         />
 
         {salvo && <div className="ok"><IcCheck /> Treino salvo. O aluno foi notificado e o plano anterior ficou no histórico.</div>}
