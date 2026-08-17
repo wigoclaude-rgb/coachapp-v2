@@ -11,13 +11,18 @@ export default function Login() {
   const [senha, setSenha] = useState('')
   const [erro, setErro] = useState('')
   const [ok, setOk] = useState('')
+  // true quando chegou pelo link que o personal manda (?modo=aluno&codigo=...).
+  // Nesse caso trava em "Sou Aluno" — sem controle de quem é personal ainda,
+  // qualquer um poderia clicar em "Sou Personal" e tentar criar conta ali.
+  const [travadoEmAluno, setTravadoEmAluno] = useState(false)
 useEffect(() => {
   const params = new URLSearchParams(window.location.search)
   const modoURL = params.get('modo')
   const codigoURL = params.get('codigo')
-  
+
   if (modoURL === 'aluno') {
     setModo('aluno')
+    setTravadoEmAluno(true)
     if (codigoURL) setCodigo(codigoURL)
   }
 }, [])
@@ -74,7 +79,7 @@ useEffect(() => {
         <h1>COACHAPP</h1>
         <p className="sub">Treinos entre personal e aluno, em um só lugar.</p>
 
-        {modo !== 'recuperar' && (
+        {modo !== 'recuperar' && !travadoEmAluno && (
           <div className="tabs" style={{ marginBottom: 6 }}>
             <button type="button" className={'tab ' + (modo === 'personal' ? 'ativa' : '')} onClick={() => { setModo('personal'); setErro('') }}>Sou Personal</button>
             <button type="button" className={'tab ' + (modo === 'aluno' ? 'ativa' : '')} onClick={() => { setModo('aluno'); setErro('') }}>Sou Aluno</button>
@@ -119,7 +124,7 @@ useEffect(() => {
             {ok && <div className="ok">{ok}</div>}
             <button className="btn" disabled={enviando}>{enviando ? 'Enviando...' : 'Enviar link de redefinição'}</button>
             <div className="link-row">
-              <a href="#" onClick={e => { e.preventDefault(); setModo('personal'); setErro(''); setOk('') }}>Voltar ao login</a>
+              <a href="#" onClick={e => { e.preventDefault(); setModo(travadoEmAluno ? 'aluno' : 'personal'); setErro(''); setOk('') }}>Voltar ao login</a>
             </div>
           </form>
         )}
