@@ -1086,6 +1086,13 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   display: flex; flex-direction: column; gap: 4px;
 }
 
+/*
+  Cada dia é um bloco. Precisa ser flex-column também: o `align-self` que joga a
+  minha mensagem para a direita só vale para filho direto de um flex container,
+  e as bolhas ficam dentro deste bloco, não direto no .chat-msgs.
+*/
+.chat-grupo { display: flex; flex-direction: column; }
+
 .chat-dia { text-align: center; margin: 14px 0 10px; }
 .chat-dia span {
   background: var(--superficie-2); border: 1px solid var(--borda);

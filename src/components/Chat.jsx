@@ -95,7 +95,7 @@ export default function Chat({ chatId, meuUid, outroUid, outroNome, outroFoto, r
         )}
 
         {grupos.map(g => (
-          <div key={g.dia}>
+          <div key={g.dia} className="chat-grupo">
             <div className="chat-dia"><span>{fmtDataLonga(g.ts)}</span></div>
             {g.msgs.map(m => {
               const minha = m.de === meuUid
