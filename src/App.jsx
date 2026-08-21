@@ -8,6 +8,7 @@ import Login from './pages/Login.jsx'
 import CadastroPersonal from './pages/CadastroPersonal.jsx'
 import FichaPublica from './pages/FichaPublica.jsx'
 import CriarSenha from './pages/CriarSenha.jsx'
+import Novidades from './components/Novidades.jsx'
 import PersonalHome from './pages/personal/PersonalHome.jsx'
 import AlunoDetalhe from './pages/personal/AlunoDetalhe.jsx'
 import CriarTreino from './pages/personal/CriarTreino.jsx'
@@ -56,6 +57,7 @@ export default function App() {
 
   return (
     <>
+      {logado && <Novidades user={user} perfil={perfil} />}
       <Routes>
         <Route path="/" element={
           !logado ? <Login /> :

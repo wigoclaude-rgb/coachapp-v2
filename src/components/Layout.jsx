@@ -11,7 +11,7 @@ import { IcHalter, IcMenu, IcSair } from './Icones.jsx'
     - roleLabel: texto abaixo do nome (ex: "Personal Trainer")
     - titulo, subtitulo: cabeçalho da topbar (dinâmico por aba)
 */
-export default function Layout({ user, perfil, onSair, itens, abaAtiva, onAba, roleLabel, titulo, subtitulo, children }) {
+export default function Layout({ user, perfil, onSair, itens, abaAtiva, onAba, roleLabel, titulo, subtitulo, onAjuda, children }) {
   const [menuAberto, setMenuAberto] = useState(false)
   const inicial = (perfil?.nome || '?').trim().charAt(0).toUpperCase()
 
@@ -74,6 +74,9 @@ export default function Layout({ user, perfil, onSair, itens, abaAtiva, onAba, r
             {subtitulo && <span className="sub">{subtitulo}</span>}
           </div>
           <div className="topbar-dir">
+            {onAjuda && (
+              <button className="btn-ajuda" onClick={onAjuda} title="Rever o tutorial desta tela">?</button>
+            )}
             <Notificacoes uid={user.uid} />
             {perfil?.foto
               ? <img src={perfil.foto} className="topbar-avatar" alt="perfil" />

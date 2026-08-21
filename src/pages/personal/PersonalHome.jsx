@@ -13,6 +13,11 @@ import Config from '../Config.jsx'
 import MeusTemplates from './MeusTemplates.jsx'
 import Financeiro from './Financeiro.jsx'
 import Layout from '../../components/Layout.jsx'
+import Tour from '../../components/Tour.jsx'
+import {
+  TOUR_PERSONAL_INICIO, TOUR_PERSONAL_ALUNOS,
+  TOUR_PERSONAL_TEMPLATES, TOUR_PERSONAL_FINANCEIRO
+} from '../../lib/tours'
 import {
   IcInicio, IcAlunos, IcFinanceiro, IcChat, IcTemplates, IcConfig,
   IcRaio, IcRelogio, IcMais, IcBusca, IcHalter, IcAlerta, IcCopiar, IcCheck, IcVoltar
@@ -60,6 +65,7 @@ const FILTROS = [
 ]
 
 export default function PersonalHome({ user, perfil, onSair }) {
+  const [rever, setRever] = useState(false)
   const [aba, setAba] = useState('inicio')
   const [alunos, setAlunos] = useState({})
   const [execucoes, setExecucoes] = useState({})
@@ -362,6 +368,16 @@ export default function PersonalHome({ user, perfil, onSair }) {
   const hojeData = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
   const meta = TITULOS[aba] || TITULOS.inicio
 
+  /* Tour da aba atual. A chave leva "p_" para não colidir com a do aluno. */
+  const TOURS = {
+    inicio: TOUR_PERSONAL_INICIO,
+    alunos: TOUR_PERSONAL_ALUNOS,
+    templates: TOUR_PERSONAL_TEMPLATES,
+    financeiro: TOUR_PERSONAL_FINANCEIRO
+  }
+  const tourDaAba = TOURS[aba]
+  const perfilTour = rever ? { ...perfil, tours: {} } : perfil
+
   function irPara(id) {
     setAba(id)
     if (id === 'chat') setChatAluno(null)
@@ -381,9 +397,19 @@ export default function PersonalHome({ user, perfil, onSair }) {
   return (
     <Layout
       user={user} perfil={perfil} onSair={onSair} itens={itens}
-      abaAtiva={aba} onAba={irPara}
+      abaAtiva={aba} onAba={a => { irPara(a); setRever(false) }}
       roleLabel="Personal Trainer" titulo={meta.t} subtitulo={meta.s}
+      onAjuda={tourDaAba ? () => setRever(true) : undefined}
     >
+      {tourDaAba && (
+        <Tour
+          key={aba + (rever ? '-rever' : '')}
+          passos={tourDaAba} chave={'p_' + aba}
+          user={user} perfil={perfilTour}
+          onFim={() => setRever(false)}
+        />
+      )}
+
       {/* ===== INÍCIO ===== */}
       {aba === 'inicio' && (
         <>
