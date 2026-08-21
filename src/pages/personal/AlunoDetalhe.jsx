@@ -4,8 +4,16 @@ import { ref, onValue, push, remove } from 'firebase/database'
 import { db } from '../../firebase'
 import { fmtData } from '../../lib/util'
 import { normalizarPlano, resumoLinhas, LETRAS } from '../../lib/treinoModel'
+
+/* Espelha PERGUNTAS_FEEDBACK do AlunoHome. `alerta` é a resposta que pede ação. */
+const PERGUNTAS_FB = [
+  { id: 'carga', curto: 'Carga adequada', alerta: 'nao' },
+  { id: 'dor', curto: 'Sentiu dor', alerta: 'sim' },
+  { id: 'completou', curto: 'Completou as reps', alerta: 'nao' }
+]
 import { CAMPOS_MEDIDAS, rotuloMedida } from '../../lib/medidas'
-import { IcEvolucao } from '../../components/Icones.jsx'
+import { IcEvolucao, IcOlho } from '../../components/Icones.jsx'
+import PreviaTreinoAluno from '../../components/PreviaTreinoAluno.jsx'
 import LineChart from '../../components/LineChart.jsx'
 import Heatmap from '../../components/Heatmap.jsx'
 import FotoInput from '../../components/FotoInput.jsx'
@@ -22,6 +30,8 @@ export default function AlunoDetalhe({ user }) {
   const [diario, setDiario] = useState({})
   const [historico, setHistorico] = useState({})
   const [medidas, setMedidas] = useState({})
+  const [feedbacks, setFeedbacks] = useState({})
+  const [verComoAluno, setVerComoAluno] = useState(false)
   const [medMsg, setMedMsg] = useState('')
   const [medidaGrafico, setMedidaGrafico] = useState('peso')
   const [exercicioGrafico, setExercicioGrafico] = useState('')
@@ -35,7 +45,8 @@ export default function AlunoDetalhe({ user }) {
     const u5 = onValue(ref(db, 'treinosHistorico/' + alunoId), s => setHistorico(s.val() || {}))
     // Só o espelho do que o aluno compartilhou — `diario/` é privado dele.
     const u6 = onValue(ref(db, 'diarioCompartilhado/' + alunoId), s => setDiario(s.val() || {}))
-    return () => { u1(); u2(); u3(); u4(); u5(); u6() }
+    const u7 = onValue(ref(db, 'feedbacks/' + alunoId), s => setFeedbacks(s.val() || {}))
+    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7() }
   }, [alunoId])
 
   if (!aluno) return <div className="loading">Carregando...</div>
@@ -44,6 +55,10 @@ export default function AlunoDetalhe({ user }) {
   const listaAval = Object.entries(avaliacoes).map(([id, a]) => ({ id, ...a })).sort((a, b) => a.ts - b.ts)
   const listaFotos = Object.entries(fotos).map(([id, f]) => ({ id, ...f })).sort((a, b) => b.ts - a.ts)
   const listaHist = Object.entries(historico).map(([id, t]) => ({ id, ...t })).sort((a, b) => (b.arquivadoEm || 0) - (a.arquivadoEm || 0))
+  const listaFeedback = Object.entries(feedbacks)
+    .map(([id, f]) => ({ id, ...f }))
+    .sort((a, b) => b.ts - a.ts)
+
   const listaDiario = Object.entries(diario)
     .map(([id, r]) => ({ id, ...r }))
     .sort((a, b) => (b.ts || 0) - (a.ts || 0))
@@ -99,13 +114,28 @@ export default function AlunoDetalhe({ user }) {
 
   return (
     <div className="container">
+      {verComoAluno && (
+        <PreviaTreinoAluno
+          alunoId={alunoId}
+          nome={aluno.nome}
+          onFechar={() => setVerComoAluno(false)}
+        />
+      )}
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {aluno.foto ? <img src={aluno.foto} className="foto-perfil" alt="" /> : null}
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
   <h2 style={{ fontSize: 22, margin: 0 }}>{aluno.nome}</h2>
-  <button 
+  <button
+    className="btn btn-sec btn-sm"
+    onClick={() => setVerComoAluno(true)}
+    title="Ver a tela de treino como o aluno vê"
+  >
+    <IcOlho /> Ver como o aluno
+  </button>
+  <button
     className="btn btn-sec btn-sm" 
     onClick={() => {
       if (confirm('Deletar aluno ' + aluno.nome + '? Vai deletar tudo!')) {
@@ -136,6 +166,9 @@ export default function AlunoDetalhe({ user }) {
         <button className={'tab ' + (aba === 'fotos' ? 'ativa' : '')} onClick={() => setAba('fotos')}>Fotos</button>
         <button className={'tab ' + (aba === 'diario' ? 'ativa' : '')} onClick={() => setAba('diario')}>
           Diário{listaDiario.length > 0 ? ` (${listaDiario.length})` : ''}
+        </button>
+        <button className={'tab ' + (aba === 'feedback' ? 'ativa' : '')} onClick={() => setAba('feedback')}>
+          Feedback{listaFeedback.length > 0 ? ` (${listaFeedback.length})` : ''}
         </button>
         <button className={'tab ' + (aba === 'relatorios' ? 'ativa' : '')} onClick={() => setAba('relatorios')}>Relatórios</button>
         <button className={'tab ' + (aba === 'historico' ? 'ativa' : '')} onClick={() => setAba('historico')}>Treinos antigos</button>
@@ -208,6 +241,47 @@ export default function AlunoDetalhe({ user }) {
             ))}
           </div>
         </>
+      )}
+
+      {aba === 'feedback' && (
+        <div className="card">
+          <div className="card-titulo">
+            <div style={{ minWidth: 0 }}>
+              <h2>O que o aluno respondeu</h2>
+              <p className="mini">Enviado por {aluno.nome?.split(' ')[0] || 'ele'} dentro de cada exercício.</p>
+            </div>
+          </div>
+
+          {listaFeedback.length === 0 && (
+            <p className="muted">Nenhum feedback ainda.</p>
+          )}
+
+          {listaFeedback.map(f => {
+            const alertas = PERGUNTAS_FB.filter(p => f.respostas?.[p.id] === p.alerta)
+            return (
+              <div key={f.id} className={'fb-item' + (alertas.length ? ' atencao' : '')}>
+                <div className="fb-topo">
+                  <strong>{f.exercicio}</strong>
+                  <span className="mini">{f.treino ? f.treino + ' · ' : ''}{fmtData(f.ts)}</span>
+                </div>
+
+                <div className="fb-respostas">
+                  {PERGUNTAS_FB.map(p => {
+                    const r = f.respostas?.[p.id]
+                    if (!r) return null
+                    return (
+                      <span key={p.id} className={'fb-tag' + (r === p.alerta ? ' ruim' : '')}>
+                        {p.curto}: {r === 'sim' ? 'sim' : 'não'}
+                      </span>
+                    )
+                  })}
+                </div>
+
+                {f.comentario && <p className="fb-comentario">{f.comentario}</p>}
+              </div>
+            )
+          })}
+        </div>
       )}
 
       {aba === 'fotos' && (

@@ -42,6 +42,13 @@
       }
     },
 
+    "feedbacks": {
+      "$alunoUid": {
+        ".read": "auth != null && (auth.uid === $alunoUid || root.child('users/'+$alunoUid+'/personalId').val() === auth.uid)",
+        ".write": "auth != null && auth.uid === $alunoUid"
+      }
+    },
+
     "diario": {
       "$alunoUid": {
         ".read": "auth != null && auth.uid === $alunoUid",
