@@ -56,6 +56,16 @@ export const capaYoutube = id => (id ? `https://img.youtube.com/vi/${id}/hqdefau
  * Prioridade: a que o personal enviou, senão a capa do vídeo, senão nada.
  */
 export const imagemExercicio = ex => ex?.imagem || capaYoutube(youtubeId(ex?.video)) || null
+
+/*
+  A carga é texto livre: o personal tanto digita "30" quanto "30Kg". Só acrescenta
+  a unidade quando ela ainda não está lá, senão sai "30Kg kg".
+*/
+export function comKg(valor) {
+  const txt = String(valor ?? '').trim()
+  if (!txt) return ''
+  return /kg\s*$/i.test(txt) ? txt : txt + ' kg'
+}
 export function beep() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)()

@@ -159,3 +159,35 @@ export function resumoLinhas(linhas) {
   const todasIguais = reps.every(r => r === reps[0])
   return todasIguais ? `${linhas.length}x${reps[0]}` : reps.join(' / ')
 }
+
+/** Número escondido num texto livre de carga: "60Kg" -> 60. */
+function cargaNumero(valor) {
+  const n = Number(String(valor ?? '').replace(/[^\d.,]/g, '').replace(',', '.'))
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+/**
+ * Resumo de uma linha só para o cabeçalho do exercício: quantas séries e a
+ * faixa de carga. Quando as repetições variam de série para série, enfileirá-las
+ * ("20 / 15 / 12 / 12-10") não diz nada — o que interessa ali é o peso.
+ * As reps detalhadas aparecem ao abrir o exercício.
+ */
+export function resumoExercicio(ex) {
+  const linhas = ex?.linhas || []
+  if (!linhas.length) return ''
+
+  const n = linhas.length
+  const partes = [`${n} série${n === 1 ? '' : 's'}`]
+
+  const reps = linhas.map(l => String(l.reps || '').trim())
+  if (reps[0] && reps.every(r => r === reps[0])) partes.push(`${reps[0]} reps`)
+
+  const nums = linhas.map(l => cargaNumero(l.carga)).filter(Boolean)
+  if (nums.length) {
+    const min = Math.min(...nums)
+    const max = Math.max(...nums)
+    partes.push(min === max ? `${min} kg` : `${min} a ${max} kg`)
+  }
+
+  return partes.join(' · ')
+}

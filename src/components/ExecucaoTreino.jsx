@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { youtubeId, beep, imagemExercicio } from '../lib/util'
+import { youtubeId, beep, imagemExercicio, comKg } from '../lib/util'
 import { agruparBlocos, chaveSerie } from '../lib/treinoModel'
 import { IcCheck, IcVoltar, IcVideo, IcTrofeu, IcRelogio } from './Icones.jsx'
 
@@ -19,6 +19,8 @@ export default function ExecucaoTreino({ exercicios, feitas, nomeTreino, cargaAn
   const blocos = useMemo(() => agruparBlocos(exercicios), [exercicios])
 
   const [idxBloco, setIdxBloco] = useState(0)
+  // Série que a pessoa tocou. null = segue a ordem natural (primeira pendente).
+  const [serieEscolhida, setSerieEscolhida] = useState(null)
   const [pesos, setPesos] = useState({})
   const [erro, setErro] = useState('')
   const [descanso, setDescanso] = useState(null)
@@ -29,7 +31,7 @@ export default function ExecucaoTreino({ exercicios, feitas, nomeTreino, cargaAn
   const bloco = blocos[idxBloco]
 
   /** Primeira série ainda não concluída do bloco (todos os exercícios contam). */
-  const serieAtual = useMemo(() => {
+  const primeiraPendente = useMemo(() => {
     if (!bloco) return 1
     for (let s = 1; s <= bloco.series; s++) {
       const pendente = bloco.exercicios.some(ex => linhaDe(ex, s) && !feitas[chaveSerie(ex.nome, s)])
@@ -38,7 +40,13 @@ export default function ExecucaoTreino({ exercicios, feitas, nomeTreino, cargaAn
     return bloco.series + 1
   }, [bloco, feitas])
 
-  const blocoCompleto = bloco ? serieAtual > bloco.series : false
+  /* A escolhida manda, desde que ainda faça sentido; senão volta para a ordem natural. */
+  const escolhidaValida = serieEscolhida
+    && serieEscolhida <= (bloco?.series || 0)
+    && bloco?.exercicios.some(ex => linhaDe(ex, serieEscolhida) && !feitas[chaveSerie(ex.nome, serieEscolhida)])
+  const serieAtual = escolhidaValida ? serieEscolhida : primeiraPendente
+
+  const blocoCompleto = bloco ? primeiraPendente > bloco.series : false
 
   const { feitasTotal, seriesTotal } = useMemo(() => {
     let f = 0, t = 0
@@ -52,7 +60,7 @@ export default function ExecucaoTreino({ exercicios, feitas, nomeTreino, cargaAn
   const progresso = seriesTotal ? Math.round((feitasTotal / seriesTotal) * 100) : 0
   const treinoCompleto = seriesTotal > 0 && feitasTotal >= seriesTotal
 
-  useEffect(() => { setPesos({}); setErro(''); setVideoAberto(null) }, [idxBloco])
+  useEffect(() => { setPesos({}); setErro(''); setVideoAberto(null); setSerieEscolhida(null) }, [idxBloco])
 
   useEffect(() => {
     if (!descanso) return
@@ -86,11 +94,22 @@ export default function ExecucaoTreino({ exercicios, feitas, nomeTreino, cargaAn
     setSalvando(false)
     setErro('')
     setPesos({})
+    setSerieEscolhida(null)
 
-    const eraUltima = serieAtual >= bloco.series
+    /*
+      Só avança de bloco quando não sobrou nenhuma série. Não dá para olhar só
+      "era a última", porque com as séries clicáveis a pessoa pode fazer a 4 antes
+      da 2 — e aí o bloco ficaria para trás pela metade. `feitas` ainda não
+      reflete o que acabou de ser gravado, então a série atual entra como feita.
+    */
+    let sobrou = false
+    for (let s = 1; s <= bloco.series && !sobrou; s++) {
+      if (s === serieAtual) continue
+      sobrou = bloco.exercicios.some(ex => linhaDe(ex, s) && !feitas[chaveSerie(ex.nome, s)])
+    }
     const temProximo = idxBloco < blocos.length - 1
 
-    if (eraUltima) {
+    if (!sobrou) {
       if (temProximo) setIdxBloco(i => i + 1)
       return
     }
@@ -181,7 +200,7 @@ export default function ExecucaoTreino({ exercicios, feitas, nomeTreino, cargaAn
                     <div className="exec-numeros">
                       <div className="exec-numero">
                         <div className="en-label">Anterior</div>
-                        <div className="en-valor">{anterior ? anterior + ' kg' : '—'}</div>
+                        <div className="en-valor">{anterior ? comKg(anterior) : '—'}</div>
                       </div>
                       <div className="exec-numero destaque">
                         <div className="en-label">Reps</div>
@@ -189,7 +208,7 @@ export default function ExecucaoTreino({ exercicios, feitas, nomeTreino, cargaAn
                       </div>
                       <div className="exec-numero">
                         <div className="en-label">Alvo</div>
-                        <div className="en-valor">{linha.carga ? linha.carga + ' kg' : 'Livre'}</div>
+                        <div className="en-valor">{linha.carga ? comKg(linha.carga) : 'Livre'}</div>
                       </div>
                     </div>
 
@@ -200,9 +219,15 @@ export default function ExecucaoTreino({ exercicios, feitas, nomeTreino, cargaAn
                         const s = i + 1
                         const done = feitas[chaveSerie(ex.nome, s)]
                         return (
-                          <div key={s} className={'serie-ponto ' + (done ? 'feita' : s === serieAtual ? 'atual' : '')} title={`${l.reps} reps${l.carga ? ` · ${l.carga} kg` : ''}`}>
+                          <button
+                            key={s} type="button"
+                            className={'serie-ponto ' + (done ? 'feita' : s === serieAtual ? 'atual' : '')}
+                            onClick={() => !done && setSerieEscolhida(s)}
+                            disabled={done}
+                            title={done ? `Série ${s} já registrada` : `Fazer a série ${s} · ${l.reps} reps${l.carga ? ` · ${comKg(l.carga)}` : ''}`}
+                          >
                             {done ? <IcCheck /> : l.reps || s}
-                          </div>
+                          </button>
                         )
                       })}
                     </div>
