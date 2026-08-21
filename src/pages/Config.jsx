@@ -16,6 +16,13 @@ export default function Config({ user, perfil }) {
   const [erro, setErro] = useState('')
   const ehPersonal = perfil.role === 'personal'
 
+  /* Ausente no banco = ligado. Quem nunca mexeu já ganha o temporizador. */
+  const descansoLigado = perfil.timerDescanso !== false
+
+  async function salvarDescanso(ligado) {
+    await update(ref(db, 'users/' + user.uid), { timerDescanso: ligado })
+  }
+
   async function salvarDados(e) {
     e.preventDefault()
     setMsg(''); setErro('')
@@ -94,6 +101,27 @@ export default function Config({ user, perfil }) {
           <button className="btn">Salvar dados</button>
         </form>
       </div>
+
+      {!ehPersonal && (
+        <div className="card">
+          <h2>Treino</h2>
+          <label className="opcao-switch">
+            <input
+              type="checkbox"
+              checked={descansoLigado}
+              onChange={e => salvarDescanso(e.target.checked)}
+            />
+            <span className="switch-trilho" aria-hidden="true"><span className="switch-bola" /></span>
+            <span className="opcao-txt">
+              <strong>Temporizador de descanso</strong>
+              <span className="mini">
+                Ao marcar uma série, mostra a contagem do intervalo e apita no fim.
+                Desligue se preferir controlar o tempo por conta própria.
+              </span>
+            </span>
+          </label>
+        </div>
+      )}
 
       <div className="card">
         <h2>Trocar e-mail</h2>

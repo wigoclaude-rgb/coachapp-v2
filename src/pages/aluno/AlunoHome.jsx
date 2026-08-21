@@ -1,11 +1,11 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ref, onValue, push, update } from 'firebase/database'
 import { db } from '../../firebase'
-import { fmtData, fmtMoeda, vencida, imagemExercicio } from '../../lib/util'
+import { fmtData, fmtMoeda, vencida, imagemExercicio, youtubeId, comKg, beep } from '../../lib/util'
 import { notificar } from '../../lib/notify'
 import {
   LETRAS, normalizarPlano, indiceSeguro, duracaoEstimada, totalSeries,
-  agruparBlocos, chaveSerie, resumoLinhas
+  agruparBlocos, chaveSerie, resumoExercicio
 } from '../../lib/treinoModel'
 import Chat from '../../components/Chat.jsx'
 import Diario from './Diario.jsx'
@@ -13,10 +13,13 @@ import Config from '../Config.jsx'
 import LineChart from '../../components/LineChart.jsx'
 import Heatmap from '../../components/Heatmap.jsx'
 import Layout from '../../components/Layout.jsx'
-import ExecucaoTreino from '../../components/ExecucaoTreino.jsx'
+import Tour from '../../components/Tour.jsx'
+import {
+  TOUR_ALUNO_TREINO, TOUR_ALUNO_EVOLUCAO, TOUR_ALUNO_DIARIO, TOUR_ALUNO_PAGAMENTOS
+} from '../../lib/tours'
 import {
   IcTreino, IcEvolucao, IcPagamentos, IcChat, IcConfig,
-  IcPlay, IcFogo, IcCalendario, IcRelogio, IcCheck, IcHalter, IcAlerta, IcTrofeu
+  IcFogo, IcCalendario, IcCheck, IcHalter, IcAlerta, IcTrofeu, IcVideo, IcSeta, IcFechar
 } from '../../components/Icones.jsx'
 
 const TITULOS = {
@@ -31,6 +34,23 @@ const TITULOS = {
 const diaISO = ts => {
   const d = new Date(ts)
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+}
+
+/*
+  Perguntas do feedback por exercício. Poucas e de sim/não, para responder
+  entre uma série e outra. O que não couber vai no comentário.
+  `alerta` marca a resposta que o personal precisa olhar.
+*/
+const PERGUNTAS_FEEDBACK = [
+  { id: 'carga', texto: 'A carga estava adequada?', alerta: 'nao' },
+  { id: 'dor', texto: 'Sentiu dor ou desconforto?', alerta: 'sim' },
+  { id: 'completou', texto: 'Conseguiu fazer todas as repetições?', alerta: 'nao' }
+]
+
+/** "Quarta, 17 de agosto" — data por extenso para o topo do treino. */
+function dataPorExtenso(d = new Date()) {
+  const s = d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
+  return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
 /** Dias consecutivos treinados, contando de hoje (ou de ontem, se ainda não treinou hoje). */
@@ -59,10 +79,43 @@ export default function AlunoHome({ user, perfil, onSair }) {
   const [avaliacoes, setAvaliacoes] = useState({})
   const [historico, setHistorico] = useState({})
   const [personal, setPersonal] = useState(null)
-  const [executando, setExecutando] = useState(false)
   const [pagObs, setPagObs] = useState('')
   const [pagCobId, setPagCobId] = useState(null)
   const [medidaGrafico, setMedidaGrafico] = useState('peso')
+
+  // Lista interativa: qual exercício está aberto, carga digitada e erro por exercício.
+  const [exAberto, setExAberto] = useState(null)
+  const [pesoInline, setPesoInline] = useState({})
+  const [erroInline, setErroInline] = useState({})
+  const [videoAberto, setVideoAberto] = useState(null)
+  const [descanso, setDescanso] = useState(null)
+  // Índice do treino que o aluno abriu pelos selos A/B/C. Só leitura.
+  const [verTreino, setVerTreino] = useState(null)
+  // Rever o tutorial da aba mesmo já tendo concluído (botão "?" no topo).
+  const [rever, setRever] = useState(false)
+
+  // Feedback por exercício: qual está aberto, o que foi respondido e o que já foi enviado hoje.
+  const [fbAberto, setFbAberto] = useState(null)
+  const [fbRespostas, setFbRespostas] = useState({})
+  const [fbComentario, setFbComentario] = useState('')
+  const [fbEnviando, setFbEnviando] = useState(false)
+  const [feedbacks, setFeedbacks] = useState({})
+
+  /* Ausente no banco = ligado; o aluno desliga em Configurações. */
+  const descansoLigado = perfil.timerDescanso !== false
+
+  // Conta o descanso e apita ao chegar em zero.
+  useEffect(() => {
+    if (!descanso) return
+    const id = setInterval(() => {
+      setDescanso(d => {
+        if (!d) return null
+        if (d.restante <= 1) { beep(); return null }
+        return { ...d, restante: d.restante - 1 }
+      })
+    }, 1000)
+    return () => clearInterval(id)
+  }, [descanso === null])
 
   useEffect(() => {
     const u1 = onValue(ref(db, 'treinos/' + user.uid), s => setTreinoBruto(s.exists() ? s.val() : null))
@@ -71,7 +124,8 @@ export default function AlunoHome({ user, perfil, onSair }) {
     const u4 = onValue(ref(db, 'avaliacoes/' + user.uid), s => setAvaliacoes(s.val() || {}))
     const u5 = onValue(ref(db, 'treinosHistorico/' + user.uid), s => setHistorico(s.val() || {}))
     const u6 = onValue(ref(db, 'users/' + perfil.personalId), s => setPersonal(s.val()))
-    return () => { u1(); u2(); u3(); u4(); u5(); u6() }
+    const u7 = onValue(ref(db, 'feedbacks/' + user.uid), s => setFeedbacks(s.val() || {}))
+    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7() }
   }, [user.uid, perfil.personalId])
 
   // séries concluídas hoje
@@ -112,8 +166,6 @@ export default function AlunoHome({ user, perfil, onSair }) {
     return dias.size
   }, [listaExec, mesAtual, anoAtual])
 
-  const ultimoTreinoTs = listaExec[0]?.ts || null
-
   /** Última carga registrada para um exercício, ignorando as séries de hoje. */
   const cargaAnterior = useMemo(() => {
     const mapa = {}
@@ -147,6 +199,19 @@ export default function AlunoHome({ user, perfil, onSair }) {
   )
   const treinoDoDiaCompleto = seriesDoDia > 0 && seriesFeitasHoje >= seriesDoDia
 
+  // Onde a pessoa parou: primeiro exercício com série faltando.
+  const exRetomada = proximoBloco?.exercicios.find(e =>
+    e.linhas.some((_, i) => !feitas[chaveSerie(e.nome, i + 1)])
+  ) || null
+
+  const pctDia = seriesDoDia ? Math.round((seriesFeitasHoje / seriesDoDia) * 100) : 0
+  const minutosRestantes = seriesDoDia
+    ? Math.round(minutos * (1 - seriesFeitasHoje / seriesDoDia))
+    : 0
+  const proximoDoCiclo = ciclico
+    ? plano.lista[(idxAtual + 1) % totalDias]?.nome
+    : null
+
   /** Registra uma série. Devolve mensagem de erro ou null. */
   async function marcarSerie(ex, serie, pesoDigitado, cargaLinha) {
     if (feitas[chaveSerie(ex.nome, serie)]) return null
@@ -157,6 +222,63 @@ export default function AlunoHome({ user, perfil, onSair }) {
     }
     await push(ref(db, 'execucoes/' + user.uid), { exercicio: ex.nome, serie, peso: peso || '', ts: Date.now() })
     return null
+  }
+
+  /** Marca uma série direto da lista e dispara o descanso, se ligado. */
+  async function marcarInline(ex, serie, linha) {
+    const msg = await marcarSerie(ex, serie, pesoInline[ex.nome] ?? '', linha.carga)
+    setErroInline(e => ({ ...e, [ex.nome]: msg || '' }))
+    if (msg) return
+
+    setPesoInline(p => ({ ...p, [ex.nome]: '' }))
+
+    const segundos = Number(linha.descanso) || 0
+    const ultimaSerie = serie >= ex.linhas.length
+    if (descansoLigado && segundos > 0 && !ultimaSerie) {
+      setDescanso({ restante: segundos, total: segundos, exercicio: ex.nome, proxima: serie + 1 })
+    }
+  }
+
+  /** Exercícios que já receberam feedback hoje — não pede duas vezes. */
+  const fbDeHoje = useMemo(() => {
+    const hoje = new Date().toDateString()
+    return new Set(
+      Object.values(feedbacks)
+        .filter(f => new Date(f.ts).toDateString() === hoje)
+        .map(f => f.exercicio)
+    )
+  }, [feedbacks])
+
+  function abrirFeedback(nome) {
+    setFbAberto(nome)
+    setFbRespostas({})
+    setFbComentario('')
+  }
+
+  async function enviarFeedback(ex) {
+    const respondeu = Object.keys(fbRespostas).length > 0
+    const comentou = fbComentario.trim() !== ''
+    if ((!respondeu && !comentou) || fbEnviando) return
+
+    setFbEnviando(true)
+    try {
+      await push(ref(db, 'feedbacks/' + user.uid), {
+        exercicio: ex.nome,
+        treino: nomeTreinoHoje,
+        respostas: fbRespostas,
+        comentario: fbComentario.trim(),
+        ts: Date.now()
+      })
+      notificar(
+        perfil.personalId,
+        `${perfil.nome} comentou sobre ${ex.nome}`,
+        '/personal-aluno/' + user.uid
+      )
+      setFbAberto(null)
+    } catch (err) {
+      console.warn('Falha ao enviar feedback:', err)
+    }
+    setFbEnviando(false)
   }
 
   async function concluirTreino() {
@@ -191,30 +313,149 @@ export default function AlunoHome({ user, perfil, onSair }) {
     .map(a => ({ label: fmtData(a.ts).slice(0, 5), valor: Number(a.medidas[medidaGrafico]) }))
 
   const meta = TITULOS[aba] || TITULOS.treino
-  const primeiroNome = (perfil?.nome || '').split(' ')[0]
+
+  /* Tour da aba atual. `rever` força a exibição mesmo já tendo sido concluído. */
+  const TOURS = {
+    treino: TOUR_ALUNO_TREINO,
+    evolucao: TOUR_ALUNO_EVOLUCAO,
+    diario: TOUR_ALUNO_DIARIO,
+    pagamentos: TOUR_ALUNO_PAGAMENTOS
+  }
+  const tourDaAba = TOURS[aba]
+  const perfilTour = rever ? { ...perfil, tours: {} } : perfil
 
   return (
     <Layout
       user={user} perfil={perfil} onSair={onSair} itens={itens}
-      abaAtiva={aba} onAba={a => { setAba(a); setExecutando(false) }}
+      abaAtiva={aba} onAba={a => { setAba(a); setRever(false) }}
       roleLabel="Aluno" titulo={meta.t} subtitulo={meta.s}
+      onAjuda={tourDaAba ? () => setRever(true) : undefined}
     >
+      {tourDaAba && (
+        <Tour
+          key={aba + (rever ? '-rever' : '')}
+          passos={tourDaAba} chave={aba}
+          user={user} perfil={perfilTour}
+          onFim={() => setRever(false)}
+        />
+      )}
+
+      {/* Espiada num treino do ciclo. Só leitura — não mexe em nada. */}
+      {verTreino !== null && plano?.lista[verTreino] && (
+        <div className="espiada" onClick={() => setVerTreino(null)}>
+          <div className="espiada-caixa" onClick={e => e.stopPropagation()}>
+            <header className="espiada-topo nao-imprime">
+              <div>
+                <span className="espiada-letra">Treino {LETRAS[verTreino] || verTreino + 1}</span>
+                <h2>{plano.lista[verTreino].nome}</h2>
+              </div>
+              <div className="espiada-acoes">
+                <button className="btn btn-sec btn-sm" onClick={() => window.print()}>
+                  Baixar PDF
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setVerTreino(null)} title="Fechar">
+                  <IcFechar />
+                </button>
+              </div>
+            </header>
+
+            <div className="espiada-corpo">
+              {/* Cabeçalho do papel: só aparece na impressão. */}
+              <div className="folha-topo">
+                <h1>{plano.lista[verTreino].nome}</h1>
+                <p>
+                  {perfil.nome} · {plano.nome} · Treino {LETRAS[verTreino] || verTreino + 1}
+                  {personal?.nome ? ' · Personal: ' + personal.nome : ''}
+                </p>
+                <p>{dataPorExtenso()}</p>
+              </div>
+
+              {verTreino === idxAtual && (
+                <p className="espiada-hoje nao-imprime"><IcCheck /> É o treino de hoje</p>
+              )}
+
+              {agruparBlocos(plano.lista[verTreino].exercicios).map((b, i) => (
+                <div key={i} className={'esp-bloco' + (b.combinado ? ' biset' : '')}>
+                  {b.combinado && <span className="tr-biset-tag">Bi-set</span>}
+                  {b.exercicios.map((ex, k) => {
+                    const img = imagemExercicio(ex)
+                    // A coluna de descanso só entra quando o personal preencheu algum.
+                    const temDescanso = ex.linhas.some(l => Number(l.descanso) > 0)
+                    return (
+                      <div key={k} className="esp-ex">
+                        <div className="esp-ex-topo">
+                          {img && (
+                            <img
+                              src={img} alt="" className="esp-ex-foto" loading="lazy"
+                              onError={e => { e.currentTarget.style.display = 'none' }}
+                            />
+                          )}
+                          <div>
+                            <span className="esp-ex-nome">{ex.nome}</span>
+                            <span className="esp-ex-qtd">
+                              {ex.linhas.length} série{ex.linhas.length === 1 ? '' : 's'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <table className="esp-series">
+                          <thead>
+                            <tr>
+                              <th>Série</th>
+                              <th>Reps</th>
+                              <th>Carga</th>
+                              {temDescanso && <th>Descanso</th>}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {ex.linhas.map((linha, li) => (
+                              <tr key={li}>
+                                <td className="esp-s-n">{li + 1}ª</td>
+                                <td>{linha.reps || '—'}</td>
+                                <td>{linha.carga ? comKg(linha.carga) : 'Livre'}</td>
+                                {temDescanso && (
+                                  <td>{Number(linha.descanso) > 0 ? linha.descanso + 's' : '—'}</td>
+                                )}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+
+                        {ex.obs && <p className="esp-ex-obs">{ex.obs}</p>}
+                      </div>
+                    )
+                  })}
+                </div>
+              ))}
+
+              <p className="mini nao-imprime" style={{ marginTop: 12 }}>
+                Só para consultar. As séries você marca no treino do dia.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Descanso entre séries. Cobre a tela para o número ser lido de longe. */}
+      {descanso && (
+        <div className="descanso-tela" role="status" aria-live="polite">
+          <span className="descanso-num">
+            {Math.floor(descanso.restante / 60)}:{String(descanso.restante % 60).padStart(2, '0')}
+          </span>
+          <span className="descanso-rot">Descanso</span>
+          <p className="descanso-prox">
+            A seguir: <strong>{descanso.proxima}ª série</strong> de {descanso.exercicio}
+          </p>
+          <button className="btn btn-sec btn-auto" onClick={() => setDescanso(null)}>
+            Pular descanso
+          </button>
+        </div>
+      )}
+
       {/* ===== TREINO ===== */}
       {aba === 'treino' && (
         <>
-          {executando && exerciciosHoje.length > 0 ? (
-            <ExecucaoTreino
-              exercicios={exerciciosHoje}
-              feitas={feitas}
-              nomeTreino={nomeTreinoHoje}
-              cargaAnterior={cargaAnterior}
-              onMarcar={marcarSerie}
-              onFinalizar={concluirTreino}
-              onFechar={() => setExecutando(false)}
-            />
-          ) : (
-            <>
-              {bloqueado && (
+          {bloqueado && (
                 <div className="card bloqueio-card">
                   <div className="card-titulo"><h2>Treino bloqueado</h2></div>
                   <p className="muted">
@@ -237,143 +478,290 @@ export default function AlunoHome({ user, perfil, onSair }) {
 
               {!bloqueado && plano && (
                 <>
-                  <div className="hero-treino">
-                    <div className="hero-topo">
-                      <div>
-                        <div className="hero-eyebrow">
-                          {primeiroNome ? `Bom treino, ${primeiroNome}` : 'Treino de hoje'}
-                        </div>
-                        <h2>{nomeTreinoHoje}</h2>
-                      </div>
+                  <section className="tr-hero">
+                    <div className="tr-cab">
+                      <span className="tr-data">{dataPorExtenso()}</span>
                       {ciclico && (
-                        <div className="ciclo-progresso">
+                        <div className="tr-ciclo">
                           {plano.lista.map((d, i) => (
-                            <Fragment key={i}>
-                              {i > 0 && <span className="ciclo-seta">·</span>}
-                              <span className={'ciclo-passo ' + (i === idxAtual ? 'ativo' : '')} title={d.nome}>
-                                {LETRAS[i] || i + 1}
-                              </span>
-                            </Fragment>
+                            <button
+                              key={i}
+                              type="button"
+                              className={'tr-passo' + (i === idxAtual ? ' agora' : i < idxAtual ? ' feito' : '')}
+                              onClick={() => setVerTreino(i)}
+                              title={'Ver ' + d.nome}
+                            >
+                              {LETRAS[i] || i + 1}
+                            </button>
                           ))}
                         </div>
                       )}
                     </div>
 
-                    <div className="hero-meta">
-                      <div className="hm">
-                        <span className="hm-label">Duração</span>
-                        <span className="hm-valor">{minutos} min</span>
-                      </div>
-                      <div className="hm">
-                        <span className="hm-label">Exercícios</span>
-                        <span className="hm-valor">{exerciciosHoje.length}</span>
-                      </div>
-                      <div className="hm">
-                        <span className="hm-label">Séries</span>
-                        <span className="hm-valor">{seriesFeitasHoje}/{seriesDoDia}</span>
-                      </div>
-                      {ciclico && (
-                        <div className="hm">
-                          <span className="hm-label">No ciclo</span>
-                          <span className="hm-valor">{idxAtual + 1} de {totalDias}</span>
-                        </div>
-                      )}
-                    </div>
+                    <h2 className="tr-nome">{nomeTreinoHoje}</h2>
 
-                    {proximoBloco && (
-                      <p className="hero-proximo">
-                        Próximo: <strong>{proximoBloco.titulo}</strong>
-                        {proximoBloco.combinado ? ' · bi-set' : ` · ${resumoLinhas(proximoBloco.exercicios[0].linhas)}`}
-                      </p>
-                    )}
+                    <div className="tr-progresso">
+                      <div className="tr-numeros">
+                        <strong>{seriesFeitasHoje}</strong>
+                        <span>de {seriesDoDia} séries</span>
+                        {!treinoDoDiaCompleto && minutosRestantes > 0 && (
+                          <span className="tr-restante">faltam ~{minutosRestantes} min</span>
+                        )}
+                      </div>
+                      <div className="tr-barra">
+                        <div className="tr-barra-fill" style={{ width: pctDia + '%' }} />
+                      </div>
+                    </div>
 
                     {treinoDoDiaCompleto ? (
-                      <button className="btn btn-lg" onClick={concluirTreino}>
-                        <IcCheck /> {ciclico ? 'Finalizar e liberar o próximo' : 'Finalizar treino'}
-                      </button>
-                    ) : (
-                      <button className="btn btn-lg" onClick={() => setExecutando(true)}>
-                        <IcPlay /> {seriesFeitasHoje > 0 ? 'Continuar treino' : 'Iniciar treino'}
-                      </button>
+                      <>
+                        <div className="tr-pronto">
+                          <span className="tr-pronto-icone"><IcTrofeu /></span>
+                          <div>
+                            <strong>Treino de hoje concluído</strong>
+                            <span>
+                              {seriesDoDia} séries registradas.
+                              {ciclico && proximoDoCiclo ? ` A seguir: ${proximoDoCiclo}.` : ''}
+                            </span>
+                          </div>
+                        </div>
+                        <button className="btn btn-lg tr-acao" onClick={concluirTreino}>
+                          <IcCheck /> {ciclico ? 'Finalizar e liberar o próximo' : 'Finalizar treino'}
+                        </button>
+                      </>
+                    ) : exRetomada && (
+                      <div className="tr-retomada">
+                        <span className="tr-retomada-rot">
+                          {seriesFeitasHoje > 0 ? 'Você parou em' : 'Começa com'}
+                        </span>
+                        <span className="tr-retomada-nome">{exRetomada.nome}</span>
+                        <span className="tr-retomada-meta">
+                          {resumoExercicio(exRetomada)}{proximoBloco?.combinado ? ' · bi-set' : ''}
+                        </span>
+                      </div>
                     )}
-                  </div>
+                  </section>
 
-                  <div className="metricas-aluno">
-                    <div className="metrica">
-                      <span className="m-icone"><IcFogo /></span>
-                      <div>
-                        <div className="m-valor">{sequencia}</div>
-                        <div className="m-label">dia{sequencia === 1 ? '' : 's'} seguido{sequencia === 1 ? '' : 's'}</div>
-                      </div>
-                    </div>
-                    <div className="metrica">
-                      <span className="m-icone"><IcCalendario /></span>
-                      <div>
-                        <div className="m-valor">{treinosNoMes}</div>
-                        <div className="m-label">treinos no mês</div>
-                      </div>
-                    </div>
-                    <div className="metrica">
-                      <span className="m-icone"><IcRelogio /></span>
-                      <div>
-                        <div className="m-valor" style={{ fontSize: 15 }}>{ultimoTreinoTs ? fmtData(ultimoTreinoTs) : '—'}</div>
-                        <div className="m-label">último treino</div>
-                      </div>
-                    </div>
-                    <div className="metrica">
-                      <span className="m-icone"><IcTrofeu /></span>
-                      <div>
-                        <div className="m-valor">{listaExec.length}</div>
-                        <div className="m-label">séries no total</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {proximaCobranca && (
-                    <div className="card card-compacto" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                      <span className="stat-icone amarelo"><IcAlerta /></span>
-                      <div style={{ flex: 1, minWidth: 160 }}>
-                        <div style={{ fontWeight: 600 }}>Próximo pagamento · {fmtMoeda(proximaCobranca.valor)}</div>
-                        <div className="mini">Vence em {proximaCobranca.vencimento.split('-').reverse().join('/')}</div>
-                      </div>
-                      <button className="btn btn-sec btn-sm" onClick={() => setAba('pagamentos')}>Ver</button>
+                  {(sequencia > 1 || proximaCobranca) && (
+                    <div className="tr-avisos">
+                      {sequencia > 1 && (
+                        <div className="tr-aviso fogo">
+                          <IcFogo />
+                          <span><strong>{sequencia} dias seguidos</strong> — não perca a sequência</span>
+                        </div>
+                      )}
+                      {proximaCobranca && (
+                        <button className="tr-aviso alerta" type="button" onClick={() => setAba('pagamentos')}>
+                          <IcAlerta />
+                          <span>
+                            <strong>{fmtMoeda(proximaCobranca.valor)}</strong>
+                            {' vence em ' + proximaCobranca.vencimento.split('-').reverse().slice(0, 2).join('/')}
+                          </span>
+                        </button>
+                      )}
                     </div>
                   )}
 
-                  <div className="section-title">Exercícios de hoje</div>
-                  {blocosHoje.map((b, i) => (
-                    <div key={i} className={'bloco-preview ' + (b.combinado ? 'combinado' : '')}>
-                      {b.combinado && <span className="badge primaria bloco-tag">Bi-set</span>}
-                      {b.exercicios.map((ex, k) => {
-                        const total = ex.linhas.length
-                        let n = 0
-                        for (let s = 1; s <= total; s++) if (feitas[chaveSerie(ex.nome, s)]) n++
-                        const completo = total > 0 && n >= total
-                        const img = imagemExercicio(ex)
-                        return (
-                          <div key={k} className={'exercicio-linha ' + (completo ? 'completo' : '')}>
-                            {img
-                              ? <img
-                                  src={img} alt="" className="el-miniatura" loading="lazy"
-                                  onError={e => { e.currentTarget.style.visibility = 'hidden' }}
-                                />
-                              : <span className="el-num">{completo ? <IcCheck /> : i + 1}</span>}
-                            <div className="el-nome">
-                              {ex.nome}
-                              {ex.obs && <div className="el-obs">{ex.obs}</div>}
+                  <div className="section-title">
+                    Exercícios de hoje
+                    <span className="st-dica">Toque para marcar as séries</span>
+                  </div>
+                  <ol className="tr-lista">
+                    {blocosHoje.map((b, i) => (
+                      <li key={i} className={'tr-bloco' + (b.combinado ? ' biset' : '')}>
+                        {b.combinado && <span className="tr-biset-tag">Bi-set</span>}
+                        {b.exercicios.map((ex, k) => {
+                          const total = ex.linhas.length
+                          let n = 0
+                          for (let s = 1; s <= total; s++) if (feitas[chaveSerie(ex.nome, s)]) n++
+                          const completo = total > 0 && n >= total
+                          const agora = exRetomada?.nome === ex.nome
+                          // O exercício da vez já abre; tocar em outro troca o aberto.
+                          const aberto = (exAberto ?? exRetomada?.nome) === ex.nome
+                          const img = imagemExercicio(ex)
+                          const vid = youtubeId(ex.video)
+                          const erro = erroInline[ex.nome]
+
+                          return (
+                            <div
+                              key={k}
+                              className={'tr-ex' + (completo ? ' feito' : '') + (agora ? ' agora' : '') + (aberto ? ' aberto' : '')}
+                            >
+                              <button
+                                type="button"
+                                className="tr-ex-cab"
+                                onClick={() => setExAberto(aberto ? '' : ex.nome)}
+                                aria-expanded={aberto}
+                              >
+                                {img
+                                  ? <img
+                                      src={img} alt="" className="tr-ex-foto" loading="lazy"
+                                      onError={e => { e.currentTarget.style.visibility = 'hidden' }}
+                                    />
+                                  : <span className="tr-ex-marca">{completo ? <IcCheck /> : i + 1}</span>}
+                                <span className="tr-ex-txt">
+                                  <span className="tr-ex-nome">{ex.nome}</span>
+                                  <span className="tr-ex-meta">{resumoExercicio(ex)}</span>
+                                </span>
+                                <span className={'tr-ex-cont' + (completo ? ' ok' : '')}>
+                                  {completo ? <IcCheck /> : `${n}/${total}`}
+                                </span>
+                              </button>
+
+                              {aberto && (
+                                <div className="tr-ex-corpo">
+                                  {ex.obs && <p className="tr-ex-obs">{ex.obs}</p>}
+
+                                  {cargaAnterior(ex.nome) && (
+                                    <p className="tr-ex-anterior">
+                                      Da última vez você usou <strong>{comKg(cargaAnterior(ex.nome))}</strong>
+                                    </p>
+                                  )}
+
+                                  <div className="tr-series">
+                                    {ex.linhas.map((linha, li) => {
+                                      const s = li + 1
+                                      const feita = !!feitas[chaveSerie(ex.nome, s)]
+                                      return (
+                                        <button
+                                          key={s}
+                                          type="button"
+                                          className={'tr-serie' + (feita ? ' feita' : '')}
+                                          onClick={() => !feita && marcarInline(ex, s, linha)}
+                                          disabled={feita}
+                                          title={feita ? `Série ${s} registrada` : `Marcar a série ${s}`}
+                                        >
+                                          <span className="tr-serie-n">{feita ? <IcCheck /> : s + 'ª'}</span>
+                                          <span className="tr-serie-alvo">
+                                            {linha.reps}{linha.carga ? ' · ' + comKg(linha.carga) : ''}
+                                          </span>
+                                        </button>
+                                      )
+                                    })}
+                                  </div>
+
+                                  {!completo && (
+                                    <div className="tr-ex-carga">
+                                      <label htmlFor={'carga-' + i + '-' + k}>Carga usada (kg)</label>
+                                      <input
+                                        id={'carga-' + i + '-' + k}
+                                        type="number" inputMode="decimal"
+                                        value={pesoInline[ex.nome] ?? ''}
+                                        onChange={e => setPesoInline(p => ({ ...p, [ex.nome]: e.target.value }))}
+                                        placeholder={ex.linhas[n]?.carga || 'igual ao alvo'}
+                                      />
+                                      <p className="mini">Deixe em branco para registrar a carga do plano.</p>
+                                    </div>
+                                  )}
+
+                                  {erro && <div className="erro">{erro}</div>}
+
+                                  {vid && (() => {
+                                    const vAberto = videoAberto === ex.nome
+                                    return (
+                                      <div className="tr-video">
+                                        <button
+                                          type="button"
+                                          className={'tr-video-btn' + (vAberto ? ' aberto' : '')}
+                                          onClick={() => setVideoAberto(vAberto ? null : ex.nome)}
+                                          aria-expanded={vAberto}
+                                        >
+                                          <IcVideo />
+                                          <span>Como executar</span>
+                                          <span className="tvb-seta" aria-hidden="true"><IcSeta /></span>
+                                        </button>
+
+                                        {vAberto && (
+                                          <div className="video-wrap">
+                                            <iframe
+                                              src={'https://www.youtube.com/embed/' + vid + '?autoplay=1'}
+                                              title={'Execução de ' + ex.nome}
+                                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                              allowFullScreen
+                                            />
+                                          </div>
+                                        )}
+                                      </div>
+                                    )
+                                  })()}
+
+                                  {(() => {
+                                    const fbFeito = fbDeHoje.has(ex.nome)
+                                    const fbOpen = fbAberto === ex.nome
+                                    if (fbFeito && !fbOpen) {
+                                      return <p className="tr-fb-ok"><IcCheck /> Feedback enviado hoje</p>
+                                    }
+                                    return (
+                                      <div className="tr-fb">
+                                        <button
+                                          type="button"
+                                          className={'tr-video-btn' + (fbOpen ? ' aberto' : '')}
+                                          onClick={() => (fbOpen ? setFbAberto(null) : abrirFeedback(ex.nome))}
+                                          aria-expanded={fbOpen}
+                                        >
+                                          <IcChat />
+                                          <span>Feedback</span>
+                                          <span className="tvb-seta" aria-hidden="true"><IcSeta /></span>
+                                        </button>
+
+                                        {fbOpen && (
+                                          <div className="tr-fb-corpo">
+                                            {PERGUNTAS_FEEDBACK.map(p => (
+                                              <div key={p.id} className="tr-fb-linha">
+                                                <span className="tr-fb-pergunta">{p.texto}</span>
+                                                <div className="tr-fb-opcoes">
+                                                  {['sim', 'nao'].map(v => (
+                                                    <button
+                                                      key={v}
+                                                      type="button"
+                                                      className={'tr-fb-op' + (fbRespostas[p.id] === v ? ' marcada' : '')}
+                                                      onClick={() => setFbRespostas(r => ({
+                                                        ...r,
+                                                        [p.id]: r[p.id] === v ? undefined : v
+                                                      }))}
+                                                      aria-pressed={fbRespostas[p.id] === v}
+                                                    >
+                                                      {v === 'sim' ? 'Sim' : 'Não'}
+                                                    </button>
+                                                  ))}
+                                                </div>
+                                              </div>
+                                            ))}
+
+                                            <label htmlFor={'fb-' + i + '-' + k}>Quer contar mais alguma coisa?</label>
+                                            <textarea
+                                              id={'fb-' + i + '-' + k}
+                                              rows={3}
+                                              value={fbComentario}
+                                              onChange={e => setFbComentario(e.target.value)}
+                                              placeholder="Ex: senti o joelho na última série"
+                                            />
+
+                                            <button
+                                              type="button"
+                                              className="btn btn-sm"
+                                              onClick={() => enviarFeedback(ex)}
+                                              disabled={fbEnviando}
+                                            >
+                                              {fbEnviando ? 'Enviando...' : 'Enviar para o personal'}
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )
+                                  })()}
+                                </div>
+                              )}
                             </div>
-                            <span className="el-meta">{n}/{total} · {resumoLinhas(ex.linhas)}</span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ))}
+                          )
+                        })}
+                      </li>
+                    ))}
+                  </ol>
 
                   <p className="mini" style={{ marginTop: 12 }}>
                     Plano {plano.nome} · atualizado em {plano.atualizadoEm ? fmtData(plano.atualizadoEm) : '—'}
                   </p>
-                </>
-              )}
             </>
           )}
         </>

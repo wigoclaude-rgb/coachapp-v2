@@ -123,6 +123,7 @@ h3 { font-size: var(--t-base); font-weight: 600; }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
 @keyframes pop { 0% { transform: scale(0.9); opacity: 0; } 60% { transform: scale(1.03); } 100% { transform: scale(1); opacity: 1; } }
 @keyframes shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
 @keyframes girar { to { transform: rotate(360deg); } }
@@ -922,6 +923,444 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 .metrica .m-label { font-size: var(--t-sm); color: var(--texto-4); }
 
 /* ============================================================
+   INÍCIO DO ALUNO — a tela responde "o que eu faço agora?".
+   O progresso do dia é o elemento principal; as métricas de
+   histórico ficam na aba Evolução, que é onde se olha progresso.
+   ============================================================ */
+.tr-hero {
+  background: var(--superficie); border: 1px solid var(--borda);
+  border-radius: var(--raio-lg); padding: 22px; margin-bottom: 14px;
+  box-shadow: var(--sombra);
+}
+.tr-cab { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tr-data {
+  font-size: var(--t-xs); font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--texto-4);
+}
+.tr-ciclo { display: flex; gap: 5px; flex-shrink: 0; }
+.tr-passo {
+  width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+  font-size: var(--t-xs); font-weight: 700; font-family: 'Archivo';
+  background: var(--superficie-2); color: var(--texto-4); border: 1px solid var(--borda);
+  padding: 0; cursor: pointer; transition: all var(--t);
+}
+button.tr-passo:hover { border-color: var(--primaria); color: var(--primaria); transform: translateY(-1px); }
+.tr-passo.feito { background: var(--sucesso-bg); color: var(--sucesso); border-color: var(--sucesso-borda); }
+.tr-passo.agora { background: var(--primaria); color: #fff; border-color: var(--primaria); }
+.tr-nome {
+  font-family: 'Archivo'; font-size: var(--t-2xl); font-weight: 700;
+  letter-spacing: -0.025em; margin: 8px 0 0;
+}
+
+.tr-progresso { margin: 20px 0 18px; }
+.tr-numeros { display: flex; align-items: baseline; gap: 6px; margin-bottom: 9px; flex-wrap: wrap; }
+.tr-numeros strong {
+  font-family: 'Archivo'; font-size: 34px; font-weight: 800; line-height: 1;
+  color: var(--primaria); font-variant-numeric: tabular-nums;
+}
+.tr-numeros span { font-size: var(--t-md); color: var(--texto-3); }
+.tr-restante { margin-left: auto; font-size: var(--t-sm) !important; color: var(--texto-4) !important; }
+.tr-barra { height: 7px; background: var(--superficie-2); border-radius: var(--raio-full); overflow: hidden; }
+.tr-barra-fill {
+  height: 100%; background: var(--primaria); border-radius: var(--raio-full);
+  transition: width 0.4s ease;
+}
+
+.tr-retomada {
+  display: flex; flex-direction: column; gap: 2px;
+  background: var(--primaria-suave); border: 1px solid var(--primaria-borda);
+  border-radius: var(--raio); padding: 12px 14px; margin-bottom: 16px;
+}
+.tr-retomada-rot {
+  font-size: var(--t-xs); font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--primaria);
+}
+.tr-retomada-nome { font-weight: 600; font-size: var(--t-lg); }
+.tr-retomada-meta { font-size: var(--t-sm); color: var(--texto-3); }
+
+.tr-pronto {
+  display: flex; align-items: center; gap: 12px; background: var(--sucesso-bg);
+  border: 1px solid var(--sucesso-borda); border-radius: var(--raio);
+  padding: 14px; margin-bottom: 16px;
+}
+.tr-pronto-icone {
+  display: grid; place-items: center; width: 38px; height: 38px; flex-shrink: 0;
+  border-radius: 50%; background: var(--sucesso); color: #fff;
+}
+.tr-pronto-icone svg { width: 19px; height: 19px; }
+.tr-pronto strong { display: block; font-size: var(--t-lg); }
+.tr-pronto span { font-size: var(--t-sm); color: var(--texto-3); }
+.tr-acao { margin: 0; }
+
+.tr-avisos { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+.tr-aviso {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 11px 14px; border-radius: var(--raio); font-size: var(--t-md);
+  border: 1px solid var(--borda); background: var(--superficie); color: var(--texto-2);
+}
+.tr-aviso svg { width: 17px; height: 17px; flex-shrink: 0; }
+.tr-aviso strong { color: var(--texto); font-weight: 600; }
+.tr-aviso.fogo { border-color: var(--aviso-borda); background: var(--aviso-bg); }
+.tr-aviso.fogo svg { color: var(--aviso); }
+.tr-aviso.alerta { cursor: pointer; }
+.tr-aviso.alerta svg { color: var(--aviso-txt); }
+
+.tr-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.tr-bloco { margin: 0; }
+.tr-bloco.biset {
+  border: 1px dashed var(--primaria-borda); border-radius: var(--raio);
+  padding: 10px 10px 4px; background: var(--primaria-suave);
+}
+.tr-biset-tag {
+  display: inline-block; padding: 2px 9px; border-radius: var(--raio-full);
+  background: var(--primaria); color: #fff; font-size: var(--t-xs);
+  font-weight: 600; margin-bottom: 6px;
+}
+.st-dica {
+  display: block; font-size: var(--t-xs); font-weight: 400; color: var(--texto-4);
+  text-transform: none; letter-spacing: 0; margin-top: 2px;
+}
+
+.tr-ex {
+  border-radius: var(--raio); border: 1px solid var(--borda);
+  background: var(--superficie); margin-bottom: 6px; overflow: hidden;
+  transition: border-color var(--t), box-shadow var(--t);
+}
+/* O cabeçalho é o alvo do toque; o corpo abre embaixo. */
+.tr-ex-cab {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 13px 14px; border: none; background: transparent;
+  font-family: inherit; font-size: var(--t-base); color: inherit;
+  text-align: left; cursor: pointer;
+}
+.tr-ex-cab:hover { background: var(--superficie-2); }
+
+.tr-ex-corpo {
+  padding: 4px 14px 14px; border-top: 1px solid var(--borda);
+  animation: slideDown var(--t);
+}
+.tr-ex-corpo .tr-ex-obs { margin: 10px 0 0; }
+
+.tr-series { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0; }
+.tr-serie {
+  flex: 1 1 78px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 9px 6px; border-radius: var(--raio-sm);
+  border: 1.5px solid var(--borda); background: var(--superficie);
+  font-family: inherit; cursor: pointer; transition: all var(--t);
+}
+.tr-serie:hover:not(:disabled) { border-color: var(--primaria); background: var(--primaria-suave); }
+.tr-serie:disabled { cursor: default; }
+.tr-serie-n {
+  font-family: 'Archivo'; font-weight: 700; font-size: var(--t-md); color: var(--texto-2);
+  display: flex; align-items: center;
+}
+.tr-serie-n svg { width: 16px; height: 16px; }
+.tr-serie-alvo { font-size: var(--t-xs); color: var(--texto-4); white-space: nowrap; }
+.tr-serie.feita {
+  background: var(--sucesso-bg); border-color: var(--sucesso-borda);
+  animation: pop var(--t);
+}
+.tr-serie.feita .tr-serie-n { color: var(--sucesso); }
+
+.tr-ex-carga { margin-bottom: 4px; }
+.tr-ex-carga input { margin-bottom: 4px; }
+
+.tr-ex-anterior { font-size: var(--t-sm); color: var(--texto-3); margin: 10px 0 0; }
+.tr-ex-anterior strong { color: var(--texto); font-weight: 600; }
+
+/*
+  O próprio "Como executar" abre e fecha o vídeo. Fechado, o player do YouTube
+  nem é carregado — são uns 400KB de scripts que ninguém pediu.
+*/
+.tr-video { margin-top: 14px; }
+.tr-video-btn {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 11px 14px; border-radius: var(--raio); cursor: pointer;
+  border: 1px solid var(--borda); background: var(--superficie);
+  font-family: inherit; font-size: var(--t-md); font-weight: 600;
+  color: var(--texto-2); transition: all var(--t);
+}
+.tr-video-btn:hover { border-color: var(--primaria); background: var(--primaria-suave); color: var(--primaria); }
+.tr-video-btn svg { width: 17px; height: 17px; flex-shrink: 0; }
+.tr-video-btn .tvb-seta { margin-left: auto; display: flex; transition: transform var(--t); }
+.tr-video-btn.aberto {
+  border-color: var(--primaria); color: var(--primaria);
+  border-radius: var(--raio) var(--raio) 0 0; border-bottom-color: transparent;
+}
+.tr-video-btn.aberto .tvb-seta { transform: rotate(180deg); }
+/* --- Prévia da tela do aluno, vista pelo personal --- */
+.previa-nota {
+  background: var(--info-bg); border: 1px solid var(--info-borda); color: var(--texto-2);
+  border-radius: var(--raio-sm); padding: 10px 13px; margin: 0 0 16px;
+  font-size: var(--t-sm); line-height: 1.5;
+}
+/* Na prévia a série é só leitura: sem cursor de mão, sem reação ao passar o mouse. */
+.tr-serie.previa { cursor: default; }
+.tr-serie.previa:hover { border-color: var(--borda); background: var(--superficie); }
+.tr-serie.previa.feita:hover { background: var(--sucesso-bg); border-color: var(--sucesso-borda); }
+
+/* --- Novidades da versão --- */
+.nov-caixa { max-width: 520px; }
+.nov-topo {
+  display: flex; align-items: flex-start; gap: 13px;
+  padding: 22px 22px 16px; border-bottom: 1px solid var(--borda); flex-shrink: 0;
+}
+.nov-icone {
+  display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0;
+  border-radius: 50%; background: var(--primaria-suave); color: var(--primaria);
+}
+.nov-icone svg { width: 20px; height: 20px; }
+.nov-topo h2 {
+  font-family: 'Archivo'; font-size: var(--t-xl); font-weight: 700;
+  letter-spacing: -0.02em; margin: 3px 0 0;
+}
+.nov-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.nov-lista li { display: flex; align-items: flex-start; gap: 10px; font-size: var(--t-md); line-height: 1.5; }
+.nov-lista svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--sucesso); margin-top: 3px; }
+
+/* ============================================================
+   TOUR DE PRIMEIRO ACESSO
+   ============================================================ */
+.tour { position: fixed; inset: 0; z-index: 90; animation: fadeIn var(--t); }
+.tour-veu { position: absolute; inset: 0; background: rgba(16, 24, 40, 0.55); }
+
+/* O recorte é feito com uma sombra enorme em volta do alvo. */
+.tour-foco {
+  position: absolute; border-radius: var(--raio);
+  box-shadow: 0 0 0 9999px rgba(16, 24, 40, 0.55);
+  border: 2px solid var(--primaria);
+  transition: all 0.25s ease; pointer-events: none;
+}
+
+.tour-balao {
+  position: absolute; width: 300px; max-width: calc(100vw - 24px);
+  background: var(--superficie); border-radius: var(--raio-lg);
+  box-shadow: var(--sombra-xl); padding: 18px; animation: pop var(--t);
+}
+.tour-x {
+  position: absolute; top: 10px; right: 10px; width: 28px; height: 28px;
+  display: grid; place-items: center; border: none; background: transparent;
+  color: var(--texto-4); border-radius: var(--raio-sm); cursor: pointer;
+}
+.tour-x:hover { background: var(--superficie-2); color: var(--texto); }
+.tour-x svg { width: 15px; height: 15px; }
+.tour-passo {
+  font-size: var(--t-xs); font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--primaria);
+}
+.tour-balao h3 {
+  font-family: 'Archivo'; font-size: var(--t-lg); font-weight: 700;
+  margin: 5px 0 6px; padding-right: 24px;
+}
+.tour-balao p { font-size: var(--t-md); color: var(--texto-2); line-height: 1.5; margin: 0; }
+.tour-acoes { display: flex; align-items: center; gap: 6px; margin-top: 16px; }
+
+.btn-ajuda {
+  width: 34px; height: 34px; flex-shrink: 0; border-radius: 50%;
+  display: grid; place-items: center; border: 1px solid var(--borda);
+  background: var(--superficie); color: var(--texto-3);
+  font-family: 'Archivo'; font-weight: 700; font-size: var(--t-md);
+  cursor: pointer; transition: all var(--t);
+}
+.btn-ajuda:hover { border-color: var(--primaria); color: var(--primaria); }
+
+/* --- Feedback visto pelo personal --- */
+.fb-item {
+  border: 1px solid var(--borda); border-left: 3px solid var(--borda-forte);
+  border-radius: var(--raio); padding: 13px 15px; margin-bottom: 8px;
+}
+.fb-item.atencao { border-left-color: var(--aviso); background: var(--aviso-bg); }
+.fb-topo { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.fb-topo strong { font-size: var(--t-lg); }
+.fb-respostas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.fb-tag {
+  font-size: var(--t-xs); padding: 3px 9px; border-radius: var(--raio-full);
+  background: var(--superficie-2); color: var(--texto-3); border: 1px solid var(--borda);
+}
+.fb-tag.ruim {
+  background: var(--erro-bg); color: var(--erro); border-color: var(--erro-borda); font-weight: 600;
+}
+.fb-comentario {
+  margin: 10px 0 0; font-size: var(--t-md); white-space: pre-wrap;
+  padding-left: 11px; border-left: 2px solid var(--borda-forte); color: var(--texto-2);
+}
+
+/* --- Feedback do aluno sobre o exercício --- */
+.tr-fb { margin-top: 14px; }
+.tr-fb-corpo {
+  border: 1px solid var(--primaria); border-top: none;
+  border-radius: 0 0 var(--raio) var(--raio);
+  padding: 14px; animation: slideDown var(--t);
+}
+.tr-fb-linha {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--borda); flex-wrap: wrap;
+}
+.tr-fb-pergunta { font-size: var(--t-md); flex: 1; min-width: 150px; }
+.tr-fb-opcoes { display: flex; gap: 6px; flex-shrink: 0; }
+.tr-fb-op {
+  min-width: 58px; padding: 7px 14px; border-radius: var(--raio-sm);
+  border: 1.5px solid var(--borda); background: var(--superficie);
+  font-family: inherit; font-size: var(--t-sm); font-weight: 600;
+  color: var(--texto-3); cursor: pointer; transition: all var(--t);
+}
+.tr-fb-op:hover { border-color: var(--primaria); color: var(--primaria); }
+.tr-fb-op.marcada { background: var(--primaria); border-color: var(--primaria); color: #fff; }
+.tr-fb-corpo label { margin-top: 14px; }
+.tr-fb-corpo textarea { margin-bottom: 12px; }
+.tr-fb-ok {
+  display: flex; align-items: center; gap: 7px; margin: 14px 0 0;
+  font-size: var(--t-sm); font-weight: 600; color: var(--sucesso);
+}
+.tr-fb-ok svg { width: 15px; height: 15px; }
+
+.tr-video-btn.aberto + .video-wrap {
+  border: 1px solid var(--primaria); border-top: none;
+  border-radius: 0 0 var(--raio) var(--raio); overflow: hidden;
+}
+
+/* --- Espiada num treino do ciclo (só leitura) --- */
+.espiada {
+  position: fixed; inset: 0; z-index: 70; background: rgba(16, 24, 40, 0.45);
+  display: flex; align-items: flex-end; justify-content: center;
+  animation: fadeIn var(--t);
+}
+.espiada-caixa {
+  width: 100%; max-width: 620px; max-height: 88vh; display: flex; flex-direction: column;
+  background: var(--superficie); border-radius: var(--raio-lg) var(--raio-lg) 0 0;
+  box-shadow: var(--sombra-lg); animation: slideUp var(--t);
+}
+.espiada-topo {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 20px 20px 14px; border-bottom: 1px solid var(--borda); flex-shrink: 0;
+}
+.espiada-letra {
+  font-size: var(--t-xs); font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--texto-4);
+}
+.espiada-topo h2 {
+  font-family: 'Archivo'; font-size: var(--t-xl); font-weight: 700;
+  letter-spacing: -0.02em; margin: 3px 0 0;
+}
+/* flex:1 + min-height:0 é o que permite encolher e rolar dentro do painel. */
+.espiada-corpo { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 20px 24px; }
+.espiada-hoje {
+  display: flex; align-items: center; gap: 7px; margin: 0 0 14px;
+  font-size: var(--t-sm); font-weight: 600; color: var(--sucesso);
+}
+.espiada-hoje svg { width: 15px; height: 15px; }
+.espiada-corpo .tr-ex { margin-bottom: 6px; }
+.espiada-acoes { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.folha-topo { display: none; }
+
+/* Exercício na consulta: cabeçalho + tabela de séries com as cargas. */
+.esp-bloco { margin-bottom: 10px; }
+.esp-bloco.biset {
+  border: 1px dashed var(--primaria-borda); border-radius: var(--raio);
+  padding: 10px; background: var(--primaria-suave);
+}
+.esp-ex {
+  border: 1px solid var(--borda); border-radius: var(--raio);
+  background: var(--superficie); padding: 12px 14px; margin-bottom: 8px;
+}
+.esp-bloco.biset .esp-ex:last-child { margin-bottom: 0; }
+.esp-ex-topo { display: flex; align-items: center; gap: 11px; margin-bottom: 10px; }
+.esp-ex-foto {
+  width: 44px; height: 44px; flex-shrink: 0; border-radius: var(--raio-sm);
+  object-fit: cover; background: var(--superficie-2);
+}
+.esp-ex-nome { display: block; font-weight: 600; font-size: var(--t-lg); }
+.esp-ex-qtd { display: block; font-size: var(--t-sm); color: var(--texto-4); }
+
+.esp-series { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }
+.esp-series th {
+  text-align: left; font-size: var(--t-xs); text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--texto-4); font-weight: 600;
+  padding: 0 8px 6px 0; border-bottom: 1px solid var(--borda);
+}
+.esp-series td {
+  padding: 7px 8px 7px 0; border-bottom: 1px solid var(--borda);
+  font-variant-numeric: tabular-nums;
+}
+.esp-series tr:last-child td { border-bottom: none; padding-bottom: 0; }
+.esp-s-n { font-family: 'Archivo'; font-weight: 700; color: var(--primaria); width: 48px; }
+.esp-ex-obs {
+  font-size: var(--t-sm); color: var(--texto-3); font-style: italic;
+  margin: 10px 0 0; white-space: pre-wrap;
+}
+
+@media (min-width: 640px) {
+  .espiada { align-items: center; padding: 24px; }
+  .espiada-caixa { border-radius: var(--raio-lg); animation: pop var(--t); }
+}
+
+/* --- Descanso entre séries --- */
+.descanso-tela {
+  position: fixed; inset: 0; z-index: 60;
+  background: var(--superficie); animation: fadeIn var(--t);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; padding: 24px; text-align: center;
+}
+.descanso-num {
+  font-family: 'Archivo'; font-size: 76px; font-weight: 800; line-height: 1;
+  color: var(--primaria); font-variant-numeric: tabular-nums;
+}
+.descanso-rot {
+  font-size: var(--t-md); color: var(--texto-4); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.descanso-prox { font-size: var(--t-md); color: var(--texto-3); margin: 16px 0 20px; }
+.descanso-prox strong { color: var(--texto); font-weight: 600; }
+
+/* --- Interruptor de opção --- */
+.opcao-switch { display: flex; align-items: flex-start; gap: 12px; cursor: pointer; margin: 0; }
+.opcao-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.switch-trilho {
+  flex-shrink: 0; width: 44px; height: 26px; border-radius: var(--raio-full);
+  background: var(--borda-forte); position: relative; transition: background var(--t); margin-top: 2px;
+}
+.switch-bola {
+  position: absolute; top: 3px; left: 3px; width: 20px; height: 20px;
+  border-radius: 50%; background: #fff; box-shadow: var(--sombra);
+  transition: transform var(--t);
+}
+.opcao-switch input:checked + .switch-trilho { background: var(--primaria); }
+.opcao-switch input:checked + .switch-trilho .switch-bola { transform: translateX(18px); }
+.opcao-switch input:focus-visible + .switch-trilho { box-shadow: 0 0 0 3px var(--primaria-suave); }
+.opcao-txt { display: flex; flex-direction: column; gap: 3px; }
+.opcao-txt strong { font-weight: 600; }
+.opcao-txt .mini { margin: 0; }
+
+.tr-ex-marca {
+  width: 28px; height: 28px; flex-shrink: 0; border-radius: 50%;
+  display: grid; place-items: center; font-size: var(--t-sm); font-weight: 700;
+  font-family: 'Archivo'; background: var(--superficie-2); color: var(--texto-4);
+}
+.tr-ex-marca svg { width: 15px; height: 15px; }
+.tr-ex-foto {
+  width: 46px; height: 46px; flex-shrink: 0; border-radius: var(--raio-sm);
+  object-fit: cover; background: var(--superficie-2);
+}
+.tr-ex-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.tr-ex-nome { font-weight: 500; }
+.tr-ex-meta { font-size: var(--t-sm); color: var(--texto-4); }
+.tr-ex-obs { font-size: var(--t-sm); color: var(--texto-3); font-style: italic; white-space: pre-wrap; }
+.tr-ex-cont {
+  font-size: var(--t-sm); color: var(--texto-4); flex-shrink: 0;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.tr-ex-cont.ok { color: var(--sucesso); display: flex; }
+.tr-ex-cont svg { width: 18px; height: 18px; }
+
+.tr-ex.feito { background: var(--superficie-2); border-color: transparent; }
+.tr-ex.feito .tr-ex-marca { background: var(--sucesso-bg); color: var(--sucesso); }
+.tr-ex.feito .tr-ex-nome { color: var(--texto-3); }
+.tr-ex.agora { border-color: var(--primaria); box-shadow: 0 0 0 3px var(--primaria-suave); }
+.tr-ex.agora .tr-ex-marca { background: var(--primaria); color: #fff; }
+.tr-ex.aberto { border-color: var(--borda-forte); }
+.tr-ex.agora.aberto { border-color: var(--primaria); }
+
+/* ============================================================
    EXECUÇÃO DE TREINO (modo foco)
    ============================================================ */
 .execucao-wrap { max-width: 620px; margin: 0 auto; }
@@ -959,11 +1398,16 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   flex: 1; min-width: 44px; height: 40px; border-radius: var(--raio-sm);
   background: var(--superficie-2); border: 1px solid var(--borda);
   display: flex; align-items: center; justify-content: center; gap: 4px;
-  font-size: var(--t-md); font-weight: 600; color: var(--texto-4);
-  transition: all var(--t);
+  font-family: inherit; font-size: var(--t-md); font-weight: 600; color: var(--texto-4);
+  padding: 0; cursor: pointer; transition: all var(--t);
 }
+.serie-ponto:hover:not(:disabled) { border-color: var(--primaria); color: var(--primaria); }
+.serie-ponto:disabled { cursor: default; }
 .serie-ponto.feita { background: var(--sucesso-bg); border-color: var(--sucesso-borda); color: var(--sucesso); animation: pop var(--t); }
-.serie-ponto.atual { background: var(--primaria-suave); border-color: var(--primaria); color: var(--primaria); }
+.serie-ponto.atual {
+  background: var(--primaria-suave); border-color: var(--primaria); color: var(--primaria);
+  box-shadow: 0 0 0 3px var(--primaria-suave);
+}
 .serie-ponto svg { width: 14px; height: 14px; }
 
 .exec-serie-atual {
@@ -1310,7 +1754,9 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   .barra-selecao { top: 8px; }
   .descanso-anel { width: 168px; height: 168px; }
   .descanso-anel .tempo { font-size: var(--t-3xl); }
-  .hero-treino, .exec-card { padding: 18px; }
+  .hero-treino, .exec-card, .tr-hero { padding: 18px; }
+  .tr-numeros strong { font-size: 30px; }
+  .tr-restante { width: 100%; margin-left: 0; }
   .la-cabecalho { display: none; }
   .la-linha { grid-template-columns: 1fr auto; gap: 10px; }
   .la-col-mobile-off { display: none; }
@@ -1319,4 +1765,49 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 @media (max-width: 420px) {
   .stats-grid, .metricas-aluno { grid-template-columns: 1fr 1fr; gap: 8px; }
   .stat-num { font-size: var(--t-2xl); }
+}
+
+/* ============================================================
+   IMPRESSÃO — o aluno salva o treino em PDF pelo próprio
+   navegador. Só o painel de visualização vai para o papel.
+   ============================================================ */
+@media print {
+  @page { margin: 14mm; }
+
+  /* visibility (e não display) esconde o resto sem quebrar o layout dos pais */
+  body * { visibility: hidden; }
+  .espiada, .espiada * { visibility: visible; }
+  .nao-imprime, .nao-imprime * { display: none !important; }
+
+  .espiada {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: block; padding: 0; background: #fff; animation: none;
+  }
+  .espiada-caixa {
+    max-width: none; max-height: none; width: 100%;
+    display: block; border-radius: 0; box-shadow: none; animation: none;
+  }
+  .espiada-corpo { overflow: visible; padding: 0; }
+
+  .folha-topo { display: block; margin-bottom: 18px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+  .folha-topo h1 { font-family: 'Archivo'; font-size: 20pt; font-weight: 800; margin: 0 0 4px; }
+  .folha-topo p { font-size: 10pt; color: #444; margin: 0; }
+
+  /* Um exercício não pode ser partido entre duas páginas. */
+  .esp-ex, .esp-bloco { break-inside: avoid; page-break-inside: avoid; }
+  .esp-ex {
+    border: 1px solid #ccc; background: #fff !important;
+    padding: 8px 10px; margin-bottom: 6px; box-shadow: none !important;
+  }
+  .esp-ex-foto { width: 36px; height: 36px; }
+  .esp-ex-nome { font-size: 11pt; }
+  .esp-ex-qtd, .esp-ex-obs { font-size: 9pt; color: #444; }
+
+  .esp-series { font-size: 9.5pt; }
+  .esp-series th { font-size: 7.5pt; color: #666; border-bottom: 1px solid #999; }
+  .esp-series td { border-bottom: 1px solid #e4e4e4; padding: 4px 8px 4px 0; }
+  .esp-s-n { color: #000; }
+
+  .esp-bloco.biset { border: 1px dashed #999; background: #fff; }
+  .tr-biset-tag { background: #fff; color: #000; border: 1px solid #000; font-size: 8pt; }
 }
