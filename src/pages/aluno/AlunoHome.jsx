@@ -14,18 +14,23 @@ import LineChart from '../../components/LineChart.jsx'
 import Heatmap from '../../components/Heatmap.jsx'
 import Layout from '../../components/Layout.jsx'
 import Tour from '../../components/Tour.jsx'
+import Suplementacao from '../../components/Suplementacao.jsx'
+// `diaISO` daqui já existe no arquivo para a sequência de treinos; o alias evita a colisão.
+import { normalizarSuplemento, faltaHoje, vezesNoDia, diaISO as diaSup } from '../../lib/suplementos'
 import {
   TOUR_ALUNO_TREINO, TOUR_ALUNO_EVOLUCAO, TOUR_ALUNO_DIARIO, TOUR_ALUNO_PAGAMENTOS
 } from '../../lib/tours'
 import {
   IcTreino, IcEvolucao, IcPagamentos, IcChat, IcConfig,
-  IcFogo, IcCalendario, IcCheck, IcHalter, IcAlerta, IcTrofeu, IcVideo, IcSeta, IcFechar
+  IcFogo, IcCalendario, IcCheck, IcHalter, IcAlerta, IcTrofeu, IcVideo, IcSeta, IcFechar,
+  IcSuplemento
 } from '../../components/Icones.jsx'
 
 const TITULOS = {
   treino: { t: 'Meu Treino', s: 'Seu plano de hoje' },
   evolucao: { t: 'Evolução', s: 'Acompanhe seu progresso' },
   diario: { t: 'Meu diário', s: 'Privado — só você vê' },
+  suplementos: { t: 'Suplementação', s: 'O que você toma e a constância' },
   pagamentos: { t: 'Pagamentos', s: 'Suas cobranças' },
   chat: { t: 'Chat', s: 'Fale com seu personal' },
   config: { t: 'Configurações', s: 'Sua conta e preferências' }
@@ -100,6 +105,10 @@ export default function AlunoHome({ user, perfil, onSair }) {
   const [fbComentario, setFbComentario] = useState('')
   const [fbEnviando, setFbEnviando] = useState(false)
   const [feedbacks, setFeedbacks] = useState({})
+  const [suplementos, setSuplementos] = useState({})
+  const [supTomados, setSupTomados] = useState({})
+  // Esconde o aviso flutuante até a próxima abertura do app, sem marcar nada.
+  const [supDispensado, setSupDispensado] = useState(false)
 
   /* Ausente no banco = ligado; o aluno desliga em Configurações. */
   const descansoLigado = perfil.timerDescanso !== false
@@ -125,7 +134,9 @@ export default function AlunoHome({ user, perfil, onSair }) {
     const u5 = onValue(ref(db, 'treinosHistorico/' + user.uid), s => setHistorico(s.val() || {}))
     const u6 = onValue(ref(db, 'users/' + perfil.personalId), s => setPersonal(s.val()))
     const u7 = onValue(ref(db, 'feedbacks/' + user.uid), s => setFeedbacks(s.val() || {}))
-    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7() }
+    const u8 = onValue(ref(db, 'suplementos/' + user.uid), s => setSuplementos(s.val() || {}))
+    const u9 = onValue(ref(db, 'suplementosTomados/' + user.uid), s => setSupTomados(s.val() || {}))
+    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8(); u9() }
   }, [user.uid, perfil.personalId])
 
   // séries concluídas hoje
@@ -281,6 +292,21 @@ export default function AlunoHome({ user, perfil, onSair }) {
     setFbEnviando(false)
   }
 
+  /** Marca a dose direto do aviso flutuante, sem sair da tela onde a pessoa está. */
+  async function marcarSuplemento(sup) {
+    const dia = diaSup()
+    const feitas = vezesNoDia(supTomados, sup.id, dia)
+    if (feitas >= sup.vezesAoDia) return
+    try {
+      await update(ref(db, `suplementosTomados/${user.uid}/${dia}/${sup.id}`), {
+        vezes: feitas + 1,
+        ts: Date.now()
+      })
+    } catch (err) {
+      console.warn('Falha ao marcar suplemento:', err)
+    }
+  }
+
   async function concluirTreino() {
     if (ciclico) {
       await update(ref(db, 'treinos/' + user.uid), { indiceAtual: (idxAtual + 1) % totalDias })
@@ -299,10 +325,22 @@ export default function AlunoHome({ user, perfil, onSair }) {
     setPagCobId(null); setPagObs('')
   }
 
+  /*
+    Suplementos que ainda faltam hoje. Sem push, o lembrete é este: o app cobra
+    assim que a pessoa abre, na tela de treino, em vez de esperar ela lembrar
+    de ir até a aba de suplementação.
+  */
+  const supPendentes = useMemo(() => (
+    Object.entries(suplementos)
+      .map(([id, s]) => ({ id, ...normalizarSuplemento(s) }))
+      .filter(s => faltaHoje(s, s.id, supTomados))
+  ), [suplementos, supTomados])
+
   const itens = [
     { id: 'treino', label: 'Meu Treino', icone: <IcTreino /> },
     { id: 'evolucao', label: 'Evolução', icone: <IcEvolucao /> },
     { id: 'diario', label: 'Meu diário', icone: <IcCalendario /> },
+    { id: 'suplementos', label: 'Suplementação', icone: <IcSuplemento />, badge: supPendentes.length },
     { id: 'pagamentos', label: 'Pagamentos', icone: <IcPagamentos />, badge: vencidas.length },
     { id: 'chat', label: 'Chat', icone: <IcChat /> },
     { id: 'config', label: 'Configurações', icone: <IcConfig /> }
@@ -435,6 +473,48 @@ export default function AlunoHome({ user, perfil, onSair }) {
           </div>
         </div>
       )}
+
+      {/*
+        Cobrança do suplemento em qualquer aba, até ser marcado. Fica de fora só
+        da própria aba de suplementação, onde seria redundante.
+        Enquanto não houver push, é este aviso que faz o papel do lembrete.
+      */}
+      {supPendentes.length > 0 && aba !== 'suplementos' && !supDispensado && (() => {
+        const sup = supPendentes[0]
+        const feitas = vezesNoDia(supTomados, sup.id, diaSup())
+        const outros = supPendentes.length - 1
+        return (
+          <div className="sup-flutuante" role="status">
+            <button
+              className="sf-x" onClick={() => setSupDispensado(true)}
+              title="Esconder até a próxima vez que abrir"
+            >
+              <IcFechar />
+            </button>
+
+            <div className="sf-topo">
+              <span className="sf-icone"><IcSuplemento /></span>
+              <div className="sf-txt">
+                <strong>Já tomou a {sup.nome}?</strong>
+                <span>
+                  {sup.dose || 'dose de hoje'}
+                  {sup.vezesAoDia > 1 ? ` · ${feitas} de ${sup.vezesAoDia}` : ''}
+                  {outros > 0 ? ` · mais ${outros}` : ''}
+                </span>
+              </div>
+            </div>
+
+            <div className="sf-acoes">
+              <button className="btn btn-sm" onClick={() => marcarSuplemento(sup)}>
+                <IcCheck /> Já tomei
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => setAba('suplementos')}>
+                Ver suplementação
+              </button>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Descanso entre séries. Cobre a tela para o número ser lido de longe. */}
       {descanso && (
@@ -932,6 +1012,10 @@ export default function AlunoHome({ user, perfil, onSair }) {
 
       {/* ===== CONFIG ===== */}
       {aba === 'diario' && <Diario user={user} perfil={perfil} />}
+
+      {aba === 'suplementos' && (
+        <Suplementacao alunoId={user.uid} podeMarcar quemSou="proprio" />
+      )}
 
       {aba === 'config' && <Config user={user} perfil={perfil} />}
     </Layout>

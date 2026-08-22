@@ -1088,6 +1088,110 @@ button.tr-passo:hover { border-color: var(--primaria); color: var(--primaria); t
   border-radius: var(--raio) var(--raio) 0 0; border-bottom-color: transparent;
 }
 .tr-video-btn.aberto .tvb-seta { transform: rotate(180deg); }
+/* ============================================================
+   SUPLEMENTAÇÃO
+   ============================================================ */
+.sup-hoje { display: flex; flex-direction: column; gap: 8px; }
+.sup-dose {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+  border: 1px solid var(--borda); border-radius: var(--raio); background: var(--superficie);
+}
+.sup-dose.ok { background: var(--sucesso-bg); border-color: var(--sucesso-borda); }
+.sup-dose-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.sup-dose-nome { font-weight: 600; }
+.sup-dose-meta { font-size: var(--t-sm); color: var(--texto-4); }
+.sup-contagem {
+  font-size: var(--t-sm); font-weight: 600; color: var(--texto-3);
+  font-variant-numeric: tabular-nums; flex-shrink: 0;
+}
+.sup-btn {
+  flex-shrink: 0; padding: 9px 18px; border-radius: var(--raio-sm);
+  border: 1.5px solid var(--primaria); background: var(--primaria); color: #fff;
+  font-family: inherit; font-size: var(--t-sm); font-weight: 600;
+  cursor: pointer; transition: all var(--t);
+}
+.sup-btn:hover { background: var(--primaria-escura); }
+.sup-btn.feito {
+  background: transparent; color: var(--sucesso); border-color: var(--sucesso-borda);
+  display: flex; align-items: center; gap: 6px;
+}
+.sup-btn.feito svg { width: 15px; height: 15px; }
+.sup-selo {
+  flex-shrink: 0; font-size: var(--t-xs); font-weight: 600; padding: 4px 11px;
+  border-radius: var(--raio-full); background: var(--superficie-2); color: var(--texto-4);
+}
+.sup-selo.ok { background: var(--sucesso-bg); color: var(--sucesso); }
+
+.sup-card {
+  border: 1px solid var(--borda); border-radius: var(--raio); background: var(--superficie);
+  padding: 15px 16px; margin-bottom: 10px;
+}
+.sup-card.pausado { opacity: 0.6; }
+.sup-card-topo { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.sup-nome { font-family: 'Archivo'; font-weight: 700; font-size: var(--t-lg); }
+.sup-marca {
+  font-family: 'Inter'; font-weight: 400; font-size: var(--t-sm);
+  color: var(--texto-4); margin-left: 8px;
+}
+.sup-resumo { font-size: var(--t-sm); color: var(--texto-3); margin-top: 2px; }
+.sup-acoes { display: flex; gap: 4px; flex-shrink: 0; }
+
+.sup-numeros {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--borda);
+}
+.sup-num { display: flex; align-items: center; gap: 6px; font-size: var(--t-sm); color: var(--texto-3); }
+.sup-num svg { width: 15px; height: 15px; color: var(--aviso); }
+.sup-num strong { color: var(--texto); font-weight: 700; font-family: 'Archivo'; }
+.sup-ad { font-family: 'Archivo'; font-weight: 700; color: var(--primaria); font-variant-numeric: tabular-nums; }
+.sup-tag {
+  font-size: var(--t-xs); padding: 3px 9px; border-radius: var(--raio-full);
+  background: var(--superficie-2); color: var(--texto-4); margin-left: auto;
+}
+.sup-tag.pausado { background: var(--aviso-bg); color: var(--aviso-txt); margin-left: 0; }
+.sup-obs {
+  font-size: var(--t-sm); color: var(--texto-3); font-style: italic;
+  margin: 10px 0 0; white-space: pre-wrap;
+}
+
+.tr-aviso.sup { cursor: pointer; border-color: var(--info-borda); background: var(--info-bg); }
+.tr-aviso.sup svg { color: var(--info); }
+
+/*
+  Aviso flutuante: acompanha o aluno em todas as abas até a dose do dia ser
+  marcada. Traz o botão junto — cobrar sem dar a ação a um toque é irritante.
+*/
+.sup-flutuante {
+  position: fixed; z-index: 55; right: 20px; bottom: 20px; width: 330px;
+  max-width: calc(100vw - 32px);
+  background: var(--superficie); border: 1px solid var(--info-borda);
+  border-left: 3px solid var(--info); border-radius: var(--raio);
+  box-shadow: var(--sombra-lg); padding: 15px 16px; animation: slideUp var(--t);
+}
+.sf-x {
+  position: absolute; top: 8px; right: 8px; width: 26px; height: 26px;
+  display: grid; place-items: center; border: none; background: transparent;
+  color: var(--texto-4); border-radius: var(--raio-sm); cursor: pointer;
+}
+.sf-x:hover { background: var(--superficie-2); color: var(--texto); }
+.sf-x svg { width: 14px; height: 14px; }
+.sf-topo { display: flex; align-items: flex-start; gap: 11px; padding-right: 22px; }
+.sf-icone {
+  display: grid; place-items: center; width: 34px; height: 34px; flex-shrink: 0;
+  border-radius: 50%; background: var(--info-bg); color: var(--info);
+}
+.sf-icone svg { width: 17px; height: 17px; }
+.sf-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sf-txt strong { font-size: var(--t-md); font-weight: 600; }
+.sf-txt span { font-size: var(--t-sm); color: var(--texto-4); }
+.sf-acoes { display: flex; align-items: center; gap: 6px; margin-top: 13px; }
+.sf-acoes .btn { margin: 0; }
+
+@media (max-width: 640px) {
+  /* No celular vira uma barra embaixo, longe do polegar que rola a tela. */
+  .sup-flutuante { left: 12px; right: 12px; bottom: 12px; width: auto; }
+}
+
 /* --- Prévia da tela do aluno, vista pelo personal --- */
 .previa-nota {
   background: var(--info-bg); border: 1px solid var(--info-borda); color: var(--texto-2);
