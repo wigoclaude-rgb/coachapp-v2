@@ -23,6 +23,13 @@ export default function Diario({ user, perfil }) {
   const [nota, setNota] = useState('')
   const [medidas, setMedidas] = useState({})
   const [compartilhar, setCompartilhar] = useState(false)
+
+  /*
+    O personal usa este mesmo diário para acompanhar o próprio corpo, e aí não há
+    com quem compartilhar. Sem isso a tela oferece "compartilhar com meu personal"
+    para quem é o personal.
+  */
+  const temPersonal = !!perfil?.personalId
   const [maisMedidas, setMaisMedidas] = useState(false)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
@@ -136,7 +143,11 @@ export default function Diario({ user, perfil }) {
         <div className="card-titulo">
           <div style={{ minWidth: 0 }}>
             <h2>Meu diário</h2>
-            <p className="mini">Só você vê. Compartilhe com {perfil?.nomePersonal || 'seu personal'} o que quiser.</p>
+            <p className="mini">
+              {temPersonal
+                ? <>Só você vê. Compartilhe com {perfil?.nomePersonal || 'seu personal'} o que quiser.</>
+                : 'Seu registro de peso, medidas e fotos. Só você vê.'}
+            </p>
           </div>
           <button className="btn btn-sm" onClick={() => { setAberto(!aberto); setErro('') }}>
             {aberto ? 'Fechar' : <><IcMais /> Novo registro</>}
@@ -178,17 +189,19 @@ export default function Diario({ user, perfil }) {
               {maisMedidas ? 'Mostrar menos' : 'Mais medidas'}
             </button>
 
-            <label className="troca-privacidade">
-              <input
-                type="checkbox" checked={compartilhar}
-                onChange={e => setCompartilhar(e.target.checked)}
-              />
-              <span className="tp-caixa" aria-hidden="true"><IcCheck /></span>
-              <span className="tp-texto">
-                <strong>Compartilhar com meu personal</strong>
-                <span className="mini">Sem marcar, este registro fica só para você.</span>
-              </span>
-            </label>
+            {temPersonal && (
+              <label className="troca-privacidade">
+                <input
+                  type="checkbox" checked={compartilhar}
+                  onChange={e => setCompartilhar(e.target.checked)}
+                />
+                <span className="tp-caixa" aria-hidden="true"><IcCheck /></span>
+                <span className="tp-texto">
+                  <strong>Compartilhar com meu personal</strong>
+                  <span className="mini">Sem marcar, este registro fica só para você.</span>
+                </span>
+              </label>
+            )}
 
             {erro && <div className="erro">{erro}</div>}
 
@@ -272,7 +285,7 @@ export default function Diario({ user, perfil }) {
             <h2>Nada registrado ainda</h2>
             <p className="muted">
               Anote como foi o dia, tire uma foto ou marque seu peso. Nada é obrigatório
-              e nada aparece para o seu personal sem você marcar.
+              {temPersonal ? ' e nada aparece para o seu personal sem você marcar.' : '.'}
             </p>
           </div>
         </div>
@@ -280,9 +293,11 @@ export default function Diario({ user, perfil }) {
         <div key={r.id} className="card diario-registro">
           <div className="dr-topo">
             <span className="dr-data">{fmtData(r.ts)}</span>
-            <span className={'badge ' + (r.compartilhado ? 'primaria' : '')}>
-              {r.compartilhado ? 'Compartilhado' : 'Privado'}
-            </span>
+            {temPersonal && (
+              <span className={'badge ' + (r.compartilhado ? 'primaria' : '')}>
+                {r.compartilhado ? 'Compartilhado' : 'Privado'}
+              </span>
+            )}
           </div>
 
           {r.foto && <img src={r.foto} alt="" className="dr-foto" loading="lazy" />}
@@ -300,9 +315,11 @@ export default function Diario({ user, perfil }) {
           )}
 
           <div className="dr-acoes">
-            <button className="btn btn-ghost btn-sm" onClick={() => alternarCompartilhar(r)}>
-              {r.compartilhado ? <><IcFechar /> Tornar privado</> : <><IcCheck /> Compartilhar</>}
-            </button>
+            {temPersonal && (
+              <button className="btn btn-ghost btn-sm" onClick={() => alternarCompartilhar(r)}>
+                {r.compartilhado ? <><IcFechar /> Tornar privado</> : <><IcCheck /> Compartilhar</>}
+              </button>
+            )}
             <span className="espaco" />
             <button className="btn btn-perigo-sutil btn-sm" onClick={() => apagar(r)}>
               <IcLixeira /> Apagar

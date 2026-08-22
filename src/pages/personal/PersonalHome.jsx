@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { createUserWithEmailAndPassword, signOut, getAuth, deleteUser } from 'firebase/auth'
 import { initializeApp, getApps } from 'firebase/app'
 import { ref, onValue, set, push, update, remove, get, getDatabase } from 'firebase/database'
@@ -14,13 +14,19 @@ import MeusTemplates from './MeusTemplates.jsx'
 import Financeiro from './Financeiro.jsx'
 import Layout from '../../components/Layout.jsx'
 import Tour from '../../components/Tour.jsx'
+import Suplementacao from '../../components/Suplementacao.jsx'
+import TreinoDoDia from '../../components/TreinoDoDia.jsx'
+import Diario from '../aluno/Diario.jsx'
+// `diaISO` daqui vira `diaSup` por simetria com o AlunoHome, onde há colisão de nome.
+import { normalizarSuplemento, faltaHoje, vezesNoDia, diaISO as diaSup } from '../../lib/suplementos'
 import {
   TOUR_PERSONAL_INICIO, TOUR_PERSONAL_ALUNOS,
   TOUR_PERSONAL_TEMPLATES, TOUR_PERSONAL_FINANCEIRO
 } from '../../lib/tours'
 import {
   IcInicio, IcAlunos, IcFinanceiro, IcChat, IcTemplates, IcConfig,
-  IcRaio, IcRelogio, IcMais, IcBusca, IcHalter, IcAlerta, IcCopiar, IcCheck, IcVoltar
+  IcRaio, IcRelogio, IcMais, IcBusca, IcHalter, IcAlerta, IcCopiar, IcCheck, IcVoltar,
+  IcSuplemento, IcFechar, IcTreino
 } from '../../components/Icones.jsx'
 
 // Sem I, O, 0 e 1 — some a chance do aluno digitar errado o que veio na mensagem.
@@ -51,6 +57,8 @@ const TITULOS = {
   financeiro: { t: 'Financeiro', s: 'Cobranças e pagamentos' },
   chat: { t: 'Chat', s: 'Converse com seus alunos' },
   templates: { t: 'Templates', s: 'Planos reutilizáveis' },
+  meutreino: { t: 'Meu treino', s: 'Seu plano e sua evolução' },
+  suplementos: { t: 'Suplementação', s: 'O que você toma e a constância' },
   config: { t: 'Configurações', s: 'Sua conta e preferências' }
 }
 
@@ -73,6 +81,13 @@ export default function PersonalHome({ user, perfil, onSair }) {
   const [treinos, setTreinos] = useState({})
   const [chatAluno, setChatAluno] = useState(null)
 
+  // Suplementação do próprio personal — mesma tela do aluno, dados dele.
+  const [suplementos, setSuplementos] = useState({})
+  const [supTomados, setSupTomados] = useState({})
+  const [supDispensado, setSupDispensado] = useState(false)
+  const [subMeuTreino, setSubMeuTreino] = useState('hoje')
+  const navigate = useNavigate()
+
   const [busca, setBusca] = useState('')
   const [filtro, setFiltro] = useState('todos')
 
@@ -92,8 +107,30 @@ export default function PersonalHome({ user, perfil, onSair }) {
     const u1 = onValue(ref(db, 'personals/' + user.uid + '/alunos'), s => setAlunos(s.val() || {}))
     const u2 = onValue(ref(db, 'fichas/' + user.uid), s => setFichasRecebidas(s.val() || {}))
     const u3 = onValue(ref(db, 'personals/' + user.uid + '/codigoFicha'), s => setCodigoFicha(s.val() || ''))
-    return () => { u1(); u2(); u3() }
+    const u4 = onValue(ref(db, 'suplementos/' + user.uid), s => setSuplementos(s.val() || {}))
+    const u5 = onValue(ref(db, 'suplementosTomados/' + user.uid), s => setSupTomados(s.val() || {}))
+    return () => { u1(); u2(); u3(); u4(); u5() }
   }, [user.uid])
+
+  const supPendentes = useMemo(() => (
+    Object.entries(suplementos)
+      .map(([id, s]) => ({ id, ...normalizarSuplemento(s) }))
+      .filter(s => faltaHoje(s, s.id, supTomados))
+  ), [suplementos, supTomados])
+
+  /** Marca a dose direto do aviso flutuante, sem sair da tela onde está. */
+  async function marcarSuplemento(sup) {
+    const dia = diaSup()
+    const feitas = vezesNoDia(supTomados, sup.id, dia)
+    if (feitas >= sup.vezesAoDia) return
+    try {
+      await update(ref(db, `suplementosTomados/${user.uid}/${dia}/${sup.id}`), {
+        vezes: feitas + 1, ts: Date.now()
+      })
+    } catch (err) {
+      console.warn('Falha ao marcar suplemento:', err)
+    }
+  }
 
   const idsAlunos = useMemo(() => Object.keys(alunos).sort().join(','), [alunos])
 
@@ -362,6 +399,8 @@ export default function PersonalHome({ user, perfil, onSair }) {
     { id: 'financeiro', label: 'Financeiro', icone: <IcFinanceiro />, badge: paraValidar },
     { id: 'chat', label: 'Chat', icone: <IcChat /> },
     { id: 'templates', label: 'Templates', icone: <IcTemplates /> },
+    { id: 'meutreino', label: 'Meu treino', icone: <IcTreino /> },
+    { id: 'suplementos', label: 'Suplementação', icone: <IcSuplemento />, badge: supPendentes.length },
     { id: 'config', label: 'Configurações', icone: <IcConfig /> }
   ]
 
@@ -401,6 +440,39 @@ export default function PersonalHome({ user, perfil, onSair }) {
       roleLabel="Personal Trainer" titulo={meta.t} subtitulo={meta.s}
       onAjuda={tourDaAba ? () => setRever(true) : undefined}
     >
+      {/* Mesmo aviso do aluno: acompanha em todas as abas até a dose ser marcada. */}
+      {supPendentes.length > 0 && aba !== 'suplementos' && !supDispensado && (() => {
+        const sup = supPendentes[0]
+        const feitas = vezesNoDia(supTomados, sup.id, diaSup())
+        const outros = supPendentes.length - 1
+        return (
+          <div className="sup-flutuante" role="status">
+            <button className="sf-x" onClick={() => setSupDispensado(true)} title="Esconder até a próxima vez que abrir">
+              <IcFechar />
+            </button>
+            <div className="sf-topo">
+              <span className="sf-icone"><IcSuplemento /></span>
+              <div className="sf-txt">
+                <strong>Já tomou a {sup.nome}?</strong>
+                <span>
+                  {sup.dose || 'dose de hoje'}
+                  {sup.vezesAoDia > 1 ? ` · ${feitas} de ${sup.vezesAoDia}` : ''}
+                  {outros > 0 ? ` · mais ${outros}` : ''}
+                </span>
+              </div>
+            </div>
+            <div className="sf-acoes">
+              <button className="btn btn-sm" onClick={() => marcarSuplemento(sup)}>
+                <IcCheck /> Já tomei
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => irPara('suplementos')}>
+                Ver suplementação
+              </button>
+            </div>
+          </div>
+        )
+      })()}
+
       {tourDaAba && (
         <Tour
           key={aba + (rever ? '-rever' : '')}
@@ -757,6 +829,43 @@ export default function PersonalHome({ user, perfil, onSair }) {
 
       {/* ===== TEMPLATES ===== */}
       {aba === 'templates' && <MeusTemplates user={user} />}
+
+      {/* ===== MEU TREINO (do próprio personal) ===== */}
+      {aba === 'meutreino' && (
+        <>
+          <div className="tabs" style={{ marginBottom: 14 }}>
+            <button
+              className={'tab ' + (subMeuTreino === 'hoje' ? 'ativa' : '')}
+              onClick={() => setSubMeuTreino('hoje')}
+            >
+              Treino de hoje
+            </button>
+            <button
+              className={'tab ' + (subMeuTreino === 'corpo' ? 'ativa' : '')}
+              onClick={() => setSubMeuTreino('corpo')}
+            >
+              Relatório
+            </button>
+          </div>
+
+          {subMeuTreino === 'hoje' ? (
+            <TreinoDoDia
+              uid={user.uid}
+              nome={perfil.nome}
+              podeMarcar
+              embutido
+              onProgramar={() => navigate('/personal-treino/' + user.uid)}
+            />
+          ) : (
+            <Diario user={user} perfil={perfil} />
+          )}
+        </>
+      )}
+
+      {/* ===== SUPLEMENTAÇÃO (do próprio personal) ===== */}
+      {aba === 'suplementos' && (
+        <Suplementacao alunoId={user.uid} podeMarcar quemSou="proprio" />
+      )}
 
       {/* ===== CONFIG ===== */}
       {aba === 'config' && <Config user={user} perfil={perfil} />}

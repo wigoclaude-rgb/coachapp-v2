@@ -25,9 +25,14 @@ export default function CriarTreino({ user }) {
   const [enviando, setEnviando] = useState(false)
 
   useEffect(() => {
-    get(ref(db, 'personals/' + user.uid + '/alunos/' + alunoId)).then(s => {
-      if (s.exists()) setNomeAluno(s.val().nome)
-    })
+    // O personal também monta o próprio treino; aí não existe ficha de aluno.
+    if (alunoId === user.uid) {
+      setNomeAluno('você')
+    } else {
+      get(ref(db, 'personals/' + user.uid + '/alunos/' + alunoId)).then(s => {
+        if (s.exists()) setNomeAluno(s.val().nome)
+      })
+    }
     get(ref(db, 'personals/' + user.uid + '/meusTemplates')).then(s => {
       if (s.exists()) setMeusTemplates(s.val())
     })
@@ -148,7 +153,10 @@ export default function CriarTreino({ user }) {
     await set(ref(db, 'treinos/' + alunoId), novo)
     setTreinoExistente(novo)
     setIndiceAtualExistente(indiceAtual)
-    notificar(alunoId, 'Seu treino foi atualizado: ' + novo.nome, '/aluno')
+    // Montando o próprio treino não há a quem avisar.
+    if (alunoId !== user.uid) {
+      notificar(alunoId, 'Seu treino foi atualizado: ' + novo.nome, '/aluno')
+    }
     setSalvo(true)
     setEnviando(false)
     setTimeout(() => setSalvo(false), 3000)

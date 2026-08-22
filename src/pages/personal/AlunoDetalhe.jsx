@@ -13,7 +13,8 @@ const PERGUNTAS_FB = [
 ]
 import { CAMPOS_MEDIDAS, rotuloMedida } from '../../lib/medidas'
 import { IcEvolucao, IcOlho } from '../../components/Icones.jsx'
-import PreviaTreinoAluno from '../../components/PreviaTreinoAluno.jsx'
+import TreinoDoDia from '../../components/TreinoDoDia.jsx'
+import Suplementacao from '../../components/Suplementacao.jsx'
 import LineChart from '../../components/LineChart.jsx'
 import Heatmap from '../../components/Heatmap.jsx'
 import FotoInput from '../../components/FotoInput.jsx'
@@ -115,8 +116,8 @@ export default function AlunoDetalhe({ user }) {
   return (
     <div className="container">
       {verComoAluno && (
-        <PreviaTreinoAluno
-          alunoId={alunoId}
+        <TreinoDoDia
+          uid={alunoId}
           nome={aluno.nome}
           onFechar={() => setVerComoAluno(false)}
         />
@@ -166,6 +167,9 @@ export default function AlunoDetalhe({ user }) {
         <button className={'tab ' + (aba === 'fotos' ? 'ativa' : '')} onClick={() => setAba('fotos')}>Fotos</button>
         <button className={'tab ' + (aba === 'diario' ? 'ativa' : '')} onClick={() => setAba('diario')}>
           Diário{listaDiario.length > 0 ? ` (${listaDiario.length})` : ''}
+        </button>
+        <button className={'tab ' + (aba === 'suplementos' ? 'ativa' : '')} onClick={() => setAba('suplementos')}>
+          Suplementação
         </button>
         <button className={'tab ' + (aba === 'feedback' ? 'ativa' : '')} onClick={() => setAba('feedback')}>
           Feedback{listaFeedback.length > 0 ? ` (${listaFeedback.length})` : ''}
@@ -241,6 +245,10 @@ export default function AlunoDetalhe({ user }) {
             ))}
           </div>
         </>
+      )}
+
+      {aba === 'suplementos' && (
+        <Suplementacao alunoId={alunoId} quemSou="personal" nomeAluno={aluno.nome} />
       )}
 
       {aba === 'feedback' && (
