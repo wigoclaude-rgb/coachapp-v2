@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ref, onValue, push, remove } from 'firebase/database'
 import { db } from '../../firebase'
 import { fmtData } from '../../lib/util'
+import { soDigitos } from '../../lib/cpf'
 import { normalizarPlano, resumoLinhas, LETRAS } from '../../lib/treinoModel'
 
 /* Espelha PERGUNTAS_FEEDBACK do AlunoHome. `alerta` é a resposta que pede ação. */
@@ -113,6 +114,61 @@ export default function AlunoDetalhe({ user }) {
     return (comPeso[comPeso.length - 1].medidas.peso - comPeso[0].medidas.peso).toFixed(1)
   })()
 
+  /*
+    Apaga tudo que pertence ao aluno.
+
+    O `cpfs/{cpf}` é o que mais dói se ficar para trás: ele existe justamente para
+    barrar cadastro duplicado, então um CPF esquecido bloqueia para sempre quem
+    quiser voltar a treinar. O `codigos/{codigo}` tem o mesmo problema em menor
+    grau. Os dois vivem fora do registro do aluno, por isso é fácil esquecer.
+
+    A conta de login continua no Authentication — apagar de lá exige Admin SDK e
+    não dá do navegador. Fica avisado na confirmação.
+  */
+  async function deletarAluno() {
+    const nome = aluno.nome || 'este aluno'
+    if (!confirm(
+      `Deletar ${nome}?\n\n` +
+      'Apaga treinos, execuções, cobranças, avaliações, fotos, diário, ' +
+      'feedbacks e suplementos. Não tem como desfazer.'
+    )) return
+
+    /*
+      A ORDEM IMPORTA. Quase toda regra deste banco autoriza o personal olhando
+      `users/{aluno}/personalId`. Apagar o registro do aluno junto com o resto
+      derrubaria essa checagem no meio e o Firebase negaria o que faltasse —
+      deixando exatamente o lixo que esta função existe para evitar.
+      Por isso `users` sai por último.
+    */
+    const dependemDoRegistro = [
+      'treinos/' + alunoId,
+      'treinosHistorico/' + alunoId,
+      'execucoes/' + alunoId,
+      'cobrancas/' + alunoId,
+      'avaliacoes/' + alunoId,
+      'fotosProgresso/' + alunoId,
+      'diarioCompartilhado/' + alunoId,
+      'feedbacks/' + alunoId,
+      'suplementos/' + alunoId,
+      'suplementosTomados/' + alunoId,
+      'diario/' + alunoId,
+      'notificacoes/' + alunoId
+    ]
+    // Só existem quando o aluno tem código/CPF; sem eles a chave sairia inválida.
+    if (aluno.codigo) dependemDoRegistro.push('codigos/' + aluno.codigo)
+    if (aluno.cpf) dependemDoRegistro.push('cpfs/' + soDigitos(aluno.cpf))
+
+    try {
+      await Promise.all(dependemDoRegistro.map(c => remove(ref(db, c))))
+      await remove(ref(db, 'users/' + alunoId))
+      await remove(ref(db, 'personals/' + user.uid + '/alunos/' + alunoId))
+      navigate('/personal')
+    } catch (err) {
+      alert('Não foi possível apagar tudo. Parte dos dados pode ter ficado. Tente de novo.')
+      console.warn('Falha ao deletar aluno:', err)
+    }
+  }
+
   return (
     <div className="container">
       {verComoAluno && (
@@ -137,17 +193,8 @@ export default function AlunoDetalhe({ user }) {
     <IcOlho /> Ver como o aluno
   </button>
   <button
-    className="btn btn-sec btn-sm" 
-    onClick={() => {
-      if (confirm('Deletar aluno ' + aluno.nome + '? Vai deletar tudo!')) {
-        remove(ref(db, 'personals/' + user.uid + '/alunos/' + alunoId))
-        remove(ref(db, 'users/' + alunoId))
-        remove(ref(db, 'treinos/' + alunoId))
-        remove(ref(db, 'execucoes/' + alunoId))
-        remove(ref(db, 'cobrancas/' + alunoId))
-        navigate('/personal')
-      }
-    }}
+    className="btn btn-sec btn-sm"
+    onClick={deletarAluno}
   >
     Deletar
   </button>
