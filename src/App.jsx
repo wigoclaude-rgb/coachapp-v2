@@ -13,6 +13,11 @@ import PersonalHome from './pages/personal/PersonalHome.jsx'
 import AlunoDetalhe from './pages/personal/AlunoDetalhe.jsx'
 import CriarTreino from './pages/personal/CriarTreino.jsx'
 import AlunoHome from './pages/aluno/AlunoHome.jsx'
+import GuardAdmin from './components/GuardAdmin.jsx'
+import AdminLogin from './pages/admin/AdminLogin.jsx'
+import AdminHome from './pages/admin/AdminHome.jsx'
+import AdminPersonals from './pages/admin/AdminPersonals.jsx'
+import AdminFicha from './pages/admin/AdminFicha.jsx'
 
 export default function App() {
   const [user, setUser] = useState(null)
@@ -65,6 +70,20 @@ export default function App() {
         } />
         <Route path="/cadastro-personal" element={<CadastroPersonal />} />
         <Route path="/ficha/:codigo" element={<FichaPublica />} />
+
+        {/*
+          Painel master. Fora do gate `logado` de propósito: a conta de admin não
+          tem registro em `users/`, então `perfil` é null e ela seria expulsa.
+          Quem autoriza aqui é o GuardAdmin, pelo nó `admins/{uid}`.
+        */}
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin" element={<GuardAdmin><AdminHome /></GuardAdmin>} />
+        <Route path="/admin/personals" element={
+          <GuardAdmin>{uid => <AdminPersonals adminUid={uid} />}</GuardAdmin>
+        } />
+        <Route path="/admin/personals/:id" element={
+          <GuardAdmin>{uid => <AdminFicha adminUid={uid} />}</GuardAdmin>
+        } />
         <Route path="/personal/*" element={
           logado && perfil.role === 'personal'
             ? <PersonalHome user={user} perfil={perfil} onSair={sair} />

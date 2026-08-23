@@ -1915,3 +1915,115 @@ button.tr-passo:hover { border-color: var(--primaria); color: var(--primaria); t
   .esp-bloco.biset { border: 1px dashed #999; background: #fff; }
   .tr-biset-tag { background: #fff; color: #000; border: 1px solid #000; font-size: 8pt; }
 }
+
+/* ============================================================
+   PAINEL MASTER (/admin) — casca própria, fora do Layout do app.
+   ============================================================ */
+.admin-wrap { min-height: 100vh; background: var(--fundo); }
+.admin-topo {
+  display: flex; align-items: center; gap: 20px; padding: 0 22px; height: 60px;
+  background: var(--superficie); border-bottom: 1px solid var(--borda);
+  position: sticky; top: 0; z-index: 30;
+}
+.admin-marca { font-family: 'Archivo'; font-weight: 800; letter-spacing: -0.02em; }
+.admin-marca span { color: var(--primaria); }
+.admin-nav { display: flex; gap: 4px; flex: 1; }
+.admin-link {
+  padding: 7px 13px; border-radius: var(--raio-sm); font-size: var(--t-md);
+  font-weight: 500; color: var(--texto-3); text-decoration: none;
+}
+.admin-link:hover { background: var(--superficie-2); color: var(--texto); }
+.admin-link.ativo { background: var(--primaria-suave); color: var(--primaria); font-weight: 600; }
+.admin-corpo { padding: 24px; max-width: 1240px; margin: 0 auto; }
+.admin-cabecalho { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 20px; }
+.admin-cabecalho h1 { font-family: 'Archivo'; font-size: var(--t-2xl); font-weight: 700; letter-spacing: -0.025em; margin: 0; }
+
+.admin-mrr {
+  background: var(--primaria); color: #fff; border-radius: var(--raio-lg);
+  padding: 22px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 3px;
+}
+.mrr-rot { font-size: var(--t-xs); text-transform: uppercase; letter-spacing: 0.07em; opacity: 0.75; font-weight: 600; }
+.mrr-num { font-family: 'Archivo'; font-size: 38px; font-weight: 800; line-height: 1.1; }
+.mrr-num small { font-size: var(--t-lg); font-weight: 600; opacity: 0.8; }
+.mrr-nota { font-size: var(--t-sm); opacity: 0.8; margin-top: 5px; }
+
+.admin-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 20px; }
+.admin-card {
+  display: flex; flex-direction: column; gap: 2px; padding: 15px; text-align: left;
+  border: 1px solid var(--borda); border-radius: var(--raio); background: var(--superficie);
+  font-family: inherit; cursor: pointer; transition: all var(--t);
+}
+.admin-card:disabled { cursor: default; }
+.admin-card:hover:not(:disabled) { border-color: var(--primaria); transform: translateY(-1px); box-shadow: var(--sombra); }
+.ac-num { font-family: 'Archivo'; font-size: var(--t-2xl); font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.ac-rot { font-size: var(--t-sm); color: var(--texto-4); }
+.admin-card.destaque .ac-num { color: var(--primaria); }
+.admin-card.alerta { border-color: var(--aviso-borda); background: var(--aviso-bg); }
+.admin-card.alerta .ac-num { color: var(--aviso-txt); }
+
+.admin-filtros { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.admin-filtros select { margin: 0; width: auto; min-width: 145px; }
+.admin-filtros .campo-busca { flex: 1; min-width: 210px; }
+
+.admin-tabela-wrap { overflow-x: auto; border: 1px solid var(--borda); border-radius: var(--raio); background: var(--superficie); }
+.admin-tabela { width: 100%; border-collapse: collapse; min-width: 720px; }
+.admin-tabela th {
+  text-align: left; padding: 11px 14px; font-size: var(--t-xs); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.05em; color: var(--texto-4);
+  border-bottom: 1px solid var(--borda); white-space: nowrap;
+}
+.admin-tabela td { padding: 12px 14px; border-bottom: 1px solid var(--borda); vertical-align: middle; }
+.admin-tabela tr:last-child td { border-bottom: none; }
+.admin-tabela tr:hover td { background: var(--superficie-2); }
+.admin-nome {
+  border: none; background: none; padding: 0; font-family: inherit; font-size: var(--t-base);
+  font-weight: 600; color: var(--texto); cursor: pointer; text-align: left;
+}
+.admin-nome:hover { color: var(--primaria); }
+.admin-acoes { display: flex; gap: 5px; flex-wrap: wrap; }
+
+.plano-selo {
+  display: inline-block; padding: 3px 10px; border-radius: var(--raio-full);
+  font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.03em;
+}
+.plano-selo.free { background: var(--superficie-2); color: var(--texto-3); border: 1px solid var(--borda); }
+.plano-selo.pro { background: var(--primaria); color: #fff; }
+
+.admin-resumo { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-top: 14px; }
+.admin-resumo > div { display: flex; flex-direction: column; gap: 2px; }
+.admin-resumo strong { font-family: 'Archivo'; font-size: var(--t-lg); font-weight: 700; }
+.admin-validade { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.admin-validade input { margin: 0; width: auto; }
+
+.admin-linha {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 11px 0; border-bottom: 1px solid var(--borda); cursor: pointer;
+}
+.admin-linha:last-child { border-bottom: none; }
+.admin-linha:hover strong { color: var(--primaria); }
+.admin-log {
+  display: flex; gap: 12px; align-items: baseline; padding: 9px 0;
+  border-bottom: 1px solid var(--borda); font-size: var(--t-sm);
+}
+.admin-log:last-child { border-bottom: none; }
+.admin-log em { font-style: normal; color: var(--texto-4); }
+
+.plano-uso { margin-top: 16px; }
+
+@media (max-width: 640px) {
+  .admin-topo { padding: 0 14px; gap: 12px; }
+  .admin-corpo { padding: 16px 14px; }
+  .admin-filtros select, .admin-filtros .campo-busca { width: 100%; min-width: 0; }
+}
+
+.uid-negado {
+  display: flex; flex-direction: column; gap: 8px; align-items: flex-start;
+  background: var(--superficie-2); border: 1px solid var(--borda);
+  border-radius: var(--raio-sm); padding: 13px; margin-bottom: 14px;
+}
+.uid-negado code {
+  font-size: var(--t-sm); background: var(--superficie); border: 1px solid var(--borda);
+  border-radius: var(--raio-sm); padding: 7px 10px; width: 100%;
+  word-break: break-all; line-height: 1.5;
+}
+.uid-negado .mini { margin: 0; }

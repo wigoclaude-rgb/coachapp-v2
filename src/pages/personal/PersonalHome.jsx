@@ -7,6 +7,7 @@ import { db, firebaseConfig } from '../../firebase'
 import { fmtData, fmtMoeda, vencida } from '../../lib/util'
 import { CAMPOS_FICHA, fichaParaAluno, fichaParaMedidas } from '../../lib/ficha'
 import { cpfValido, soDigitos, formatarCPF } from '../../lib/cpf'
+import { PLANOS, normalizarAssinatura, podeCriarAluno, rotuloStatus } from '../../lib/planos'
 import Chat from '../../components/Chat.jsx'
 import Avatar from '../../components/Avatar.jsx'
 import Config from '../Config.jsx'
@@ -59,6 +60,7 @@ const TITULOS = {
   templates: { t: 'Templates', s: 'Planos reutilizáveis' },
   meutreino: { t: 'Meu treino', s: 'Seu plano e sua evolução' },
   suplementos: { t: 'Suplementação', s: 'O que você toma e a constância' },
+  plano: { t: 'Meu plano', s: 'Seu limite de alunos' },
   config: { t: 'Configurações', s: 'Sua conta e preferências' }
 }
 
@@ -100,6 +102,7 @@ export default function PersonalHome({ user, perfil, onSair }) {
   const [mostrarForm, setMostrarForm] = useState(false)
   const [copiado, setCopiado] = useState('')
 
+  const [assinaturaBruta, setAssinaturaBruta] = useState(null)
   const [fichasRecebidas, setFichasRecebidas] = useState({})
   const [codigoFicha, setCodigoFicha] = useState('')
 
@@ -109,7 +112,9 @@ export default function PersonalHome({ user, perfil, onSair }) {
     const u3 = onValue(ref(db, 'personals/' + user.uid + '/codigoFicha'), s => setCodigoFicha(s.val() || ''))
     const u4 = onValue(ref(db, 'suplementos/' + user.uid), s => setSuplementos(s.val() || {}))
     const u5 = onValue(ref(db, 'suplementosTomados/' + user.uid), s => setSupTomados(s.val() || {}))
-    return () => { u1(); u2(); u3(); u4(); u5() }
+    // Só leitura: quem grava aqui é o painel master.
+    const u6 = onValue(ref(db, 'planos/' + user.uid), s => setAssinaturaBruta(s.val()))
+    return () => { u1(); u2(); u3(); u4(); u5(); u6() }
   }, [user.uid])
 
   const supPendentes = useMemo(() => (
@@ -217,6 +222,7 @@ export default function PersonalHome({ user, perfil, onSair }) {
   }, [alunos, execucoes, cobrancas, treinos])
 
   const totalAlunos = fichas.length
+  const assinatura = normalizarAssinatura(assinaturaBruta)
   const treinaramHoje = fichas.filter(f => f.seriesHoje > 0).length
   const aReceberTotal = fichas.reduce((s, f) => s + f.aReceber, 0)
   const paraValidar = fichas.filter(f => f.aguardando).length
@@ -262,6 +268,14 @@ export default function PersonalHome({ user, perfil, onSair }) {
    * e o aluno é obrigado a trocá-la no primeiro acesso (`precisaTrocarSenha`).
    */
   async function criarConta({ nome, email, cpf = '', extras = {}, medidas = null, fichaId = null }) {
+    /*
+      Trava do plano antes de qualquer coisa — nada de criar conta no Auth e
+      descobrir o limite depois. A checagem é do lado do cliente: as regras do
+      Realtime Database não contam filhos, então isso barra a interface, não a API.
+    */
+    const { pode, motivo } = podeCriarAluno(assinatura, totalAlunos)
+    if (!pode) throw new Error(motivo === 'bloqueado' ? 'CONTA_BLOQUEADA' : 'LIMITE_PLANO')
+
     // O CPF é a chave que impede a mesma pessoa entrar duas vezes com e-mails diferentes.
     if (cpf) {
       if (!cpfValido(cpf)) throw new Error('CPF_INVALIDO')
@@ -346,6 +360,12 @@ export default function PersonalHome({ user, perfil, onSair }) {
   function traduzirErro(err) {
     if (err?.message === 'CPF_INVALIDO') return 'CPF inválido. Confira os números digitados.'
     if (err?.message === 'CPF_EM_USO') return 'Já existe um aluno cadastrado com este CPF.'
+    if (err?.message === 'LIMITE_PLANO') {
+      return `Seu plano permite ${assinatura.studentLimit} aluno${assinatura.studentLimit === 1 ? '' : 's'} e você já chegou lá. Veja "Meu plano" para liberar mais.`
+    }
+    if (err?.message === 'CONTA_BLOQUEADA') {
+      return 'Sua conta está bloqueada. Fale com o suporte para regularizar.'
+    }
     if (err?.code === 'PERMISSION_DENIED' || err?.message?.includes('permission_denied')) {
       return 'O banco recusou a gravação. Confira as regras do Firebase — nada foi salvo.'
     }
@@ -401,6 +421,7 @@ export default function PersonalHome({ user, perfil, onSair }) {
     { id: 'templates', label: 'Templates', icone: <IcTemplates /> },
     { id: 'meutreino', label: 'Meu treino', icone: <IcTreino /> },
     { id: 'suplementos', label: 'Suplementação', icone: <IcSuplemento />, badge: supPendentes.length },
+    { id: 'plano', label: 'Meu plano', icone: <IcRaio /> },
     { id: 'config', label: 'Configurações', icone: <IcConfig /> }
   ]
 
@@ -868,6 +889,65 @@ export default function PersonalHome({ user, perfil, onSair }) {
       )}
 
       {/* ===== CONFIG ===== */}
+      {/* ===== MEU PLANO ===== */}
+      {aba === 'plano' && (() => {
+        const limite = assinatura.studentLimit
+        const pct = limite > 0 ? Math.min(100, Math.round((totalAlunos / limite) * 100)) : 0
+        const cheio = totalAlunos >= limite
+        const ehPro = assinatura.plan === 'pro'
+        return (
+          <>
+            <div className="card">
+              <div className="card-titulo">
+                <div style={{ minWidth: 0 }}>
+                  <h2>Plano {PLANOS[assinatura.plan].rotulo}</h2>
+                  <p className="mini">
+                    {assinatura.planStatus === 'active'
+                      ? 'Sua conta está ativa.'
+                      : `Situação: ${rotuloStatus(assinatura.planStatus)}.`}
+                    {assinatura.planExpiresAt ? ` Válido até ${fmtData(assinatura.planExpiresAt)}.` : ''}
+                  </p>
+                </div>
+                <span className={'plano-selo ' + assinatura.plan}>{PLANOS[assinatura.plan].rotulo}</span>
+              </div>
+
+              <div className="plano-uso">
+                <div className="tr-numeros">
+                  <strong>{totalAlunos}</strong>
+                  <span>de {limite === 999 ? '∞' : limite} alunos</span>
+                </div>
+                {limite !== 999 && (
+                  <div className="tr-barra">
+                    <div className="tr-barra-fill" style={{ width: pct + '%' }} />
+                  </div>
+                )}
+              </div>
+
+              {cheio && !ehPro && (
+                <div className="aviso-sutil" style={{ marginTop: 16 }}>
+                  Você chegou ao limite do Free. Para cadastrar mais alunos, mude para o Pro.
+                </div>
+              )}
+            </div>
+
+            {!ehPro && (
+              <div className="card destaque-card">
+                <div className="card-titulo">
+                  <div style={{ minWidth: 0 }}>
+                    <h2>Plano Pro · {fmtMoeda(PLANOS.pro.preco)}/mês</h2>
+                    <p className="mini">Alunos ilimitados. Todo o resto continua igual.</p>
+                  </div>
+                </div>
+                <p className="muted">
+                  A liberação ainda é manual: faça o PIX e me chame no WhatsApp com o comprovante
+                  que eu ativo sua conta na hora.
+                </p>
+              </div>
+            )}
+          </>
+        )
+      })()}
+
       {aba === 'config' && <Config user={user} perfil={perfil} />}
     </Layout>
   )
