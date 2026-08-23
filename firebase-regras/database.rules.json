@@ -10,6 +10,11 @@
       }
     },
 
+    "config": {
+      ".read": "auth != null",
+      ".write": false
+    },
+
     "planos": {
       ".read": "auth != null && root.child('admins/'+auth.uid).val() === true",
       ".write": false,

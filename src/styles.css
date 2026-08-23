@@ -2027,3 +2027,21 @@ button.tr-passo:hover { border-color: var(--primaria); color: var(--primaria); t
   word-break: break-all; line-height: 1.5;
 }
 .uid-negado .mini { margin: 0; }
+
+/* --- Suporte: lista de conversas com os personais --- */
+.sup-conversa {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 14px 16px; margin-bottom: 8px; border-radius: var(--raio);
+  border: 1px solid var(--borda); background: var(--superficie);
+  font-family: inherit; cursor: pointer; transition: all var(--t);
+}
+.sup-conversa:hover { border-color: var(--primaria); }
+.sup-conversa.esperando { border-left: 3px solid var(--primaria); background: var(--primaria-suave); }
+.sc-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sc-nome { display: flex; align-items: center; gap: 7px; font-weight: 600; }
+.sc-ponto { width: 8px; height: 8px; border-radius: 50%; background: var(--primaria); flex-shrink: 0; }
+.sc-previa {
+  font-size: var(--t-sm); color: var(--texto-4);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sc-quando { font-size: var(--t-xs); color: var(--texto-4); flex-shrink: 0; white-space: nowrap; }

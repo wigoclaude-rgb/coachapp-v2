@@ -63,6 +63,7 @@ export default function AdminShell({ titulo, subtitulo, acao, children }) {
         <nav className="admin-nav">
           <Link className={'admin-link' + (em('/admin') && pathname === '/admin' ? ' ativo' : '')} to="/admin">Início</Link>
           <Link className={'admin-link' + (em('/admin/personals') ? ' ativo' : '')} to="/admin/personals">Personais</Link>
+          <Link className={'admin-link' + (em('/admin/suporte') ? ' ativo' : '')} to="/admin/suporte">Suporte</Link>
         </nav>
         <button className="btn btn-ghost btn-sm" onClick={() => signOut(auth).then(() => { window.location.href = '/admin/login' })}>
           Sair

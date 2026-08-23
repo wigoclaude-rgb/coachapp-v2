@@ -58,6 +58,15 @@ export function podeCriarAluno(assinatura, quantosJaTem) {
   return { pode: true, motivo: null }
 }
 
+/*
+  Id da conversa de suporte entre o personal e o CoachApp.
+
+  Os dois UIDs entram no id porque a regra de `chats` libera quem está contido
+  nele — assim os dois leem a mesma conversa sem precisar de regra nova. A ordem
+  é fixa (suporte primeiro) para os dois lados montarem exatamente o mesmo id.
+*/
+export const chatSuporte = (suporteUid, personalUid) => suporteUid + '_' + personalUid
+
 /* ---------------- escrita (só o admin chega aqui) ---------------- */
 
 /** Grava o log antes de qualquer coisa dar errado depois. */

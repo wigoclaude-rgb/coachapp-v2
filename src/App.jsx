@@ -18,6 +18,7 @@ import AdminLogin from './pages/admin/AdminLogin.jsx'
 import AdminHome from './pages/admin/AdminHome.jsx'
 import AdminPersonals from './pages/admin/AdminPersonals.jsx'
 import AdminFicha from './pages/admin/AdminFicha.jsx'
+import AdminSuporte from './pages/admin/AdminSuporte.jsx'
 
 export default function App() {
   const [user, setUser] = useState(null)
@@ -83,6 +84,9 @@ export default function App() {
         } />
         <Route path="/admin/personals/:id" element={
           <GuardAdmin>{uid => <AdminFicha adminUid={uid} />}</GuardAdmin>
+        } />
+        <Route path="/admin/suporte" element={
+          <GuardAdmin>{uid => <AdminSuporte adminUid={uid} />}</GuardAdmin>
         } />
         <Route path="/personal/*" element={
           logado && perfil.role === 'personal'

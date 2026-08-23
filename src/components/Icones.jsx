@@ -103,6 +103,9 @@ export const IcVideo = () => (
 export const IcTrofeu = () => (
   <svg {...base}><path d="M7 4h10v5a5 5 0 0 1-10 0z" /><path d="M7 5.5H4.5V7a3 3 0 0 0 3 3M17 5.5h2.5V7a3 3 0 0 1-3 3" /><path d="M12 14v3.5M8.5 21h7l-.5-3.5h-6z" /></svg>
 )
+export const IcAjuda = () => (
+  <svg {...base}><circle cx="12" cy="12" r="9.5" /><path d="M9.4 9.2a2.7 2.7 0 0 1 5.2.9c0 1.8-2.6 2.4-2.6 2.4" /><path d="M12 17h.01" /></svg>
+)
 export const IcSuplemento = () => (
   <svg {...base}><rect x="3" y="8" width="18" height="13" rx="2.5" /><path d="M8 8V5.5A2.5 2.5 0 0 1 10.5 3h3A2.5 2.5 0 0 1 16 5.5V8" /><path d="M12 12v5M9.5 14.5h5" /></svg>
 )

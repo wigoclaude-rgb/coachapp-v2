@@ -7,7 +7,7 @@ import { db, firebaseConfig } from '../../firebase'
 import { fmtData, fmtMoeda, vencida } from '../../lib/util'
 import { CAMPOS_FICHA, fichaParaAluno, fichaParaMedidas } from '../../lib/ficha'
 import { cpfValido, soDigitos, formatarCPF } from '../../lib/cpf'
-import { PLANOS, normalizarAssinatura, podeCriarAluno, rotuloStatus } from '../../lib/planos'
+import { PLANOS, normalizarAssinatura, podeCriarAluno, rotuloStatus, chatSuporte } from '../../lib/planos'
 import Chat from '../../components/Chat.jsx'
 import Avatar from '../../components/Avatar.jsx'
 import Config from '../Config.jsx'
@@ -61,6 +61,7 @@ const TITULOS = {
   meutreino: { t: 'Meu treino', s: 'Seu plano e sua evolução' },
   suplementos: { t: 'Suplementação', s: 'O que você toma e a constância' },
   plano: { t: 'Meu plano', s: 'Seu limite de alunos' },
+  suporte: { t: 'Ajuda do app', s: 'Fale com quem fez o CoachApp' },
   config: { t: 'Configurações', s: 'Sua conta e preferências' }
 }
 
@@ -103,6 +104,7 @@ export default function PersonalHome({ user, perfil, onSair }) {
   const [copiado, setCopiado] = useState('')
 
   const [assinaturaBruta, setAssinaturaBruta] = useState(null)
+  const [suporteUid, setSuporteUid] = useState('')
   const [fichasRecebidas, setFichasRecebidas] = useState({})
   const [codigoFicha, setCodigoFicha] = useState('')
 
@@ -114,7 +116,9 @@ export default function PersonalHome({ user, perfil, onSair }) {
     const u5 = onValue(ref(db, 'suplementosTomados/' + user.uid), s => setSupTomados(s.val() || {}))
     // Só leitura: quem grava aqui é o painel master.
     const u6 = onValue(ref(db, 'planos/' + user.uid), s => setAssinaturaBruta(s.val()))
-    return () => { u1(); u2(); u3(); u4(); u5(); u6() }
+    // Com quem falar sobre o app. Definido no Console; ausente = sem suporte.
+    const u7 = onValue(ref(db, 'config/suporteUid'), s => setSuporteUid(s.val() || ''))
+    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7() }
   }, [user.uid])
 
   const supPendentes = useMemo(() => (
@@ -422,6 +426,8 @@ export default function PersonalHome({ user, perfil, onSair }) {
     { id: 'meutreino', label: 'Meu treino', icone: <IcTreino /> },
     { id: 'suplementos', label: 'Suplementação', icone: <IcSuplemento />, badge: supPendentes.length },
     { id: 'plano', label: 'Meu plano', icone: <IcRaio /> },
+    // Some quando não há suporte configurado — melhor sem o item do que com um chat morto.
+    ...(suporteUid ? [{ id: 'suporte', label: 'Ajuda do app', icone: <IcAjuda /> }] : []),
     { id: 'config', label: 'Configurações', icone: <IcConfig /> }
   ]
 
@@ -947,6 +953,25 @@ export default function PersonalHome({ user, perfil, onSair }) {
           </>
         )
       })()}
+
+      {/* ===== AJUDA DO APP ===== */}
+      {aba === 'suporte' && suporteUid && (
+        <>
+          <div className="aviso-sutil">
+            Aqui é para dúvidas e problemas do <strong>aplicativo</strong>. Para falar
+            com seus alunos, use o Chat.
+          </div>
+          <div className="card sem-padding">
+            <Chat
+              chatId={chatSuporte(suporteUid, user.uid)}
+              meuUid={user.uid}
+              outroUid={suporteUid}
+              outroNome="Suporte CoachApp"
+              rotaNotif="/admin/suporte"
+            />
+          </div>
+        </>
+      )}
 
       {aba === 'config' && <Config user={user} perfil={perfil} />}
     </Layout>
