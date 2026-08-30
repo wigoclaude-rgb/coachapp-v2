@@ -258,7 +258,7 @@ export default function AlunoDetalhe({ user }) {
         <button className={'tab ' + (aba === 'avaliacao' ? 'ativa' : '')} onClick={() => setAba('avaliacao')}>Avaliação física</button>
         <button className={'tab ' + (aba === 'fotos' ? 'ativa' : '')} onClick={() => setAba('fotos')}>Fotos</button>
         <button className={'tab ' + (aba === 'diario' ? 'ativa' : '')} onClick={() => setAba('diario')}>
-          Diário{listaDiario.length > 0 ? ` (${listaDiario.length})` : ''}
+          Check-in{listaDiario.length > 0 ? ` (${listaDiario.length})` : ''}
         </button>
         <button className={'tab ' + (aba === 'suplementos' ? 'ativa' : '')} onClick={() => setAba('suplementos')}>
           Suplementação

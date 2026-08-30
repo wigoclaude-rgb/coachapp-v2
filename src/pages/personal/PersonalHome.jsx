@@ -871,7 +871,7 @@ export default function PersonalHome({ user, perfil, onSair }) {
               className={'tab ' + (subMeuTreino === 'corpo' ? 'ativa' : '')}
               onClick={() => setSubMeuTreino('corpo')}
             >
-              Relatório
+              Check-in
             </button>
           </div>
 

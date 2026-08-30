@@ -68,7 +68,7 @@ export const TOUR_ALUNO_TREINO = [
   {
     alvo: '.sidebar-nav',
     titulo: 'O resto do app',
-    texto: 'Evolução tem seus gráficos e medidas. Diário é seu espaço privado. Em Chat você fala com o personal, e em Configurações dá para desligar o cronômetro de descanso.'
+    texto: 'Evolução tem seus gráficos e medidas. Check-in é seu espaço privado. Em Chat você fala com o personal, e em Configurações dá para desligar o cronômetro de descanso.'
   }
 ]
 
@@ -138,7 +138,7 @@ export const TOUR_PERSONAL_ALUNOS = [
   {
     alvo: '.tabela-alunos, .lista-alunos',
     titulo: 'Sua carteira',
-    texto: 'Em Perfil você vê avaliações, fotos, diário e os feedbacks dos exercícios. Em Treino você monta ou ajusta o plano dele.'
+    texto: 'Em Perfil você vê avaliações, fotos, check-ins e os feedbacks dos exercícios. Em Treino você monta ou ajusta o plano dele.'
   }
 ]
 

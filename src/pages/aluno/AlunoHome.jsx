@@ -31,7 +31,7 @@ import {
 const TITULOS = {
   treino: { t: 'Meu Treino', s: 'Seu plano de hoje' },
   evolucao: { t: 'Evolução', s: 'Acompanhe seu progresso' },
-  diario: { t: 'Meu diário', s: 'Privado — só você vê' },
+  diario: { t: 'Check-in', s: 'Seu registro do dia — privado' },
   suplementos: { t: 'Suplementação', s: 'O que você toma e a constância' },
   pagamentos: { t: 'Pagamentos', s: 'Suas cobranças' },
   chat: { t: 'Chat', s: 'Fale com seu personal' },
@@ -111,6 +111,12 @@ export default function AlunoHome({ user, perfil, onSair }) {
   // Esconde o aviso flutuante até a próxima abertura do app, sem marcar nada.
   const [supDispensado, setSupDispensado] = useState(false)
   const [avalAberta, setAvalAberta] = useState(null)
+  /*
+    Treino que o aluno escolheu para hoje, quando o personal libera.
+    Vive só na tela: amanhã volta a valer o ciclo, senão uma troca pontual
+    viraria a nova ordem sem ninguém ter decidido isso.
+  */
+  const [escolhaHoje, setEscolhaHoje] = useState(null)
 
   /* Ausente no banco = ligado; o aluno desliga em Configurações. */
   const descansoLigado = perfil.timerDescanso !== false
@@ -203,7 +209,14 @@ export default function AlunoHome({ user, perfil, onSair }) {
   /* ---------- Plano de treino ---------- */
   const plano = useMemo(() => normalizarPlano(treinoBruto), [treinoBruto])
   const totalDias = plano ? plano.lista.length : 0
-  const idxAtual = plano ? indiceSeguro(plano.indiceAtual, totalDias) : 0
+  const idxCiclo = plano ? indiceSeguro(plano.indiceAtual, totalDias) : 0
+  const podeEscolher = treinoBruto?.permiteEscolha === true && totalDias > 1
+
+  /* A escolha só vale se o plano ainda tiver aquele treino — plano trocado, escolha cai. */
+  const idxAtual = podeEscolher && escolhaHoje !== null && escolhaHoje < totalDias
+    ? escolhaHoje
+    : idxCiclo
+  const trocado = idxAtual !== idxCiclo
   const diaAtual = plano ? plano.lista[idxAtual] : null
   const exerciciosHoje = diaAtual?.exercicios || []
   const nomeTreinoHoje = diaAtual?.nome || plano?.nome || ''
@@ -320,9 +333,15 @@ export default function AlunoHome({ user, perfil, onSair }) {
   }
 
   async function concluirTreino() {
+    /*
+      O ciclo continua a partir do que foi treinado de verdade, não do que estava
+      marcado. Quem refez o A hoje segue para o B amanhã — que é o que a pessoa
+      espera de um ABC, mesmo tendo saído da ordem.
+    */
     if (ciclico) {
       await update(ref(db, 'treinos/' + user.uid), { indiceAtual: (idxAtual + 1) % totalDias })
     }
+    setEscolhaHoje(null)
     setExecutando(false)
   }
 
@@ -351,7 +370,7 @@ export default function AlunoHome({ user, perfil, onSair }) {
   const itens = [
     { id: 'treino', label: 'Meu Treino', icone: <IcTreino /> },
     { id: 'evolucao', label: 'Evolução', icone: <IcEvolucao /> },
-    { id: 'diario', label: 'Meu diário', icone: <IcCalendario /> },
+    { id: 'diario', label: 'Check-in', icone: <IcCalendario /> },
     { id: 'suplementos', label: 'Suplementação', icone: <IcSuplemento />, badge: supPendentes.length },
     { id: 'pagamentos', label: 'Pagamentos', icone: <IcPagamentos />, badge: vencidas.length },
     { id: 'chat', label: 'Chat', icone: <IcChat /> },
@@ -571,14 +590,15 @@ export default function AlunoHome({ user, perfil, onSair }) {
                     <div className="tr-cab">
                       <span className="tr-data">{dataPorExtenso()}</span>
                       {ciclico && (
-                        <div className="tr-ciclo">
+                        <div className={'tr-ciclo' + (podeEscolher ? ' escolhivel' : '')}>
                           {plano.lista.map((d, i) => (
                             <button
                               key={i}
                               type="button"
-                              className={'tr-passo' + (i === idxAtual ? ' agora' : i < idxAtual ? ' feito' : '')}
-                              onClick={() => setVerTreino(i)}
-                              title={'Ver ' + d.nome}
+                              className={'tr-passo' + (i === idxAtual ? ' agora' : i < idxCiclo ? ' feito' : '')}
+                              onClick={() => (podeEscolher ? setEscolhaHoje(i) : setVerTreino(i))}
+                              title={podeEscolher ? 'Treinar ' + d.nome : 'Ver ' + d.nome}
+                              aria-pressed={podeEscolher ? i === idxAtual : undefined}
                             >
                               {LETRAS[i] || i + 1}
                             </button>
@@ -588,6 +608,23 @@ export default function AlunoHome({ user, perfil, onSair }) {
                     </div>
 
                     <h2 className="tr-nome">{nomeTreinoHoje}</h2>
+
+                    {podeEscolher && (
+                      <div className="tr-troca">
+                        {trocado ? (
+                          <>
+                            <span>
+                              Trocado por você. Pelo ciclo, hoje seria o{' '}
+                              <strong>{LETRAS[idxCiclo] || idxCiclo + 1}</strong>.
+                            </span>
+                            <button type="button" onClick={() => setEscolhaHoje(null)}>Voltar ao ciclo</button>
+                          </>
+                        ) : (
+                          <span>Toque numa letra acima para treinar outro hoje.</span>
+                        )}
+                        <button type="button" onClick={() => setVerTreino(idxAtual)}>Ver detalhes</button>
+                      </div>
+                    )}
 
                     <div className="tr-progresso">
                       <div className="tr-numeros">

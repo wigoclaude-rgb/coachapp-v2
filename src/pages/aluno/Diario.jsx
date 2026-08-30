@@ -142,7 +142,7 @@ export default function Diario({ user, perfil }) {
       <div className="card">
         <div className="card-titulo">
           <div style={{ minWidth: 0 }}>
-            <h2>Meu diário</h2>
+            <h2>Check-in</h2>
             <p className="mini">
               {temPersonal
                 ? <>Só você vê. Compartilhe com {perfil?.nomePersonal || 'seu personal'} o que quiser.</>

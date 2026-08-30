@@ -20,6 +20,8 @@ export default function CriarTreino({ user }) {
   const [diaAtivo, setDiaAtivo] = useState(0)
   const [treinoExistente, setTreinoExistente] = useState(null)
   const [indiceAtualExistente, setIndiceAtualExistente] = useState(0)
+  // Ausente = ciclo travado, que é como o app sempre funcionou.
+  const [permiteEscolha, setPermiteEscolha] = useState(false)
   const [meusTemplates, setMeusTemplates] = useState({})
   const [salvo, setSalvo] = useState(false)
   const [enviando, setEnviando] = useState(false)
@@ -45,6 +47,7 @@ export default function CriarTreino({ user }) {
       setPlanoNome(bruto.nome || '')
       setDias(plano.lista)
       setIndiceAtualExistente(plano.indiceAtual)
+      setPermiteEscolha(bruto.permiteEscolha === true)
     })
   }, [alunoId, user.uid])
 
@@ -148,7 +151,8 @@ export default function CriarTreino({ user }) {
       lista,
       indiceAtual,
       atualizadoEm: Date.now(),
-      personalId: user.uid
+      personalId: user.uid,
+      permiteEscolha
     }
     await set(ref(db, 'treinos/' + alunoId), novo)
     setTreinoExistente(novo)
@@ -185,6 +189,21 @@ export default function CriarTreino({ user }) {
       <div className="card">
         <label>Nome do plano</label>
         <input value={planoNome} onChange={e => setPlanoNome(e.target.value)} placeholder="Ex: ABC Split — Hipertrofia" />
+
+        <label className="troca-privacidade" style={{ marginTop: 14 }}>
+          <input
+            type="checkbox" checked={permiteEscolha}
+            onChange={e => setPermiteEscolha(e.target.checked)}
+          />
+          <span className="tp-caixa" aria-hidden="true"><IcCheck /></span>
+          <span className="tp-texto">
+            <strong>Deixar o aluno escolher qual treino fazer</strong>
+            <span className="mini">
+              Sem isso, ele segue a ordem do ciclo. Com isso, pode repetir o A depois do B
+              quando o dia não sair como planejado.
+            </span>
+          </span>
+        </label>
 
         <label>Aplicar um template</label>
         <select defaultValue="" onChange={e => { aplicarTemplate(e.target.value); e.target.value = '' }}>
