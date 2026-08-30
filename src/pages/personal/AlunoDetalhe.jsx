@@ -4,6 +4,7 @@ import { ref, onValue, push, remove, set } from 'firebase/database'
 import { db } from '../../firebase'
 import { fmtData } from '../../lib/util'
 import { soDigitos } from '../../lib/cpf'
+import { atividadeDe, resumoAtividade } from '../../lib/atividades'
 import { normalizarPlano, resumoLinhas, LETRAS } from '../../lib/treinoModel'
 
 /* Espelha PERGUNTAS_FEEDBACK do AlunoHome. `alerta` é a resposta que pede ação. */
@@ -466,6 +467,12 @@ export default function AlunoDetalhe({ user }) {
           ) : listaDiario.map(r => (
             <div key={r.id} className="diario-registro">
               <div className="dr-topo">
+                {r.atividade && (
+                  <span className="dr-atv">
+                    <span className="dr-atv-icone" aria-hidden="true">{atividadeDe(r.atividade)?.emoji}</span>
+                    {resumoAtividade(r)}
+                  </span>
+                )}
                 <span className="dr-data">{fmtData(r.ts)}</span>
               </div>
               {r.foto && <img src={r.foto} alt="" className="dr-foto" loading="lazy" />}

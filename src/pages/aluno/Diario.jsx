@@ -4,6 +4,9 @@ import { db } from '../../firebase'
 import { fmtData } from '../../lib/util'
 import { apagarFoto } from '../../lib/fotos'
 import { CAMPOS_MEDIDAS, MEDIDAS_RAPIDAS, rotuloMedida, medidasPreenchidas } from '../../lib/medidas'
+import {
+  ATIVIDADES, atividadeDe, temDistancia, resumoAtividade, totaisDoMes, duracao, distancia
+} from '../../lib/atividades'
 import FotoInput from '../../components/FotoInput.jsx'
 import LineChart from '../../components/LineChart.jsx'
 import { IcMais, IcCheck, IcLixeira, IcEvolucao, IcFechar } from '../../components/Icones.jsx'
@@ -23,6 +26,9 @@ export default function Diario({ user, perfil }) {
   const [nota, setNota] = useState('')
   const [medidas, setMedidas] = useState({})
   const [compartilhar, setCompartilhar] = useState(false)
+  const [atividade, setAtividade] = useState('')
+  const [km, setKm] = useState('')
+  const [minutos, setMinutos] = useState('')
 
   /*
     O personal usa este mesmo diário para acompanhar o próprio corpo, e aí não há
@@ -49,6 +55,7 @@ export default function Diario({ user, perfil }) {
   ), [registros])
 
   const comFoto = useMemo(() => lista.filter(r => r.foto), [lista])
+  const totais = useMemo(() => totaisDoMes(lista), [lista])
 
   /** Medidas que o aluno já usou alguma vez — só essas viram opção no gráfico. */
   const medidasUsadas = useMemo(() => {
@@ -72,6 +79,7 @@ export default function Diario({ user, perfil }) {
 
   function limpar() {
     setFoto(''); setNota(''); setMedidas({})
+    setAtividade(''); setKm(''); setMinutos('')
     setCompartilhar(false); setMaisMedidas(false); setErro('')
   }
 
@@ -87,6 +95,8 @@ export default function Diario({ user, perfil }) {
 
   const paraEspelho = r => ({
     ts: r.ts, foto: r.foto || '', nota: r.nota || '', medidas: r.medidas || {},
+    atividade: r.atividade || '', atividadeNome: r.atividadeNome || '',
+    km: r.km || 0, minutos: r.minutos || 0,
     alunoNome: perfil?.nome || '', personalId: perfil?.personalId || ''
   })
 
@@ -95,8 +105,8 @@ export default function Diario({ user, perfil }) {
     const numeros = medidasPreenchidas(medidas)
     const texto = nota.trim()
 
-    if (!foto && !texto && Object.keys(numeros).length === 0) {
-      setErro('Escreva algo, coloque uma medida ou adicione uma foto.')
+    if (!foto && !texto && !atividade && Object.keys(numeros).length === 0) {
+      setErro('Marque uma atividade, escreva algo, coloque uma medida ou adicione uma foto.')
       return
     }
 
@@ -108,6 +118,15 @@ export default function Diario({ user, perfil }) {
         nota: texto,
         medidas: numeros,
         compartilhado: compartilhar
+      }
+      /* Campos da atividade só entram quando existem — registro sem treino não
+         precisa carregar km: 0 e minutos: 0 no banco. */
+      if (atividade) {
+        registro.atividade = atividade
+        const nKm = Number(String(km).replace(',', '.'))
+        const nMin = Number(minutos)
+        if (Number.isFinite(nKm) && nKm > 0) registro.km = nKm
+        if (Number.isFinite(nMin) && nMin > 0) registro.minutos = Math.round(nMin)
       }
       const criado = await push(ref(db, 'diario/' + user.uid), registro)
       if (compartilhar) await set(ref(db, caminhoEspelho(criado.key)), paraEspelho(registro))
@@ -156,7 +175,47 @@ export default function Diario({ user, perfil }) {
 
         {aberto && (
           <form onSubmit={salvar} className="diario-form">
-            <label>Foto de hoje (opcional)</label>
+            <label>O que você fez hoje?</label>
+            <div className="atv-grade">
+              {ATIVIDADES.map(a => (
+                <button
+                  key={a.id}
+                  type="button"
+                  className={'atv-op' + (atividade === a.id ? ' ativo' : '')}
+                  onClick={() => setAtividade(atividade === a.id ? '' : a.id)}
+                  aria-pressed={atividade === a.id}
+                >
+                  <span className="atv-icone" aria-hidden="true">{a.emoji}</span>
+                  <span>{a.rotulo}</span>
+                </button>
+              ))}
+            </div>
+
+            {atividade && (
+              <div className="linha-2" style={{ marginTop: 12 }}>
+                <div>
+                  <label htmlFor="atv-min">Tempo (min)</label>
+                  <input
+                    id="atv-min" type="number" inputMode="numeric" min="1"
+                    value={minutos} onChange={e => setMinutos(e.target.value)}
+                    placeholder="45"
+                  />
+                </div>
+                {/* Km só para o que se mede em distância — pedir de quem fez yoga é ruído. */}
+                {temDistancia(atividade) && (
+                  <div>
+                    <label htmlFor="atv-km">Distância (km)</label>
+                    <input
+                      id="atv-km" type="number" inputMode="decimal" step="0.1" min="0"
+                      value={km} onChange={e => setKm(e.target.value)}
+                      placeholder="5,2"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            <label style={{ marginTop: 16 }}>Foto de hoje (opcional)</label>
             <FotoInput
               atual={foto}
               onFoto={setFoto}
@@ -274,6 +333,14 @@ export default function Diario({ user, perfil }) {
         </div>
       )}
 
+      {totais.sessoes > 0 && (
+        <div className="atv-totais">
+          <div><strong>{totais.sessoes}</strong><span>atividades no mês</span></div>
+          {totais.minutos > 0 && <div><strong>{duracao(totais.minutos)}</strong><span>em movimento</span></div>}
+          {totais.km > 0 && <div><strong>{distancia(totais.km)}</strong><span>percorridos</span></div>}
+        </div>
+      )}
+
       <div className="section-title">
         {lista.length === 0 ? 'Linha do tempo' : `Linha do tempo · ${lista.length} registro${lista.length === 1 ? '' : 's'}`}
       </div>
@@ -284,7 +351,7 @@ export default function Diario({ user, perfil }) {
             <div className="ve-icone"><IcEvolucao /></div>
             <h2>Nada registrado ainda</h2>
             <p className="muted">
-              Anote como foi o dia, tire uma foto ou marque seu peso. Nada é obrigatório
+              Marque a atividade do dia, tire uma foto ou anote seu peso. Nada é obrigatório
               {temPersonal ? ' e nada aparece para o seu personal sem você marcar.' : '.'}
             </p>
           </div>
@@ -292,6 +359,12 @@ export default function Diario({ user, perfil }) {
       ) : lista.map(r => (
         <div key={r.id} className="card diario-registro">
           <div className="dr-topo">
+            {r.atividade && (
+              <span className="dr-atv" title={resumoAtividade(r)}>
+                <span className="dr-atv-icone" aria-hidden="true">{atividadeDe(r.atividade)?.emoji}</span>
+                {resumoAtividade(r)}
+              </span>
+            )}
             <span className="dr-data">{fmtData(r.ts)}</span>
             {temPersonal && (
               <span className={'badge ' + (r.compartilhado ? 'primaria' : '')}>

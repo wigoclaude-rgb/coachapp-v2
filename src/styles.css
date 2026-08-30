@@ -2231,3 +2231,53 @@ form.card .av-acoes { padding: 0; }
   text-underline-offset: 2px;
 }
 .tr-troca button:hover { color: var(--primaria-escura); }
+
+/* ============================================================
+   ATIVIDADE NO CHECK-IN
+   ============================================================ */
+.atv-grade {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 7px;
+}
+.atv-op {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 12px 6px; border-radius: var(--raio-sm);
+  border: 1px solid var(--borda); background: var(--superficie);
+  font-family: inherit; font-size: var(--t-xs); font-weight: 500;
+  color: var(--texto-3); cursor: pointer; transition: all var(--t);
+}
+.atv-op:hover { border-color: var(--primaria); color: var(--primaria); }
+.atv-op.ativo {
+  border-color: var(--primaria); background: var(--primaria-suave);
+  color: var(--primaria); font-weight: 600;
+}
+/* Emoji dessaturado: fica a silhueta, sem a mancha de cor no meio da interface. */
+.atv-icone {
+  font-size: 25px; line-height: 1;
+  filter: grayscale(1); opacity: 0.55;
+  transition: opacity var(--t), filter var(--t);
+}
+.atv-op:hover .atv-icone { opacity: 0.8; }
+.atv-op.ativo .atv-icone { opacity: 1; }
+
+.atv-totais {
+  display: flex; flex-wrap: wrap; gap: 10px; margin: 4px 0 18px;
+}
+.atv-totais > div {
+  flex: 1; min-width: 108px; display: flex; flex-direction: column; gap: 2px;
+  padding: 13px 15px; border-radius: var(--raio-sm); background: var(--superficie-2);
+}
+.atv-totais strong {
+  font-family: 'Archivo'; font-size: var(--t-xl); font-weight: 700;
+  letter-spacing: -0.02em; color: var(--primaria); font-variant-numeric: tabular-nums;
+}
+.atv-totais span { font-size: var(--t-xs); color: var(--texto-4); }
+
+/* Etiqueta da atividade no cartão da linha do tempo. */
+.dr-atv-icone { font-size: 14px; line-height: 1; filter: grayscale(1); opacity: 0.7; }
+.dr-atv {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 11px; border-radius: var(--raio-full);
+  background: var(--primaria-suave); color: var(--primaria);
+  font-size: var(--t-sm); font-weight: 600;
+}
+.dr-topo { flex-wrap: wrap; gap: 8px; }
