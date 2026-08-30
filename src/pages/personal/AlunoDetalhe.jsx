@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ref, onValue, push, remove } from 'firebase/database'
+import { ref, onValue, push, remove, set } from 'firebase/database'
 import { db } from '../../firebase'
 import { fmtData } from '../../lib/util'
 import { soDigitos } from '../../lib/cpf'
@@ -13,7 +13,13 @@ const PERGUNTAS_FB = [
   { id: 'completou', curto: 'Completou as reps', alerta: 'nao' }
 ]
 import { CAMPOS_MEDIDAS, rotuloMedida } from '../../lib/medidas'
-import { IcEvolucao, IcOlho } from '../../components/Icones.jsx'
+import { IcEvolucao, IcOlho, IcMais, IcEditar, IcLixeira } from '../../components/Icones.jsx'
+import FormAvaliacao from '../../components/FormAvaliacao.jsx'
+import AvaliacaoDetalhe from '../../components/AvaliacaoDetalhe.jsx'
+import EvolucaoCorporal from '../../components/EvolucaoCorporal.jsx'
+import {
+  normalizarAvaliacao, prepararParaSalvar, avaliacaoVazia, classificarIMC
+} from '../../lib/avaliacao'
 import TreinoDoDia from '../../components/TreinoDoDia.jsx'
 import Suplementacao from '../../components/Suplementacao.jsx'
 import LineChart from '../../components/LineChart.jsx'
@@ -31,11 +37,12 @@ export default function AlunoDetalhe({ user }) {
   const [fotos, setFotos] = useState({})
   const [diario, setDiario] = useState({})
   const [historico, setHistorico] = useState({})
-  const [medidas, setMedidas] = useState({})
+  const [formAval, setFormAval] = useState(null)      // avaliação em edição, ou null
+  const [avalAberta, setAvalAberta] = useState(null)  // qual linha está expandida
+  const [avalSalvando, setAvalSalvando] = useState(false)
+  const [avalErro, setAvalErro] = useState('')
   const [feedbacks, setFeedbacks] = useState({})
   const [verComoAluno, setVerComoAluno] = useState(false)
-  const [medMsg, setMedMsg] = useState('')
-  const [medidaGrafico, setMedidaGrafico] = useState('peso')
   const [exercicioGrafico, setExercicioGrafico] = useState('')
   const [tipoFoto, setTipoFoto] = useState('frente')
 
@@ -74,11 +81,6 @@ export default function AlunoDetalhe({ user }) {
     .map(e => ({ label: fmtData(e.ts).slice(0, 5), valor: Number(e.peso) }))
   const pontosCargaReduzidos = pontosCarga.length > 12 ? pontosCarga.filter((_, i) => i % Math.ceil(pontosCarga.length / 12) === 0) : pontosCarga
 
-  // Evolução de medidas
-  const pontosMedida = listaAval
-    .filter(a => a.medidas && a.medidas[medidaGrafico])
-    .map(a => ({ label: fmtData(a.ts).slice(0, 5), valor: Number(a.medidas[medidaGrafico]) }))
-
   // Frequência
   const diasTreinados = new Set(listaExec.map(e => {
     const d = new Date(e.ts)
@@ -87,15 +89,58 @@ export default function AlunoDetalhe({ user }) {
   const seteDias = Date.now() - 7 * 24 * 3600 * 1000
   const diasSemana = new Set(listaExec.filter(e => e.ts >= seteDias).map(e => new Date(e.ts).toDateString())).size
 
-  async function salvarAvaliacao(e) {
-    e.preventDefault()
-    setMedMsg('')
-    const preenchidas = {}
-    Object.entries(medidas).forEach(([k, v]) => { if (v !== '') preenchidas[k] = Number(v) })
-    if (Object.keys(preenchidas).length === 0) return
-    await push(ref(db, 'avaliacoes/' + alunoId), { ts: Date.now(), medidas: preenchidas })
-    setMedMsg('Avaliação registrada.')
-    setMedidas({})
+  /*
+    Salva a avaliação inteira. `prepararParaSalvar` recalcula IMC, relação
+    cintura/quadril, dobras e resumo — assim um registro salvo pela metade e
+    completado depois fica consistente sem ninguém apertar "recalcular".
+  */
+  async function salvarAvaliacao(form) {
+    setAvalSalvando(true)
+    setAvalErro('')
+    try {
+      const doc = prepararParaSalvar(form, {
+        personalId: user.uid, sexo: aluno.sexo, nascimento: aluno.nascimento
+      })
+      if (formAval?.id) await set(ref(db, 'avaliacoes/' + alunoId + '/' + formAval.id), doc)
+      else await push(ref(db, 'avaliacoes/' + alunoId), doc)
+      setFormAval(null)
+    } catch (err) {
+      setAvalErro(
+        String(err?.message || '').toLowerCase().includes('permission')
+          ? 'O banco recusou a gravação. Confira se este aluno é seu.'
+          : 'Não foi possível salvar. Confira sua conexão e tente de novo.'
+      )
+      console.warn('Falha ao salvar avaliação:', err)
+    }
+    setAvalSalvando(false)
+  }
+
+  function novaAvaliacao() {
+    setAvalErro('')
+    setFormAval(avaliacaoVazia(listaAval.length === 0))
+  }
+
+  function editarAvaliacao(a) {
+    setAvalErro('')
+    setFormAval({ ...normalizarAvaliacao(a), id: a.id })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  async function apagarAvaliacao(a) {
+    if (!confirm('Excluir a avaliação de ' + fmtData(a.ts) + '? Não tem como desfazer.')) return
+    await remove(ref(db, 'avaliacoes/' + alunoId + '/' + a.id))
+    setAvalAberta(null)
+  }
+
+  /** Linha da lista: o que a avaliação mediu, em uma frase. */
+  function resumoLinha(n) {
+    const r = n.resumo || {}
+    const partes = []
+    if (r.peso ?? n.medidas.peso) partes.push((r.peso ?? n.medidas.peso) + ' kg')
+    if (r.imc) partes.push('IMC ' + r.imc.toFixed(1).replace('.', ',') + ' · ' + classificarIMC(r.imc))
+    if (r.percentualGordura) partes.push(r.percentualGordura.toFixed(1).replace('.', ',') + '% gordura')
+    if (r.cintura ?? n.medidas.cintura) partes.push('cintura ' + (r.cintura ?? n.medidas.cintura) + ' cm')
+    return partes.length ? partes.join(' · ') : 'Sem medidas registradas'
   }
 
   async function salvarFoto(img) {
@@ -249,48 +294,83 @@ export default function AlunoDetalhe({ user }) {
 
       {aba === 'avaliacao' && (
         <>
-          <div className="card">
-            <h2>Nova avaliação física</h2>
-            <p className="muted">Preencha apenas as medidas que tirou hoje.</p>
-            <form onSubmit={salvarAvaliacao}>
-              <div className="grid-medidas">
-                {CAMPOS_MEDIDAS.map(([campo, rotulo]) => (
-                  <div key={campo}>
-                    <label>{rotulo}</label>
-                    <input type="number" step="0.1" value={medidas[campo] || ''}
-                      onChange={e => setMedidas({ ...medidas, [campo]: e.target.value })} />
-                  </div>
-                ))}
-              </div>
-              {medMsg && <div className="ok">{medMsg}</div>}
-              <button className="btn">Salvar avaliação</button>
-            </form>
-          </div>
-          <div className="card">
-            <h2>Evolução das medidas</h2>
-            <label>Medida</label>
-            <select value={medidaGrafico} onChange={e => setMedidaGrafico(e.target.value)}>
-              {CAMPOS_MEDIDAS.map(([campo, rotulo]) => <option key={campo} value={campo}>{rotulo}</option>)}
-            </select>
-            <div style={{ marginTop: 14 }}>
-              <LineChart pontos={pontosMedida} unidade="" />
+          {!formAval && (
+            <div className="barra-filtros">
+              <span className="section-title" style={{ margin: 0 }}>
+                {listaAval.length} avaliaç{listaAval.length === 1 ? 'ão' : 'ões'}
+              </span>
+              <button className="btn btn-sm" onClick={novaAvaliacao}>
+                <IcMais /> Nova avaliação
+              </button>
             </div>
-          </div>
-          <div className="card">
-            <h2>Histórico de avaliações</h2>
-            {listaAval.length === 0 && <p className="muted">Nenhuma avaliação registrada.</p>}
-            {[...listaAval].reverse().map(a => (
-              <div key={a.id} className="aval-item">
-                <strong>{fmtData(a.ts)}</strong>
-                <div className="muted">
-                  {Object.entries(a.medidas).map(([k, v]) => {
-                    const rot = CAMPOS_MEDIDAS.find(c => c[0] === k)
-                    return (rot ? rot[1].split(' (')[0] : k) + ': ' + v
-                  }).join(' · ')}
+          )}
+
+          {formAval && (
+            <FormAvaliacao
+              inicial={formAval.id ? formAval : null}
+              aluno={aluno}
+              primeira={listaAval.length === 0}
+              onSalvar={salvarAvaliacao}
+              onCancelar={() => { setFormAval(null); setAvalErro('') }}
+              salvando={avalSalvando}
+              erro={avalErro}
+            />
+          )}
+
+          {!formAval && (
+            <>
+              <EvolucaoCorporal avaliacoes={listaAval} />
+
+              {listaAval.length === 0 && (
+                <div className="card">
+                  <div className="vazio-estado">
+                    <div className="ve-icone"><IcEvolucao /></div>
+                    <h2>Nenhuma avaliação registrada</h2>
+                    <p className="muted">
+                      Registre a primeira para acompanhar a evolução corporal do aluno.
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              )}
+
+              {[...listaAval].reverse().map(a => {
+                const n = normalizarAvaliacao(a)
+                const aberto = avalAberta === a.id
+                const oculta = !n.visibilidade.alunoPodeVer
+                return (
+                  <div key={a.id} className="card av-linha">
+                    <button
+                      type="button"
+                      className="av-linha-cab"
+                      onClick={() => setAvalAberta(aberto ? null : a.id)}
+                      aria-expanded={aberto}
+                    >
+                      <div className="av-linha-txt">
+                        <strong>{fmtData(a.ts)}</strong>
+                        <span className="muted">{resumoLinha(n)}</span>
+                      </div>
+                      {oculta && <span className="av-oculta">Oculta do aluno</span>}
+                      <span className="av-seta">{aberto ? '−' : '+'}</span>
+                    </button>
+
+                    {aberto && (
+                      <>
+                        <AvaliacaoDetalhe avaliacao={a} />
+                        <div className="av-acoes">
+                          <button className="btn btn-sec btn-sm btn-auto" onClick={() => editarAvaliacao(a)}>
+                            <IcEditar /> Editar
+                          </button>
+                          <button className="btn btn-perigo-sutil btn-sm btn-auto" onClick={() => apagarAvaliacao(a)}>
+                            <IcLixeira /> Excluir
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )
+              })}
+            </>
+          )}
         </>
       )}
 

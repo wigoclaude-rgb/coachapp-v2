@@ -10,11 +10,13 @@ import {
 import Chat from '../../components/Chat.jsx'
 import Diario from './Diario.jsx'
 import Config from '../Config.jsx'
-import LineChart from '../../components/LineChart.jsx'
 import Heatmap from '../../components/Heatmap.jsx'
 import Layout from '../../components/Layout.jsx'
 import Tour from '../../components/Tour.jsx'
 import Suplementacao from '../../components/Suplementacao.jsx'
+import AvaliacaoDetalhe from '../../components/AvaliacaoDetalhe.jsx'
+import EvolucaoCorporal from '../../components/EvolucaoCorporal.jsx'
+import { normalizarAvaliacao } from '../../lib/avaliacao'
 // `diaISO` daqui já existe no arquivo para a sequência de treinos; o alias evita a colisão.
 import { normalizarSuplemento, faltaHoje, vezesNoDia, diaISO as diaSup } from '../../lib/suplementos'
 import {
@@ -86,7 +88,6 @@ export default function AlunoHome({ user, perfil, onSair }) {
   const [personal, setPersonal] = useState(null)
   const [pagObs, setPagObs] = useState('')
   const [pagCobId, setPagCobId] = useState(null)
-  const [medidaGrafico, setMedidaGrafico] = useState('peso')
 
   // Lista interativa: qual exercício está aberto, carga digitada e erro por exercício.
   const [exAberto, setExAberto] = useState(null)
@@ -109,6 +110,7 @@ export default function AlunoHome({ user, perfil, onSair }) {
   const [supTomados, setSupTomados] = useState({})
   // Esconde o aviso flutuante até a próxima abertura do app, sem marcar nada.
   const [supDispensado, setSupDispensado] = useState(false)
+  const [avalAberta, setAvalAberta] = useState(null)
 
   /* Ausente no banco = ligado; o aluno desliga em Configurações. */
   const descansoLigado = perfil.timerDescanso !== false
@@ -161,6 +163,16 @@ export default function AlunoHome({ user, perfil, onSair }) {
   /* ---------- Execuções e progresso ---------- */
   const listaExec = useMemo(() => Object.values(execucoes).sort((a, b) => b.ts - a.ts), [execucoes])
   const listaAval = Object.entries(avaliacoes).map(([id, a]) => ({ id, ...a })).sort((a, b) => a.ts - b.ts)
+
+  /*
+    O aluno só enxerga o que o personal liberou. O banco entrega o nó inteiro —
+    as regras do Realtime DB não filtram por campo — então o corte é aqui, e
+    registro antigo sem `visibilidade` continua visível, como sempre foi.
+  */
+  const avalVisiveis = useMemo(
+    () => listaAval.filter(a => normalizarAvaliacao(a).visibilidade.alunoPodeVer),
+    [avaliacoes]
+  )
   const listaHist = Object.entries(historico).map(([id, t]) => ({ id, ...t })).sort((a, b) => (b.arquivadoEm || 0) - (a.arquivadoEm || 0))
 
   const diasTreinados = useMemo(() => new Set(listaExec.map(e => diaISO(e.ts))), [listaExec])
@@ -346,9 +358,6 @@ export default function AlunoHome({ user, perfil, onSair }) {
     { id: 'config', label: 'Configurações', icone: <IcConfig /> }
   ]
 
-  const pontosMedida = listaAval
-    .filter(a => a.medidas && a.medidas[medidaGrafico] !== undefined)
-    .map(a => ({ label: fmtData(a.ts).slice(0, 5), valor: Number(a.medidas[medidaGrafico]) }))
 
   const meta = TITULOS[aba] || TITULOS.treino
 
@@ -886,22 +895,45 @@ export default function AlunoHome({ user, perfil, onSair }) {
             <Heatmap diasTreinados={diasTreinados} />
           </div>
 
+          <EvolucaoCorporal avaliacoes={avalVisiveis} />
+
           <div className="card">
-            <div className="card-titulo"><h2>Evolução das medidas</h2></div>
-            {listaAval.length === 0 && <p className="muted">Seu personal ainda não registrou avaliações físicas.</p>}
-            {listaAval.length > 0 && (
-              <>
-                <label>Medida</label>
-                <select value={medidaGrafico} onChange={e => setMedidaGrafico(e.target.value)}>
-                  {[...new Set(listaAval.flatMap(a => Object.keys(a.medidas || {})))].map(k => (
-                    <option key={k} value={k}>{k}</option>
-                  ))}
-                </select>
-                <div style={{ marginTop: 14 }}>
-                  <LineChart pontos={pontosMedida} unidade="" />
-                </div>
-              </>
+            <div className="card-titulo">
+              <div style={{ minWidth: 0 }}>
+                <h2>Minhas avaliações</h2>
+                <p className="mini">Registradas pelo seu personal.</p>
+              </div>
+            </div>
+
+            {avalVisiveis.length === 0 && (
+              <p className="muted">Seu personal ainda não liberou nenhuma avaliação.</p>
             )}
+
+            {[...avalVisiveis].reverse().map(a => {
+              const aberta = avalAberta === a.id
+              return (
+                <div key={a.id} className="av-linha">
+                  <button
+                    type="button"
+                    className="av-linha-cab"
+                    onClick={() => setAvalAberta(aberta ? null : a.id)}
+                    aria-expanded={aberta}
+                  >
+                    <div className="av-linha-txt">
+                      <strong>{fmtData(a.ts)}</strong>
+                      <span className="muted">
+                        {a.resumo?.peso ? a.resumo.peso + ' kg' : 'Ver detalhes'}
+                        {a.resumo?.percentualGordura
+                          ? ' · ' + String(a.resumo.percentualGordura).replace('.', ',') + '% gordura'
+                          : ''}
+                      </span>
+                    </div>
+                    <span className="av-seta">{aberta ? '−' : '+'}</span>
+                  </button>
+                  {aberta && <AvaliacaoDetalhe avaliacao={a} comoAluno />}
+                </div>
+              )
+            })}
           </div>
 
           <div className="card">
