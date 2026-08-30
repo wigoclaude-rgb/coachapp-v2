@@ -16,6 +16,7 @@ import Financeiro from './Financeiro.jsx'
 import Layout from '../../components/Layout.jsx'
 import Tour from '../../components/Tour.jsx'
 import Suplementacao from '../../components/Suplementacao.jsx'
+import Avaliacoes from './Avaliacoes.jsx'
 import TreinoDoDia from '../../components/TreinoDoDia.jsx'
 import Diario from '../aluno/Diario.jsx'
 // `diaISO` daqui vira `diaSup` por simetria com o AlunoHome, onde há colisão de nome.
@@ -27,7 +28,7 @@ import {
 import {
   IcInicio, IcAlunos, IcFinanceiro, IcChat, IcTemplates, IcConfig,
   IcRaio, IcRelogio, IcMais, IcBusca, IcHalter, IcAlerta, IcCopiar, IcCheck, IcVoltar,
-  IcSuplemento, IcFechar, IcTreino
+  IcSuplemento, IcFechar, IcTreino, IcEvolucao, IcSeta
 } from '../../components/Icones.jsx'
 
 // Sem I, O, 0 e 1 — some a chance do aluno digitar errado o que veio na mensagem.
@@ -58,6 +59,7 @@ const TITULOS = {
   financeiro: { t: 'Financeiro', s: 'Cobranças e pagamentos' },
   chat: { t: 'Chat', s: 'Converse com seus alunos' },
   templates: { t: 'Templates', s: 'Planos reutilizáveis' },
+  avaliacoes: { t: 'Avaliação física', s: 'Quem precisa reavaliar e o histórico' },
   meutreino: { t: 'Meu treino', s: 'Seu plano e sua evolução' },
   suplementos: { t: 'Suplementação', s: 'O que você toma e a constância' },
   plano: { t: 'Meu plano', s: 'Seu limite de alunos' },
@@ -423,6 +425,7 @@ export default function PersonalHome({ user, perfil, onSair }) {
     { id: 'financeiro', label: 'Financeiro', icone: <IcFinanceiro />, badge: paraValidar },
     { id: 'chat', label: 'Chat', icone: <IcChat /> },
     { id: 'templates', label: 'Templates', icone: <IcTemplates /> },
+    { id: 'avaliacoes', label: 'Avaliação física', icone: <IcEvolucao /> },
     { id: 'meutreino', label: 'Meu treino', icone: <IcTreino /> },
     { id: 'suplementos', label: 'Suplementação', icone: <IcSuplemento />, badge: supPendentes.length },
     { id: 'plano', label: 'Meu plano', icone: <IcRaio /> },
@@ -856,6 +859,9 @@ export default function PersonalHome({ user, perfil, onSair }) {
 
       {/* ===== TEMPLATES ===== */}
       {aba === 'templates' && <MeusTemplates user={user} />}
+
+      {/* ===== AVALIAÇÃO FÍSICA (carteira inteira) ===== */}
+      {aba === 'avaliacoes' && <Avaliacoes user={user} alunos={alunos} />}
 
       {/* ===== MEU TREINO (do próprio personal) ===== */}
       {aba === 'meutreino' && (

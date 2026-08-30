@@ -91,6 +91,20 @@
       }
     },
 
+    "anexos": {
+      "$alunoUid": {
+        ".read": "auth != null && (auth.uid === $alunoUid || root.child('users/'+$alunoUid+'/personalId').val() === auth.uid)",
+        ".write": "auth != null && root.child('users/'+$alunoUid+'/personalId').val() === auth.uid"
+      }
+    },
+
+    "anexosDados": {
+      "$alunoUid": {
+        ".read": "auth != null && (auth.uid === $alunoUid || root.child('users/'+$alunoUid+'/personalId').val() === auth.uid)",
+        ".write": "auth != null && root.child('users/'+$alunoUid+'/personalId').val() === auth.uid"
+      }
+    },
+
     "diario": {
       "$alunoUid": {
         ".read": "auth != null && auth.uid === $alunoUid",

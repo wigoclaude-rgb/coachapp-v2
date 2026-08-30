@@ -17,6 +17,8 @@ import Suplementacao from '../../components/Suplementacao.jsx'
 import AvaliacaoDetalhe from '../../components/AvaliacaoDetalhe.jsx'
 import EvolucaoCorporal from '../../components/EvolucaoCorporal.jsx'
 import { normalizarAvaliacao } from '../../lib/avaliacao'
+import Anexos from '../../components/Anexos.jsx'
+import { organizar } from '../../lib/anexos'
 // `diaISO` daqui já existe no arquivo para a sequência de treinos; o alias evita a colisão.
 import { normalizarSuplemento, faltaHoje, vezesNoDia, diaISO as diaSup } from '../../lib/suplementos'
 import {
@@ -111,6 +113,7 @@ export default function AlunoHome({ user, perfil, onSair }) {
   // Esconde o aviso flutuante até a próxima abertura do app, sem marcar nada.
   const [supDispensado, setSupDispensado] = useState(false)
   const [avalAberta, setAvalAberta] = useState(null)
+  const [anexos, setAnexos] = useState({})
   /*
     Treino que o aluno escolheu para hoje, quando o personal libera.
     Vive só na tela: amanhã volta a valer o ciclo, senão uma troca pontual
@@ -144,7 +147,9 @@ export default function AlunoHome({ user, perfil, onSair }) {
     const u7 = onValue(ref(db, 'feedbacks/' + user.uid), s => setFeedbacks(s.val() || {}))
     const u8 = onValue(ref(db, 'suplementos/' + user.uid), s => setSuplementos(s.val() || {}))
     const u9 = onValue(ref(db, 'suplementosTomados/' + user.uid), s => setSupTomados(s.val() || {}))
-    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8(); u9() }
+    // Só o metadado; o arquivo em si é lido ao abrir.
+    const u10 = onValue(ref(db, 'anexos/' + user.uid), s => setAnexos(s.val() || {}))
+    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8(); u9(); u10() }
   }, [user.uid, perfil.personalId])
 
   // séries concluídas hoje
@@ -175,6 +180,14 @@ export default function AlunoHome({ user, perfil, onSair }) {
     as regras do Realtime DB não filtram por campo — então o corte é aqui, e
     registro antigo sem `visibilidade` continua visível, como sempre foi.
   */
+  /*
+    Documento do aluno (atestado, exame) é dele — sempre visível.
+    Anexo preso a uma avaliação segue a visibilidade dessa avaliação.
+  */
+  const { doAluno: anexosDoAluno, porAvaliacao: anexosPorAval } = useMemo(
+    () => organizar(anexos), [anexos]
+  )
+
   const avalVisiveis = useMemo(
     () => listaAval.filter(a => normalizarAvaliacao(a).visibilidade.alunoPodeVer),
     [avaliacoes]
@@ -934,6 +947,18 @@ export default function AlunoHome({ user, perfil, onSair }) {
 
           <EvolucaoCorporal avaliacoes={avalVisiveis} />
 
+          {anexosDoAluno.length > 0 && (
+            <div className="card">
+              <div className="card-titulo">
+                <div style={{ minWidth: 0 }}>
+                  <h2>Meus documentos</h2>
+                  <p className="mini">Arquivos que seu personal guardou na sua ficha.</p>
+                </div>
+              </div>
+              <Anexos alunoId={user.uid} lista={anexosDoAluno} />
+            </div>
+          )}
+
           <div className="card">
             <div className="card-titulo">
               <div style={{ minWidth: 0 }}>
@@ -967,7 +992,16 @@ export default function AlunoHome({ user, perfil, onSair }) {
                     </div>
                     <span className="av-seta">{aberta ? '−' : '+'}</span>
                   </button>
-                  {aberta && <AvaliacaoDetalhe avaliacao={a} comoAluno />}
+                  {aberta && (
+                    <>
+                      <AvaliacaoDetalhe avaliacao={a} comoAluno />
+                      {(anexosPorAval[a.id] || []).length > 0 && (
+                        <div style={{ padding: '0 16px 16px' }}>
+                          <Anexos alunoId={user.uid} lista={anexosPorAval[a.id]} titulo="Anexos" />
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               )
             })}

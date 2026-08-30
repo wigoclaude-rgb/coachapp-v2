@@ -23,6 +23,8 @@ import {
 } from '../../lib/avaliacao'
 import TreinoDoDia from '../../components/TreinoDoDia.jsx'
 import Suplementacao from '../../components/Suplementacao.jsx'
+import Anexos from '../../components/Anexos.jsx'
+import { organizar } from '../../lib/anexos'
 import LineChart from '../../components/LineChart.jsx'
 import Heatmap from '../../components/Heatmap.jsx'
 import FotoInput from '../../components/FotoInput.jsx'
@@ -44,6 +46,7 @@ export default function AlunoDetalhe({ user }) {
   const [avalErro, setAvalErro] = useState('')
   const [feedbacks, setFeedbacks] = useState({})
   const [verComoAluno, setVerComoAluno] = useState(false)
+  const [anexos, setAnexos] = useState({})
   const [exercicioGrafico, setExercicioGrafico] = useState('')
   const [tipoFoto, setTipoFoto] = useState('frente')
 
@@ -56,13 +59,16 @@ export default function AlunoDetalhe({ user }) {
     // Só o espelho do que o aluno compartilhou — `diario/` é privado dele.
     const u6 = onValue(ref(db, 'diarioCompartilhado/' + alunoId), s => setDiario(s.val() || {}))
     const u7 = onValue(ref(db, 'feedbacks/' + alunoId), s => setFeedbacks(s.val() || {}))
-    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7() }
+    // Só o metadado. O conteúdo em base64 vive em `anexosDados` e é lido no clique.
+    const u8 = onValue(ref(db, 'anexos/' + alunoId), s => setAnexos(s.val() || {}))
+    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8() }
   }, [alunoId])
 
   if (!aluno) return <div className="loading">Carregando...</div>
 
   const listaExec = Object.values(execucoes).sort((a, b) => b.ts - a.ts)
   const listaAval = Object.entries(avaliacoes).map(([id, a]) => ({ id, ...a })).sort((a, b) => a.ts - b.ts)
+  const { doAluno: anexosDoAluno, porAvaliacao: anexosPorAval } = organizar(anexos)
   const listaFotos = Object.entries(fotos).map(([id, f]) => ({ id, ...f })).sort((a, b) => b.ts - a.ts)
   const listaHist = Object.entries(historico).map(([id, t]) => ({ id, ...t })).sort((a, b) => (b.arquivadoEm || 0) - (a.arquivadoEm || 0))
   const listaFeedback = Object.entries(feedbacks)
@@ -320,6 +326,18 @@ export default function AlunoDetalhe({ user }) {
 
           {!formAval && (
             <>
+              <div className="card">
+                <div className="card-titulo">
+                  <div style={{ minWidth: 0 }}>
+                    <h2>Documentos do aluno</h2>
+                    <p className="mini">
+                      Atestado, liberação médica, exame — vale para qualquer avaliação.
+                    </p>
+                  </div>
+                </div>
+                <Anexos alunoId={alunoId} lista={anexosDoAluno} podeEditar />
+              </div>
+
               <EvolucaoCorporal avaliacoes={listaAval} />
 
               {listaAval.length === 0 && (
@@ -357,6 +375,15 @@ export default function AlunoDetalhe({ user }) {
                     {aberto && (
                       <>
                         <AvaliacaoDetalhe avaliacao={a} />
+                        <div style={{ padding: '0 16px' }}>
+                          <Anexos
+                            alunoId={alunoId}
+                            lista={anexosPorAval[a.id] || []}
+                            avaliacaoId={a.id}
+                            podeEditar
+                            titulo="Anexos desta avaliação"
+                          />
+                        </div>
                         <div className="av-acoes">
                           <button className="btn btn-sec btn-sm btn-auto" onClick={() => editarAvaliacao(a)}>
                             <IcEditar /> Editar
