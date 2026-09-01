@@ -41,14 +41,14 @@ export const TOUR_ALUNO_TREINO = [
     texto: 'Toque em qualquer exercício para abrir. O que está com a borda vermelha é o da vez; os terminados ficam com um visto verde.'
   },
   {
-    alvo: '.tr-ex.aberto .tr-series',
+    alvo: '.tr-ex.aberto .tr-tabela',
     titulo: 'Marque cada série',
-    texto: 'Cada quadrado é uma série, com as repetições e a carga que o personal montou. Toque quando terminar — ele fica verde e não dá para desmarcar.'
+    texto: 'Cada linha é uma série, com as repetições e a carga que o personal montou. Toque em Marcar quando terminar. Se errar, o "desfazer" da linha volta atrás.'
   },
   {
-    alvo: '.tr-ex.aberto .tr-ex-carga',
+    alvo: '.tr-ex.aberto .ts-input',
     titulo: 'A carga que você usou',
-    texto: 'Se pegou um peso diferente do combinado, escreva aqui antes de marcar a série. Em branco, vale a carga do plano. Menos que o combinado o app não aceita — fale com seu personal.'
+    texto: 'O campo já vem com o peso do plano. Se pegou diferente, é só trocar o número antes de marcar. Pegou menos? Pode registrar do mesmo jeito — o app só pergunta o motivo, para o seu personal saber.'
   },
   {
     alvo: '.tr-ex.aberto .tr-video',

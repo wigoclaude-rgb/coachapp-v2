@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ref, onValue, push, update } from 'firebase/database'
+import { ref, onValue, push, update, remove } from 'firebase/database'
 import { db } from '../../firebase'
 import { fmtData, fmtMoeda, vencida, imagemExercicio, youtubeId, comKg, beep } from '../../lib/util'
 import { notificar } from '../../lib/notify'
 import {
   LETRAS, normalizarPlano, indiceSeguro, duracaoEstimada, totalSeries,
-  agruparBlocos, chaveSerie, resumoExercicio
+  agruparBlocos, chaveSerie, resumoExercicio, cargaNumero
 } from '../../lib/treinoModel'
 import Chat from '../../components/Chat.jsx'
 import Diario from './Diario.jsx'
@@ -50,6 +50,14 @@ const diaISO = ts => {
   entre uma série e outra. O que não couber vai no comentário.
   `alerta` marca a resposta que o personal precisa olhar.
 */
+/* Motivos de baixar a carga. Curtos, para responder de pé entre as séries. */
+const MOTIVOS_REDUCAO = [
+  'Senti dor',
+  'Sem força hoje',
+  'Aparelho diferente',
+  'Estava pesado demais'
+]
+
 const PERGUNTAS_FEEDBACK = [
   { id: 'carga', texto: 'A carga estava adequada?', alerta: 'nao' },
   { id: 'dor', texto: 'Sentiu dor ou desconforto?', alerta: 'sim' },
@@ -96,6 +104,8 @@ export default function AlunoHome({ user, perfil, onSair }) {
   const [pesoInline, setPesoInline] = useState({})
   const [erroInline, setErroInline] = useState({})
   const [videoAberto, setVideoAberto] = useState(null)
+  // Série que a pessoa quer marcar com carga menor que a do plano, aguardando o motivo.
+  const [reducao, setReducao] = useState(null)
   const [descanso, setDescanso] = useState(null)
   // Índice do treino que o aluno abriu pelos selos A/B/C. Só leitura.
   const [verTreino, setVerTreino] = useState(null)
@@ -152,12 +162,19 @@ export default function AlunoHome({ user, perfil, onSair }) {
     return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8(); u9(); u10() }
   }, [user.uid, perfil.personalId])
 
-  // séries concluídas hoje
+  /*
+    Séries concluídas hoje. Guarda o peso junto, não só `true`: é ele que a
+    coluna Carga mostra depois de marcada — o que a pessoa levantou de verdade,
+    e não o alvo que o personal escreveu.
+  */
   useEffect(() => {
     const hoje = new Date().toDateString()
     const f = {}
-    Object.values(execucoes).forEach(e => {
-      if (new Date(e.ts).toDateString() === hoje) f[e.exercicio + '_' + e.serie] = true
+    // `entries` e não `values`: o id do registro é o que permite desfazer depois.
+    Object.entries(execucoes).forEach(([id, e]) => {
+      if (new Date(e.ts).toDateString() === hoje) {
+        f[e.exercicio + '_' + e.serie] = { id, peso: e.peso ?? '', ts: e.ts }
+      }
     })
     setFeitas(f)
   }, [execucoes])
@@ -209,14 +226,23 @@ export default function AlunoHome({ user, perfil, onSair }) {
   }, [listaExec, mesAtual, anoAtual])
 
   /** Última carga registrada para um exercício, ignorando as séries de hoje. */
+  /*
+    Carga do treino anterior, guardada POR SÉRIE.
+
+    Por exercício não servia numa pirâmide: pegava o último peso registrado, que
+    é o da série mais pesada, e mostrava 65 kg para quem ia fazer a primeira de
+    20 repetições. `listaExec` vem do mais novo para o mais velho, então o
+    primeiro que aparece de cada série já é o mais recente.
+  */
   const cargaAnterior = useMemo(() => {
     const mapa = {}
     const hoje = new Date().toDateString()
     listaExec.forEach(e => {
       if (new Date(e.ts).toDateString() === hoje) return
-      if (mapa[e.exercicio] === undefined && e.peso) mapa[e.exercicio] = Number(e.peso)
+      const chave = e.exercicio + '_' + e.serie
+      if (mapa[chave] === undefined && e.peso) mapa[chave] = Number(e.peso)
     })
-    return nome => mapa[nome] ?? null
+    return (nome, serie) => mapa[nome + '_' + serie] ?? null
   }, [listaExec])
 
   /* ---------- Plano de treino ---------- */
@@ -262,24 +288,79 @@ export default function AlunoHome({ user, perfil, onSair }) {
     : null
 
   /** Registra uma série. Devolve mensagem de erro ou null. */
-  async function marcarSerie(ex, serie, pesoDigitado, cargaLinha) {
+  /*
+    Registra a série. Carga menor que a do plano é PERMITIDA e fica marcada com
+    o motivo — antes era recusada, e recusar só ensinava a mentir no número ou a
+    não marcar a série. Com o motivo gravado, o personal vê o que aconteceu.
+
+    `cargaNumero` e não `Number`: a carga é texto livre, e Number("45Kg") é NaN —
+    era por isso que a trava antiga nem disparava quando o personal escrevia o Kg.
+  */
+  async function marcarSerie(ex, serie, pesoDigitado, cargaLinha, motivo = '') {
     if (feitas[chaveSerie(ex.nome, serie)]) return null
-    const cargaAlvo = Number(cargaLinha) || 0
-    const peso = pesoDigitado !== undefined && pesoDigitado !== '' ? Number(pesoDigitado) : cargaAlvo
-    if (cargaAlvo > 0 && peso < cargaAlvo) {
-      return `A carga não pode ser menor que ${cargaAlvo} kg. Para reduzir, fale com o seu personal.`
-    }
-    await push(ref(db, 'execucoes/' + user.uid), { exercicio: ex.nome, serie, peso: peso || '', ts: Date.now() })
+    const alvo = cargaNumero(cargaLinha) || 0
+    const peso = pesoDigitado !== undefined && pesoDigitado !== '' ? Number(pesoDigitado) : alvo
+    const abaixo = alvo > 0 && peso > 0 && peso < alvo
+
+    await push(ref(db, 'execucoes/' + user.uid), {
+      exercicio: ex.nome,
+      serie,
+      peso: peso || '',
+      ts: Date.now(),
+      ...(abaixo ? { alvo, motivo: motivo || 'não informado' } : {})
+    })
     return null
   }
 
-  /** Marca uma série direto da lista e dispara o descanso, se ligado. */
-  async function marcarInline(ex, serie, linha) {
-    const msg = await marcarSerie(ex, serie, pesoInline[ex.nome] ?? '', linha.carga)
+  /**
+   * Copia a carga da série atual para as seguintes que ainda faltam.
+   * Só preenche o campo — nada é marcado; a pessoa ainda confirma série a série.
+   */
+  function repetirCarga(ex, serie) {
+    const valor = pesoInline[ex.nome + '_' + serie] ?? cargaNumero(ex.linhas[serie - 1]?.carga)
+    if (valor === '' || valor === null || valor === undefined) return
+    setPesoInline(p => {
+      const novo = { ...p }
+      ex.linhas.forEach((_, li) => {
+        const s = li + 1
+        if (s > serie && !feitas[chaveSerie(ex.nome, s)]) novo[ex.nome + '_' + s] = String(valor)
+      })
+      return novo
+    })
+  }
+
+  /**
+   * Desfaz uma série marcada por engano. Só as de hoje: `feitas` é o de hoje, e
+   * dia fechado é histórico — corrigir treino antigo é assunto do personal.
+   */
+  async function desmarcarSerie(ex, serie) {
+    const reg = feitas[chaveSerie(ex.nome, serie)]
+    if (!reg?.id) return
+    await remove(ref(db, 'execucoes/' + user.uid + '/' + reg.id))
+    setDescanso(null)
+  }
+
+  /**
+   * Marca uma série da lista. Carga abaixo do plano abre a pergunta do motivo
+   * antes de gravar — uma vez respondida, `motivo` vem preenchido e segue direto.
+   */
+  async function marcarInline(ex, serie, linha, motivo = '') {
+    const chave = ex.nome + '_' + serie
+    const digitado = pesoInline[chave]
+    const alvo = cargaNumero(linha.carga) || 0
+    const peso = digitado !== undefined && digitado !== '' ? Number(digitado) : alvo
+
+    if (!motivo && alvo > 0 && peso > 0 && peso < alvo) {
+      setReducao({ nome: ex.nome, serie, peso, alvo })
+      return
+    }
+
+    const msg = await marcarSerie(ex, serie, digitado ?? '', linha.carga, motivo)
     setErroInline(e => ({ ...e, [ex.nome]: msg || '' }))
     if (msg) return
 
-    setPesoInline(p => ({ ...p, [ex.nome]: '' }))
+    setReducao(null)
+    setPesoInline(p => ({ ...p, [chave]: '' }))
 
     const segundos = Number(linha.descanso) || 0
     const ultimaSerie = serie >= ex.linhas.length
@@ -717,6 +798,11 @@ export default function AlunoHome({ user, perfil, onSair }) {
                           const agora = exRetomada?.nome === ex.nome
                           // O exercício da vez já abre; tocar em outro troca o aberto.
                           const aberto = (exAberto ?? exRetomada?.nome) === ex.nome
+                          // Primeira série pendente: é a linha que ganha o campo e o botão.
+                          const proximaSerie = ex.linhas.findIndex((_, li) => !feitas[chaveSerie(ex.nome, li + 1)]) + 1
+                          const temDescanso = ex.linhas.some(l => Number(l.descanso) > 0)
+                          // Coluna "Anterior" só entra quando existe histórico — senão é uma coluna de traços.
+                          const temAnterior = ex.linhas.some((_, li) => cargaAnterior(ex.nome, li + 1))
                           const img = imagemExercicio(ex)
                           const vid = youtubeId(ex.video)
                           const erro = erroInline[ex.nome]
@@ -751,45 +837,138 @@ export default function AlunoHome({ user, perfil, onSair }) {
                                 <div className="tr-ex-corpo">
                                   {ex.obs && <p className="tr-ex-obs">{ex.obs}</p>}
 
-                                  {cargaAnterior(ex.nome) && (
-                                    <p className="tr-ex-anterior">
-                                      Da última vez você usou <strong>{comKg(cargaAnterior(ex.nome))}</strong>
-                                    </p>
-                                  )}
 
-                                  <div className="tr-series">
-                                    {ex.linhas.map((linha, li) => {
-                                      const s = li + 1
-                                      const feita = !!feitas[chaveSerie(ex.nome, s)]
-                                      return (
+                                  {/*
+                                    Mesma tabela da consulta A/B/C, mas viva: a linha da
+                                    vez tem o campo de carga e o botão. O peso é por série,
+                                    e não um campo por exercício — numa pirâmide de 30 a
+                                    65 kg, um campo só obriga a reescrever a cada série.
+                                  */}
+                                  <table className="tr-tabela">
+                                    <thead>
+                                      <tr>
+                                        <th>Série</th>
+                                        <th>Reps</th>
+                                        {temAnterior && <th title="O que você usou no último treino">Anterior</th>}
+                                        <th>Carga</th>
+                                        {temDescanso && <th>Desc.</th>}
+                                        <th />
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {ex.linhas.map((linha, li) => {
+                                        const s = li + 1
+                                        const reg = feitas[chaveSerie(ex.nome, s)]
+                                        const feita = !!reg
+                                        const daVez = !feita && s === proximaSerie
+                                        const chave = ex.nome + '_' + s
+                                        return (
+                                          <tr key={s} className={(feita ? 'feita' : '') + (daVez ? ' da-vez' : '')}>
+                                            <td className="ts-n">{feita ? <IcCheck /> : s + 'ª'}</td>
+                                            <td>{linha.reps || '—'}</td>
+                                            {temAnterior && (
+                                              <td className="ts-antes">
+                                                {cargaAnterior(ex.nome, s) ? comKg(cargaAnterior(ex.nome, s)) : '—'}
+                                              </td>
+                                            )}
+                                            <td className="ts-carga">
+                                              {feita
+                                                ? <strong>{reg.peso ? comKg(reg.peso) : comKg(linha.carga) || 'livre'}</strong>
+                                                : daVez
+                                                  ? <input
+                                                      type="number" inputMode="decimal"
+                                                      className="ts-input"
+                                                      /*
+                                                        Já vem com o peso do plano. Na pirâmide, a
+                                                        pessoa só confirma; ajusta quando pegou
+                                                        diferente. `??` e não `||`: campo limpo pela
+                                                        própria pessoa tem que continuar limpo.
+                                                      */
+                                                      value={pesoInline[chave] ?? (cargaNumero(linha.carga) ?? '')}
+                                                      onChange={e => setPesoInline(p => ({ ...p, [chave]: e.target.value }))}
+                                                      placeholder="livre"
+                                                      aria-label={`Carga da série ${s}`}
+                                                    />
+                                                  : pesoInline[chave] !== undefined && pesoInline[chave] !== ''
+                                                    /* Carga copiada da série anterior: mostra o que vai valer, não o alvo. */
+                                                    ? <span className="ts-copiada">{comKg(pesoInline[chave])}</span>
+                                                    : <span className="ts-alvo">{linha.carga ? comKg(linha.carga) : 'Livre'}</span>}
+                                            </td>
+                                            {temDescanso && (
+                                              <td className="ts-desc">
+                                                {Number(linha.descanso) > 0 ? linha.descanso + 's' : '—'}
+                                              </td>
+                                            )}
+                                            <td className="ts-acao">
+                                              {feita
+                                                ? <button
+                                                    type="button" className="ts-desfazer"
+                                                    onClick={() => desmarcarSerie(ex, s)}
+                                                    title={`Desfazer a ${s}ª série`}
+                                                  >
+                                                    desfazer
+                                                  </button>
+                                                : daVez
+                                                  ? <button type="button" className="btn btn-sm" onClick={() => marcarInline(ex, s, linha)}>
+                                                      Marcar
+                                                    </button>
+                                                  : <button type="button" className="ts-pular" onClick={() => marcarInline(ex, s, linha)}>
+                                                      marcar
+                                                    </button>}
+                                            </td>
+                                          </tr>
+                                        )
+                                      })}
+                                    </tbody>
+                                  </table>
+
+                                  {/* Atalho para carga constante: uma série define as que faltam. */}
+                                  {(() => {
+                                    const faltamDepois = ex.linhas.filter((_, li) =>
+                                      li + 1 > proximaSerie && !feitas[chaveSerie(ex.nome, li + 1)]
+                                    ).length
+                                    if (proximaSerie < 1 || faltamDepois === 0) return null
+                                    const atual = pesoInline[ex.nome + '_' + proximaSerie]
+                                      ?? cargaNumero(ex.linhas[proximaSerie - 1]?.carga)
+                                    if (atual === null || atual === undefined || atual === '') return null
+                                    return (
+                                      <button
+                                        type="button" className="tr-repetir"
+                                        onClick={() => repetirCarga(ex, proximaSerie)}
+                                      >
+                                        Usar {atual} kg {faltamDepois === 1 ? 'na última série' : `nas outras ${faltamDepois} séries`}
+                                      </button>
+                                    )
+                                  })()}
+
+                                  {reducao?.nome === ex.nome && (
+                                    <div className="tr-reducao">
+                                      <p className="tr-red-tit">
+                                        <strong>{reducao.peso} kg</strong> na {reducao.serie}ª, sendo que
+                                        o plano pede <strong>{reducao.alvo} kg</strong>. Sem problema —
+                                        só conta o motivo para o seu personal ajustar.
+                                      </p>
+                                      <div className="opcoes-chips">
+                                        {MOTIVOS_REDUCAO.map(m => (
+                                          <button
+                                            key={m} type="button" className="chip-opcao"
+                                            onClick={() => marcarInline(ex, reducao.serie, ex.linhas[reducao.serie - 1], m)}
+                                          >
+                                            {m}
+                                          </button>
+                                        ))}
+                                      </div>
+                                      <div className="tr-red-acoes">
                                         <button
-                                          key={s}
-                                          type="button"
-                                          className={'tr-serie' + (feita ? ' feita' : '')}
-                                          onClick={() => !feita && marcarInline(ex, s, linha)}
-                                          disabled={feita}
-                                          title={feita ? `Série ${s} registrada` : `Marcar a série ${s}`}
+                                          type="button" className="btn btn-ghost btn-sm"
+                                          onClick={() => marcarInline(ex, reducao.serie, ex.linhas[reducao.serie - 1], 'não informado')}
                                         >
-                                          <span className="tr-serie-n">{feita ? <IcCheck /> : s + 'ª'}</span>
-                                          <span className="tr-serie-alvo">
-                                            {linha.reps}{linha.carga ? ' · ' + comKg(linha.carga) : ''}
-                                          </span>
+                                          Prefiro não dizer
                                         </button>
-                                      )
-                                    })}
-                                  </div>
-
-                                  {!completo && (
-                                    <div className="tr-ex-carga">
-                                      <label htmlFor={'carga-' + i + '-' + k}>Carga usada (kg)</label>
-                                      <input
-                                        id={'carga-' + i + '-' + k}
-                                        type="number" inputMode="decimal"
-                                        value={pesoInline[ex.nome] ?? ''}
-                                        onChange={e => setPesoInline(p => ({ ...p, [ex.nome]: e.target.value }))}
-                                        placeholder={ex.linhas[n]?.carga || 'igual ao alvo'}
-                                      />
-                                      <p className="mini">Deixe em branco para registrar a carga do plano.</p>
+                                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setReducao(null)}>
+                                          Cancelar
+                                        </button>
+                                      </div>
                                     </div>
                                   )}
 

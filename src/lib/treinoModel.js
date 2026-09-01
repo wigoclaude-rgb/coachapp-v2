@@ -161,7 +161,7 @@ export function resumoLinhas(linhas) {
 }
 
 /** Número escondido num texto livre de carga: "60Kg" -> 60. */
-function cargaNumero(valor) {
+export function cargaNumero(valor) {
   const n = Number(String(valor ?? '').replace(/[^\d.,]/g, '').replace(',', '.'))
   return Number.isFinite(n) && n > 0 ? n : null
 }

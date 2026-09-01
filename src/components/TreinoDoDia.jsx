@@ -4,7 +4,7 @@ import { db } from '../firebase'
 import { imagemExercicio, comKg } from '../lib/util'
 import {
   LETRAS, normalizarPlano, indiceSeguro, duracaoEstimada, totalSeries,
-  agruparBlocos, chaveSerie, resumoExercicio
+  agruparBlocos, chaveSerie, resumoExercicio, cargaNumero
 } from '../lib/treinoModel'
 import { IcCheck, IcFechar, IcTrofeu, IcHalter } from './Icones.jsx'
 
@@ -48,7 +48,11 @@ export default function TreinoDoDia({
     return f
   }, [execucoes])
 
-  /** Última carga registrada, ignorando as séries de hoje. */
+  /*
+    Última carga registrada por SÉRIE, ignorando as de hoje.
+    Por exercício mostrava a série mais pesada da pirâmide como se valesse para
+    todas — 65 kg na linha da primeira série, de 20 repetições.
+  */
   const cargaAnterior = useMemo(() => {
     const mapa = {}
     const hoje = new Date().toDateString()
@@ -56,9 +60,10 @@ export default function TreinoDoDia({
       .sort((a, b) => b.ts - a.ts)
       .forEach(e => {
         if (new Date(e.ts).toDateString() === hoje) return
-        if (mapa[e.exercicio] === undefined && e.peso) mapa[e.exercicio] = Number(e.peso)
+        const chave = e.exercicio + '_' + e.serie
+        if (mapa[chave] === undefined && e.peso) mapa[chave] = Number(e.peso)
       })
-    return n => mapa[n] ?? null
+    return (nome, serie) => mapa[nome + '_' + serie] ?? null
   }, [execucoes])
 
   const plano = useMemo(() => normalizarPlano(treinoBruto), [treinoBruto])
@@ -82,17 +87,20 @@ export default function TreinoDoDia({
 
   async function marcar(ex, serie, linha) {
     if (!podeMarcar || feitas[chaveSerie(ex.nome, serie)]) return
-    const alvo = Number(linha.carga) || 0
+    /*
+      `cargaNumero` e não `Number`: a carga é texto livre e Number("45Kg") é NaN.
+      Carga abaixo do plano é registrada, não recusada — igual à tela do aluno.
+      Recusar só ensinava a mentir no número ou a não marcar a série.
+    */
+    const alvo = cargaNumero(linha.carga) || 0
     const digitado = pesos[ex.nome]
     const peso = digitado !== undefined && digitado !== '' ? Number(digitado) : alvo
+    const abaixo = alvo > 0 && peso > 0 && peso < alvo
 
-    if (alvo > 0 && peso < alvo) {
-      setErro(`A carga não pode ser menor que ${alvo} kg neste exercício.`)
-      return
-    }
     try {
       await push(ref(db, 'execucoes/' + uid), {
-        exercicio: ex.nome, serie, peso: peso || '', ts: Date.now()
+        exercicio: ex.nome, serie, peso: peso || '', ts: Date.now(),
+        ...(abaixo ? { alvo, motivo: 'não informado' } : {})
       })
       setErro('')
       setPesos(p => ({ ...p, [ex.nome]: '' }))
@@ -187,7 +195,6 @@ export default function TreinoDoDia({
                 for (let s = 1; s <= total; s++) if (feitas[chaveSerie(ex.nome, s)]) n++
                 const exOk = total > 0 && n >= total
                 const img = imagemExercicio(ex)
-                const anterior = cargaAnterior(ex.nome)
                 return (
                   <div key={k} className={'tr-ex aberto' + (exOk ? ' feito' : '')}>
                     <div className="tr-ex-cab" style={{ cursor: 'default' }}>
@@ -209,22 +216,19 @@ export default function TreinoDoDia({
                     <div className="tr-ex-corpo">
                       {ex.obs && <p className="tr-ex-obs">{ex.obs}</p>}
 
-                      {podeMarcar && anterior && (
-                        <p className="tr-ex-anterior">
-                          Da última vez você usou <strong>{comKg(anterior)}</strong>
-                        </p>
-                      )}
-
                       <div className="tr-series">
                         {ex.linhas.map((linha, li) => {
                           const s = li + 1
                           const feita = !!feitas[chaveSerie(ex.nome, s)]
+                          // A carga do último treino nesta mesma série, quando existe.
+                          const antes = cargaAnterior(ex.nome, s)
                           const rotulo = (
                             <>
                               <span className="tr-serie-n">{feita ? <IcCheck /> : s + 'ª'}</span>
                               <span className="tr-serie-alvo">
                                 {linha.reps}{linha.carga ? ' · ' + comKg(linha.carga) : ''}
                               </span>
+                              {antes && <span className="tr-serie-antes">antes: {comKg(antes)}</span>}
                             </>
                           )
                           return podeMarcar ? (

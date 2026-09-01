@@ -2359,3 +2359,78 @@ form.card .av-acoes { padding: 0; }
   font-size: var(--t-xs); color: var(--texto-4);
   font-variant-numeric: tabular-nums;
 }
+
+/* --- Tabela de séries na tela de treino (marcável) --- */
+.tr-tabela { width: 100%; border-collapse: collapse; font-size: var(--t-sm); margin: 12px 0 4px; }
+.tr-tabela th {
+  text-align: left; padding: 0 8px 7px 0; border-bottom: 1px solid var(--borda);
+  font-size: var(--t-xs); font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--texto-4); white-space: nowrap;
+}
+.tr-tabela td {
+  padding: 8px 8px 8px 0; border-bottom: 1px solid var(--borda);
+  font-variant-numeric: tabular-nums; vertical-align: middle;
+}
+.tr-tabela tr:last-child td { border-bottom: none; }
+.tr-tabela .ts-n {
+  font-family: 'Archivo'; font-weight: 700; color: var(--texto-3);
+  width: 46px; white-space: nowrap;
+}
+.tr-tabela .ts-n svg { width: 16px; height: 16px; color: var(--sucesso); }
+.ts-alvo { color: var(--texto-4); }
+.ts-desc { color: var(--texto-4); }
+.ts-acao { text-align: right; width: 1%; white-space: nowrap; }
+.ts-ok { font-size: var(--t-xs); font-weight: 600; color: var(--sucesso); }
+.ts-pular {
+  border: none; background: none; padding: 4px 6px; font-family: inherit;
+  font-size: var(--t-xs); color: var(--texto-4); cursor: pointer;
+  border-radius: var(--raio-sm); text-decoration: underline;
+}
+.ts-pular:hover { color: var(--primaria); background: var(--primaria-suave); }
+
+/* A série da vez: destaque suave, campo de carga pronto para digitar. */
+.tr-tabela tr.da-vez { background: var(--primaria-suave); }
+.tr-tabela tr.da-vez .ts-n { color: var(--primaria); }
+.ts-input {
+  width: 74px; margin: 0; padding: 6px 9px; font-size: var(--t-sm);
+  border-radius: var(--raio-sm);
+}
+.tr-tabela tr.feita .ts-carga strong { color: var(--sucesso); font-weight: 700; }
+.tr-tabela tr.feita td { color: var(--texto-4); }
+
+/* --- Pergunta do motivo ao reduzir a carga --- */
+.tr-reducao {
+  background: var(--aviso-bg); border: 1px solid var(--aviso-borda);
+  border-radius: var(--raio); padding: 13px 14px; margin-top: 10px;
+  animation: slideDown var(--t);
+}
+.tr-red-tit { font-size: var(--t-sm); color: var(--texto-2); margin: 0 0 10px; line-height: 1.5; }
+.tr-red-tit strong { color: var(--texto); font-weight: 700; }
+.tr-red-acoes { display: flex; gap: 6px; margin-top: 10px; }
+
+.ts-desfazer {
+  border: none; background: none; padding: 4px 6px; font-family: inherit;
+  font-size: var(--t-xs); color: var(--texto-4); cursor: pointer;
+  border-radius: var(--raio-sm); text-decoration: underline;
+}
+.ts-desfazer:hover { color: var(--erro); background: var(--erro-bg); }
+
+/* --- Atalho de carga constante --- */
+.tr-repetir {
+  display: block; width: 100%; margin-top: 8px; padding: 9px;
+  border: 1px dashed var(--borda-forte); border-radius: var(--raio-sm);
+  background: transparent; font-family: inherit; font-size: var(--t-sm);
+  color: var(--texto-3); cursor: pointer; transition: all var(--t);
+}
+.tr-repetir:hover {
+  border-color: var(--primaria); border-style: solid;
+  color: var(--primaria); background: var(--primaria-suave);
+}
+/* Carga herdada de uma série anterior, ainda não confirmada. */
+.ts-copiada { color: var(--primaria); font-weight: 600; }
+
+/* Carga do treino anterior, por série: referência, não destaque. */
+.ts-antes { color: var(--texto-4); font-size: var(--t-xs); white-space: nowrap; }
+
+/* Carga do último treino, dentro do chip de série. */
+.tr-serie-antes { font-size: var(--t-xs); color: var(--texto-4); white-space: nowrap; }

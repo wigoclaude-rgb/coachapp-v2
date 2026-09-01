@@ -67,6 +67,9 @@ export default function AlunoDetalhe({ user }) {
   if (!aluno) return <div className="loading">Carregando...</div>
 
   const listaExec = Object.values(execucoes).sort((a, b) => b.ts - a.ts)
+
+  /* Séries feitas com menos carga que a do plano. `alvo` só existe nesses casos. */
+  const reducoes = listaExec.filter(e => e.alvo).slice(0, 15)
   const listaAval = Object.entries(avaliacoes).map(([id, a]) => ({ id, ...a })).sort((a, b) => a.ts - b.ts)
   const { doAluno: anexosDoAluno, porAvaliacao: anexosPorAval } = organizar(anexos)
   const listaFotos = Object.entries(fotos).map(([id, f]) => ({ id, ...f })).sort((a, b) => b.ts - a.ts)
@@ -404,6 +407,32 @@ export default function AlunoDetalhe({ user }) {
 
       {aba === 'suplementos' && (
         <Suplementacao alunoId={alunoId} quemSou="personal" nomeAluno={aluno.nome} />
+      )}
+
+      {aba === 'feedback' && reducoes.length > 0 && (
+        <div className="card">
+          <div className="card-titulo">
+            <div style={{ minWidth: 0 }}>
+              <h2>Carga abaixo do plano</h2>
+              <p className="mini">
+                O app não bloqueia mais — registra o motivo. Se repetir no mesmo
+                exercício, o alvo provavelmente está alto.
+              </p>
+            </div>
+          </div>
+          {reducoes.map((r, i) => (
+            <div key={i} className="fb-item atencao">
+              <div className="fb-topo">
+                <strong>{r.exercicio}</strong>
+                <span className="mini">{r.serie}ª série · {fmtData(r.ts)}</span>
+              </div>
+              <div className="fb-respostas">
+                <span className="fb-tag ruim">{r.peso} kg (plano: {r.alvo} kg)</span>
+                <span className="fb-tag">{r.motivo}</span>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {aba === 'feedback' && (
