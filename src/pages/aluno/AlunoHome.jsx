@@ -130,6 +130,12 @@ export default function AlunoHome({ user, perfil, onSair }) {
     viraria a nova ordem sem ninguém ter decidido isso.
   */
   const [escolhaHoje, setEscolhaHoje] = useState(null)
+  /*
+    Resumo do treino encerrado sem completar. Vive só na tela: o ciclo já avançou
+    no banco, e isto existe para a pessoa não ver o treino seguinte aparecer do
+    nada logo depois de dizer que parou.
+  */
+  const [encerrado, setEncerrado] = useState(null)
 
   /* Ausente no banco = ligado; o aluno desliga em Configurações. */
   const descansoLigado = perfil.timerDescanso !== false
@@ -423,6 +429,42 @@ export default function AlunoHome({ user, perfil, onSair }) {
       })
     } catch (err) {
       console.warn('Falha ao marcar suplemento:', err)
+    }
+  }
+
+  /**
+   * Encerra o dia sem ter completado o treino e libera o próximo do ciclo.
+   *
+   * Sem isto o ciclo travava: o avanço só acontecia com todas as séries marcadas,
+   * então quem não terminava ficava preso no mesmo treino indefinidamente.
+   *
+   * O registro vai para `feedbacks` de propósito — é o aluno contando algo ao
+   * personal sobre o treino, chega na aba onde ele já olha, e não precisa de
+   * regra nova no banco. Treino encurtado toda semana é sinal de plano longo
+   * demais para a rotina da pessoa, e hoje esse dado se perdia.
+   */
+  async function encerrarPorHoje() {
+    const proximo = ciclico ? plano.lista[(idxAtual + 1) % totalDias]?.nome : null
+    const texto = proximo
+      ? `Encerrar o treino com ${seriesFeitasHoje} de ${seriesDoDia} séries? O próximo será o ${proximo}.`
+      : `Encerrar o treino com ${seriesFeitasHoje} de ${seriesDoDia} séries?`
+    if (!confirm(texto)) return
+
+    try {
+      await push(ref(db, 'feedbacks/' + user.uid), {
+        tipo: 'sessao',
+        treino: nomeTreinoHoje,
+        feitas: seriesFeitasHoje,
+        total: seriesDoDia,
+        ts: Date.now()
+      })
+      if (ciclico) {
+        await update(ref(db, 'treinos/' + user.uid), { indiceAtual: (idxAtual + 1) % totalDias })
+      }
+      setEncerrado({ treino: nomeTreinoHoje, feitas: seriesFeitasHoje, total: seriesDoDia, proximo })
+      setEscolhaHoje(null)
+    } catch (err) {
+      console.warn('Falha ao encerrar o treino:', err)
     }
   }
 
@@ -749,16 +791,41 @@ export default function AlunoHome({ user, perfil, onSair }) {
                           <IcCheck /> {ciclico ? 'Finalizar e liberar o próximo' : 'Finalizar treino'}
                         </button>
                       </>
-                    ) : exRetomada && (
-                      <div className="tr-retomada">
-                        <span className="tr-retomada-rot">
-                          {seriesFeitasHoje > 0 ? 'Você parou em' : 'Começa com'}
-                        </span>
-                        <span className="tr-retomada-nome">{exRetomada.nome}</span>
-                        <span className="tr-retomada-meta">
-                          {resumoExercicio(exRetomada)}{proximoBloco?.combinado ? ' · bi-set' : ''}
-                        </span>
+                    ) : encerrado ? (
+                      <div className="tr-encerrado">
+                        <span className="tr-enc-icone"><IcCheck /></span>
+                        <div>
+                          <strong>{encerrado.treino} encerrado</strong>
+                          <span>
+                            {encerrado.feitas} de {encerrado.total} séries registradas.
+                            {encerrado.proximo ? ` No próximo treino: ${encerrado.proximo}.` : ''}
+                          </span>
+                        </div>
                       </div>
+                    ) : (
+                      <>
+                        {exRetomada && (
+                          <div className="tr-retomada">
+                            <span className="tr-retomada-rot">
+                              {seriesFeitasHoje > 0 ? 'Você parou em' : 'Começa com'}
+                            </span>
+                            <span className="tr-retomada-nome">{exRetomada.nome}</span>
+                            <span className="tr-retomada-meta">
+                              {resumoExercicio(exRetomada)}{proximoBloco?.combinado ? ' · bi-set' : ''}
+                            </span>
+                          </div>
+                        )}
+
+                        {/*
+                          Só aparece depois da primeira série: sem nada marcado não há
+                          o que encerrar, e o botão só atrapalharia quem vai começar.
+                        */}
+                        {seriesFeitasHoje > 0 && (
+                          <button className="btn btn-sec tr-acao" onClick={encerrarPorHoje}>
+                            Terminei por hoje
+                          </button>
+                        )}
+                      </>
                     )}
                   </section>
 
@@ -864,7 +931,7 @@ export default function AlunoHome({ user, perfil, onSair }) {
                                         const chave = ex.nome + '_' + s
                                         return (
                                           <tr key={s} className={(feita ? 'feita' : '') + (daVez ? ' da-vez' : '')}>
-                                            <td className="ts-n">{feita ? <IcCheck /> : s + 'ª'}</td>
+                                            <td className="ts-n">{s}ª</td>
                                             <td>{linha.reps || '—'}</td>
                                             {temAnterior && (
                                               <td className="ts-antes">
@@ -900,21 +967,17 @@ export default function AlunoHome({ user, perfil, onSair }) {
                                               </td>
                                             )}
                                             <td className="ts-acao">
-                                              {feita
-                                                ? <button
-                                                    type="button" className="ts-desfazer"
-                                                    onClick={() => desmarcarSerie(ex, s)}
-                                                    title={`Desfazer a ${s}ª série`}
-                                                  >
-                                                    desfazer
-                                                  </button>
-                                                : daVez
-                                                  ? <button type="button" className="btn btn-sm" onClick={() => marcarInline(ex, s, linha)}>
-                                                      Marcar
-                                                    </button>
-                                                  : <button type="button" className="ts-pular" onClick={() => marcarInline(ex, s, linha)}>
-                                                      marcar
-                                                    </button>}
+                                              {/* Mesma bolinha marca e desmarca — tocar de novo desfaz. */}
+                                              <button
+                                                type="button"
+                                                className={'ts-bolinha' + (feita ? ' feita' : '') + (daVez ? ' da-vez' : '')}
+                                                onClick={() => (feita ? desmarcarSerie(ex, s) : marcarInline(ex, s, linha))}
+                                                aria-pressed={feita}
+                                                aria-label={feita ? `Desfazer a ${s}ª série` : `Marcar a ${s}ª série`}
+                                                title={feita ? 'Toque para desfazer' : 'Toque para marcar'}
+                                              >
+                                                {feita && <IcCheck />}
+                                              </button>
                                             </td>
                                           </tr>
                                         )

@@ -43,7 +43,7 @@ export const TOUR_ALUNO_TREINO = [
   {
     alvo: '.tr-ex.aberto .tr-tabela',
     titulo: 'Marque cada série',
-    texto: 'Cada linha é uma série, com as repetições e a carga que o personal montou. Toque em Marcar quando terminar. Se errar, o "desfazer" da linha volta atrás.'
+    texto: 'Cada linha é uma série, com as repetições e a carga que o personal montou. Toque na bolinha ao terminar cada uma. Tocou sem querer? Toque de novo que ela volta.'
   },
   {
     alvo: '.tr-ex.aberto .ts-input',

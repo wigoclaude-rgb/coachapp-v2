@@ -449,6 +449,24 @@ export default function AlunoDetalhe({ user }) {
           )}
 
           {listaFeedback.map(f => {
+            /* Treino encerrado sem completar — não tem perguntas, tem uma proporção. */
+            if (f.tipo === 'sessao') {
+              const pct = f.total ? Math.round((f.feitas / f.total) * 100) : 0
+              return (
+                <div key={f.id} className="fb-item sessao">
+                  <div className="fb-topo">
+                    <strong>{f.treino || 'Treino'}</strong>
+                    <span className="mini">{fmtData(f.ts)}</span>
+                  </div>
+                  <div className="fb-respostas">
+                    <span className={'fb-tag' + (pct < 60 ? ' ruim' : '')}>
+                      encerrou com {f.feitas} de {f.total} séries
+                    </span>
+                  </div>
+                </div>
+              )
+            }
+
             const alertas = PERGUNTAS_FB.filter(p => f.respostas?.[p.id] === p.alerta)
             return (
               <div key={f.id} className={'fb-item' + (alertas.length ? ' atencao' : '')}>

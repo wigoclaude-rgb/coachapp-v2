@@ -2381,12 +2381,6 @@ form.card .av-acoes { padding: 0; }
 .ts-desc { color: var(--texto-4); }
 .ts-acao { text-align: right; width: 1%; white-space: nowrap; }
 .ts-ok { font-size: var(--t-xs); font-weight: 600; color: var(--sucesso); }
-.ts-pular {
-  border: none; background: none; padding: 4px 6px; font-family: inherit;
-  font-size: var(--t-xs); color: var(--texto-4); cursor: pointer;
-  border-radius: var(--raio-sm); text-decoration: underline;
-}
-.ts-pular:hover { color: var(--primaria); background: var(--primaria-suave); }
 
 /* A série da vez: destaque suave, campo de carga pronto para digitar. */
 .tr-tabela tr.da-vez { background: var(--primaria-suave); }
@@ -2408,12 +2402,6 @@ form.card .av-acoes { padding: 0; }
 .tr-red-tit strong { color: var(--texto); font-weight: 700; }
 .tr-red-acoes { display: flex; gap: 6px; margin-top: 10px; }
 
-.ts-desfazer {
-  border: none; background: none; padding: 4px 6px; font-family: inherit;
-  font-size: var(--t-xs); color: var(--texto-4); cursor: pointer;
-  border-radius: var(--raio-sm); text-decoration: underline;
-}
-.ts-desfazer:hover { color: var(--erro); background: var(--erro-bg); }
 
 /* --- Atalho de carga constante --- */
 .tr-repetir {
@@ -2434,3 +2422,40 @@ form.card .av-acoes { padding: 0; }
 
 /* Carga do último treino, dentro do chip de série. */
 .tr-serie-antes { font-size: var(--t-xs); color: var(--texto-4); white-space: nowrap; }
+
+/* --- Bolinha de marcar a série (marca e desfaz) --- */
+.ts-bolinha {
+  width: 30px; height: 30px; border-radius: 50%; padding: 0;
+  display: grid; place-items: center; cursor: pointer;
+  border: 2px solid var(--borda-forte); background: var(--superficie);
+  color: transparent; transition: all var(--t);
+}
+.ts-bolinha:hover { border-color: var(--primaria); background: var(--primaria-suave); }
+.ts-bolinha svg { width: 16px; height: 16px; }
+
+/* A da vez chama o toque; as outras ficam disponíveis, sem puxar o olho. */
+.ts-bolinha.da-vez { border-color: var(--primaria); box-shadow: 0 0 0 3px var(--primaria-suave); }
+.ts-bolinha:not(.da-vez):not(.feita) { border-color: var(--borda); }
+
+.ts-bolinha.feita {
+  background: var(--sucesso); border-color: var(--sucesso); color: #fff;
+  animation: pop var(--t);
+}
+.ts-bolinha.feita:hover { background: var(--erro); border-color: var(--erro); }
+
+/* --- Treino encerrado sem completar --- */
+.tr-encerrado {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--superficie-2); border: 1px solid var(--borda);
+  border-radius: var(--raio); padding: 14px; margin-bottom: 4px;
+}
+.tr-enc-icone {
+  display: grid; place-items: center; width: 38px; height: 38px; flex-shrink: 0;
+  border-radius: 50%; background: var(--texto-4); color: #fff;
+}
+.tr-enc-icone svg { width: 19px; height: 19px; }
+.tr-encerrado strong { display: block; font-size: var(--t-lg); }
+.tr-encerrado span { font-size: var(--t-sm); color: var(--texto-3); }
+
+/* Sessão parcial na lista do personal: informa, não alarma como o feedback ruim. */
+.fb-item.sessao { border-left-color: var(--texto-4); }
