@@ -2,13 +2,23 @@ import { useEffect, useMemo, useState } from 'react'
 import { ref, onValue, push, update, remove } from 'firebase/database'
 import { db } from '../firebase'
 import {
-  DIAS_SEMANA, QUEM_INDICOU, diaISO, suplementoVazio, normalizarSuplemento,
-  tocaHoje, vezesNoDia, sequencia, aderencia, resumoSuplemento
+  diaISO, suplementoVazio, normalizarSuplemento, estaPausado,
+  rotinaDeHoje, sequencia, melhorSequencia, vezesNoDia
 } from '../lib/suplementos'
-import { IcMais, IcCheck, IcLixeira, IcEditar, IcFogo, IcAlerta } from './Icones.jsx'
+import { agruparBlocos, normalizarPlano, indiceSeguro } from '../lib/treinoModel'
+import RotinaHoje from './suplementacao/RotinaHoje.jsx'
+import Consistencia from './suplementacao/Consistencia.jsx'
+import CardSuplemento from './suplementacao/CardSuplemento.jsx'
+import FormSuplemento from './suplementacao/FormSuplemento.jsx'
+import { IcMais, IcSuplemento } from './Icones.jsx'
 
 /*
-  Tela de suplementação, usada pelos dois lados.
+  Acompanhamento da rotina de suplementação.
+
+  A ordem da tela é ação → contexto → progresso → gerenciamento: primeiro o que
+  tomar agora, depois o dia inteiro, a constância, e só então a lista e o
+  cadastro. A versão anterior abria pelo cadastro, o que colocava um formulário
+  entre a pessoa e a dose das 5h.
 
   `podeMarcar` só é verdadeiro para o aluno: quem toma é ele. O personal cadastra
   e acompanha, mas não confirma dose — senão a aderência deixa de significar algo.
@@ -16,16 +26,34 @@ import { IcMais, IcCheck, IcLixeira, IcEditar, IcFogo, IcAlerta } from './Icones
 export default function Suplementacao({ alunoId, podeMarcar = false, quemSou = 'proprio', nomeAluno }) {
   const [suplementos, setSuplementos] = useState({})
   const [tomados, setTomados] = useState({})
-  const [form, setForm] = useState(null)   // objeto em edição, ou null
+  const [execucoes, setExecucoes] = useState({})
+  const [treinoBruto, setTreinoBruto] = useState(null)
+
+  const [carregando, setCarregando] = useState(true)
+  const [erroCarga, setErroCarga] = useState('')
+  const [erroAcao, setErroAcao] = useState('')
+  const [marcando, setMarcando] = useState('')
+
+  const [form, setForm] = useState(null)
   const [editandoId, setEditandoId] = useState(null)
   const [salvando, setSalvando] = useState(false)
-  const [erro, setErro] = useState('')
+  const [filtroLista, setFiltroLista] = useState('ativos')
 
   useEffect(() => {
     if (!alunoId) return
-    const u1 = onValue(ref(db, 'suplementos/' + alunoId), s => setSuplementos(s.val() || {}))
-    const u2 = onValue(ref(db, 'suplementosTomados/' + alunoId), s => setTomados(s.val() || {}))
-    return () => { u1(); u2() }
+    const falha = e => {
+      setErroCarga('Não foi possível carregar seus suplementos. Verifique a conexão.')
+      console.warn('Falha ao ler suplementação:', e?.code || e)
+      setCarregando(false)
+    }
+    const u1 = onValue(ref(db, 'suplementos/' + alunoId), s => {
+      setSuplementos(s.val() || {}); setCarregando(false)
+    }, falha)
+    const u2 = onValue(ref(db, 'suplementosTomados/' + alunoId), s => setTomados(s.val() || {}), falha)
+    // Para a frequência "apenas dias de treino" e o bloco de pós-treino.
+    const u3 = onValue(ref(db, 'execucoes/' + alunoId), s => setExecucoes(s.val() || {}), () => {})
+    const u4 = onValue(ref(db, 'treinos/' + alunoId), s => setTreinoBruto(s.exists() ? s.val() : null), () => {})
+    return () => { u1(); u2(); u3(); u4() }
   }, [alunoId])
 
   const lista = useMemo(() => (
@@ -34,44 +62,85 @@ export default function Suplementacao({ alunoId, podeMarcar = false, quemSou = '
       .sort((a, b) => (a.nome || '').localeCompare(b.nome || ''))
   ), [suplementos])
 
-  const hoje = diaISO()
-  const doDia = lista.filter(s => tocaHoje(s))
-  const pendentes = doDia.filter(s => vezesNoDia(tomados, s.id, hoje) < s.vezesAoDia)
+  /* O treino de hoje, quando houve — é o que dá contexto ao pós-treino. */
+  const treinoDeHoje = useMemo(() => {
+    const hoje = new Date().toDateString()
+    const doDia = Object.values(execucoes).filter(e => new Date(e.ts).toDateString() === hoje)
+    if (doDia.length === 0) return null
 
-  /* ---------- ações ---------- */
+    const plano = normalizarPlano(treinoBruto)
+    const dia = plano ? plano.lista[indiceSeguro(plano.indiceAtual, plano.lista.length)] : null
+    return {
+      nome: dia?.nome || 'Treino de hoje',
+      exercicios: new Set(doDia.map(e => e.exercicio)).size
+    }
+  }, [execucoes, treinoBruto])
+
+  const rotina = useMemo(
+    () => rotinaDeHoje(lista, tomados, new Date(), !!treinoDeHoje),
+    [lista, tomados, treinoDeHoje]
+  )
+
+  /* Sequência da rotina inteira: o menor entre os suplementos ativos. */
+  const { seqAtual, seqMelhor } = useMemo(() => {
+    const ativos = lista.filter(s => !estaPausado(s))
+    if (ativos.length === 0) return { seqAtual: 0, seqMelhor: 0 }
+    return {
+      seqAtual: Math.min(...ativos.map(s => sequencia(s, s.id, tomados))),
+      seqMelhor: Math.max(...ativos.map(s => melhorSequencia(s, s.id, tomados)))
+    }
+  }, [lista, tomados])
+
+  const visiveis = useMemo(() => {
+    if (filtroLista === 'ativos') return lista.filter(s => !estaPausado(s))
+    if (filtroLista === 'pausados') return lista.filter(s => estaPausado(s))
+    return lista
+  }, [lista, filtroLista])
+
+  /* ---------------- ações ---------------- */
 
   async function marcar(sup) {
-    if (!podeMarcar) return
-    const feitas = vezesNoDia(tomados, sup.id, hoje)
-    if (feitas >= sup.vezesAoDia) return
+    if (!podeMarcar || marcando) return
+    const dia = diaISO()
+    const feitas = vezesNoDia(tomados, sup.id, dia)
+    if (feitas >= sup.vezesAoDia) return      // já completo: evita registro duplicado
+
+    setMarcando(sup.id); setErroAcao('')
     try {
-      await update(ref(db, `suplementosTomados/${alunoId}/${hoje}/${sup.id}`), {
-        vezes: feitas + 1,
-        ts: Date.now()
+      await update(ref(db, `suplementosTomados/${alunoId}/${dia}/${sup.id}`), {
+        vezes: feitas + 1, ts: Date.now()
       })
-      setErro('')
     } catch (err) {
-      setErro('Não foi possível registrar a dose. Tente de novo.')
-      console.warn('Falha ao marcar suplemento:', err)
+      setErroAcao('Não foi possível registrar a dose. Tente de novo.')
+      console.warn('Falha ao marcar dose:', err)
     }
+    setMarcando('')
   }
 
   async function desmarcar(sup) {
-    if (!podeMarcar) return
-    const feitas = vezesNoDia(tomados, sup.id, hoje)
+    if (!podeMarcar || marcando) return
+    const dia = diaISO()
+    const feitas = vezesNoDia(tomados, sup.id, dia)
     if (feitas <= 0) return
-    if (feitas === 1) {
-      await remove(ref(db, `suplementosTomados/${alunoId}/${hoje}/${sup.id}`))
-    } else {
-      await update(ref(db, `suplementosTomados/${alunoId}/${hoje}/${sup.id}`), { vezes: feitas - 1 })
+
+    setMarcando(sup.id); setErroAcao('')
+    try {
+      if (feitas === 1) await remove(ref(db, `suplementosTomados/${alunoId}/${dia}/${sup.id}`))
+      else await update(ref(db, `suplementosTomados/${alunoId}/${dia}/${sup.id}`), { vezes: feitas - 1 })
+    } catch (err) {
+      setErroAcao('Não foi possível desfazer. Tente de novo.')
     }
+    setMarcando('')
+  }
+
+  async function marcarTodas() {
+    for (const s of rotina.pendentes) await marcar(s)
   }
 
   async function salvar(e) {
     e.preventDefault()
     if (!form.nome.trim() || salvando) return
-    setSalvando(true)
-    setErro('')
+    setSalvando(true); setErroAcao('')
 
     const dados = {
       ...form,
@@ -79,23 +148,19 @@ export default function Suplementacao({ alunoId, podeMarcar = false, quemSou = '
       marca: form.marca.trim(),
       dose: form.dose.trim(),
       observacao: form.observacao.trim(),
-      vezesAoDia: Math.max(1, Number(form.vezesAoDia) || 1)
+      vezesAoDia: Math.max(1, Number(form.vezesAoDia) || 1),
+      // Pós-treino não tem hora do relógio; o momento é que manda.
+      horario: form.frequencia === 'treino' ? '' : form.horario
     }
 
     try {
-      if (editandoId) {
-        await update(ref(db, `suplementos/${alunoId}/${editandoId}`), dados)
-      } else {
-        await push(ref(db, 'suplementos/' + alunoId), {
-          ...dados, inicio: Date.now(), criadoPor: quemSou
-        })
-      }
+      if (editandoId) await update(ref(db, `suplementos/${alunoId}/${editandoId}`), dados)
+      else await push(ref(db, 'suplementos/' + alunoId), { ...dados, inicio: Date.now(), criadoPor: quemSou })
       setForm(null); setEditandoId(null)
     } catch (err) {
-      // Sem isto o botão ficava preso em "Salvando..." e ninguém descobria por quê.
-      setErro(
+      setErroAcao(
         String(err?.message || '').toLowerCase().includes('permission')
-          ? 'O banco recusou a gravação. As regras de "suplementos" precisam ser publicadas no Firebase.'
+          ? 'O banco recusou a gravação. As regras de "suplementos" precisam estar publicadas no Firebase.'
           : 'Não foi possível salvar. Confira sua conexão e tente de novo.'
       )
       console.warn('Falha ao salvar suplemento:', err)
@@ -103,8 +168,11 @@ export default function Suplementacao({ alunoId, podeMarcar = false, quemSou = '
     setSalvando(false)
   }
 
-  async function apagar(sup) {
-    if (!confirm(`Remover ${sup.nome} da lista?`)) return
+  const pausar = (sup, ate) => update(ref(db, `suplementos/${alunoId}/${sup.id}`), { pausadoAte: ate, ativo: true })
+  const retomar = sup => update(ref(db, `suplementos/${alunoId}/${sup.id}`), { pausadoAte: null, ativo: true })
+
+  async function excluir(sup) {
+    if (!confirm(`Remover ${sup.nome} da sua rotina?\n\nO histórico de doses já registradas é mantido.`)) return
     await remove(ref(db, `suplementos/${alunoId}/${sup.id}`))
   }
 
@@ -115,254 +183,131 @@ export default function Suplementacao({ alunoId, podeMarcar = false, quemSou = '
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const mudar = (campo, valor) => setForm(f => ({ ...f, [campo]: valor }))
+  /* ---------------- tela ---------------- */
 
-  function alternarDia(d) {
-    setForm(f => ({
-      ...f,
-      dias: f.dias.includes(d) ? f.dias.filter(x => x !== d) : [...f.dias, d]
-    }))
+  if (carregando) return <p className="muted">Carregando sua rotina...</p>
+
+  if (erroCarga) {
+    return (
+      <div className="card">
+        <div className="vazio-estado">
+          <h2>Não deu para carregar</h2>
+          <p className="muted">{erroCarga}</p>
+          <button className="btn btn-sm btn-auto" onClick={() => window.location.reload()}>Tentar de novo</button>
+        </div>
+      </div>
+    )
   }
 
-  /* ---------- tela ---------- */
+  if (lista.length === 0 && !form) {
+    return (
+      <div className="card">
+        <div className="vazio-estado">
+          <div className="ve-icone"><IcSuplemento /></div>
+          <h2>Sua rotina começa aqui</h2>
+          <p className="muted">
+            {podeMarcar
+              ? 'Cadastre o que você toma para acompanhar a constância dia a dia.'
+              : `Cadastre o que ${(nomeAluno || 'o aluno').split(' ')[0]} deve tomar.`}
+          </p>
+          <button className="btn btn-sm btn-auto" style={{ marginTop: 14 }} onClick={() => setForm(suplementoVazio())}>
+            <IcMais /> Adicionar suplemento
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <>
-      {/* --- o que falta hoje --- */}
-      {doDia.length > 0 && (
+      {erroAcao && <div className="erro">{erroAcao}</div>}
+
+      <RotinaHoje
+        rotina={rotina}
+        podeMarcar={podeMarcar}
+        nomeAluno={nomeAluno}
+        treinoDeHoje={treinoDeHoje}
+        onMarcar={marcar}
+        onDesmarcar={desmarcar}
+        marcando={marcando}
+      />
+
+      {podeMarcar && rotina.pendentes.length > 1 && (
+        <button className="btn btn-sec sp-todas" onClick={marcarTodas} disabled={!!marcando}>
+          Marcar as {rotina.pendentes.length} restantes
+        </button>
+      )}
+
+      {rotina.itens.length === 0 && lista.length > 0 && (
         <div className="card">
-          <div className="card-titulo">
-            <div style={{ minWidth: 0 }}>
-              <h2>Hoje</h2>
-              <p className="mini">
-                {pendentes.length === 0
-                  ? 'Tudo tomado. '
-                  : `${pendentes.length} de ${doDia.length} ainda ${pendentes.length === 1 ? 'falta' : 'faltam'}. `}
-                {podeMarcar ? 'Toque para marcar.' : `Quem marca é ${(nomeAluno || 'o aluno').split(' ')[0]}.`}
-              </p>
-            </div>
-          </div>
-
-          {erro && !form && <div className="erro">{erro}</div>}
-
-          <div className="sup-hoje">
-            {doDia.map(sup => {
-              const feitas = vezesNoDia(tomados, sup.id, hoje)
-              const ok = feitas >= sup.vezesAoDia
-              return (
-                <div key={sup.id} className={'sup-dose' + (ok ? ' ok' : '')}>
-                  <div className="sup-dose-txt">
-                    <span className="sup-dose-nome">{sup.nome}</span>
-                    <span className="sup-dose-meta">
-                      {sup.dose}{sup.marca ? ' · ' + sup.marca : ''}
-                      {sup.horario ? ' · ' + sup.horario : ''}
-                    </span>
-                  </div>
-
-                  {sup.vezesAoDia > 1 && (
-                    <span className="sup-contagem">{feitas}/{sup.vezesAoDia}</span>
-                  )}
-
-                  {podeMarcar ? (
-                    ok ? (
-                      <button className="sup-btn feito" onClick={() => desmarcar(sup)} title="Desfazer">
-                        <IcCheck /> Tomei
-                      </button>
-                    ) : (
-                      <button className="sup-btn" onClick={() => marcar(sup)}>
-                        Marcar
-                      </button>
-                    )
-                  ) : (
-                    <span className={'sup-selo' + (ok ? ' ok' : '')}>
-                      {ok ? 'tomou' : 'pendente'}
-                    </span>
-                  )}
-                </div>
-              )
-            })}
-          </div>
+          <p className="muted" style={{ margin: 0 }}>
+            Nada previsto para hoje. Seus suplementos estão pausados ou marcados
+            para outros dias.
+          </p>
         </div>
       )}
 
-      {/* --- formulário --- */}
+      <Consistencia
+        lista={lista}
+        tomados={tomados}
+        sequenciaAtual={seqAtual}
+        melhor={seqMelhor}
+      />
+
       <div className="barra-filtros">
-        <span className="section-title" style={{ margin: 0 }}>
-          {lista.length} suplemento{lista.length === 1 ? '' : 's'}
-        </span>
+        <div className="sp-filtros" style={{ margin: 0 }}>
+          {[
+            { id: 'ativos', rotulo: 'Ativos' },
+            { id: 'pausados', rotulo: 'Pausados' },
+            { id: 'todos', rotulo: 'Todos' }
+          ].map(f => (
+            <button
+              key={f.id} type="button"
+              className={'sp-filtro' + (filtroLista === f.id ? ' ativo' : '')}
+              onClick={() => setFiltroLista(f.id)}
+              aria-pressed={filtroLista === f.id}
+            >
+              {f.rotulo}
+            </button>
+          ))}
+        </div>
         <button
           className="btn btn-sm"
-          onClick={() => {
-            if (form) { setForm(null); setEditandoId(null) }
-            else setForm(suplementoVazio())
-          }}
+          onClick={() => (form ? (setForm(null), setEditandoId(null)) : setForm(suplementoVazio()))}
         >
           {form ? 'Fechar' : <><IcMais /> Adicionar</>}
         </button>
       </div>
 
       {form && (
-        <div className="card">
-          <div className="card-titulo">
-            <h2>{editandoId ? 'Editar suplemento' : 'Novo suplemento'}</h2>
-          </div>
-          <form onSubmit={salvar}>
-            <div className="linha-2">
-              <div>
-                <label>Suplemento</label>
-                <input value={form.nome} onChange={e => mudar('nome', e.target.value)} placeholder="Ex: Creatina" required />
-              </div>
-              <div>
-                <label>Marca (opcional)</label>
-                <input value={form.marca} onChange={e => mudar('marca', e.target.value)} placeholder="Ex: Growth" />
-              </div>
-            </div>
-
-            <div className="linha-2">
-              <div>
-                <label>Dose</label>
-                <input value={form.dose} onChange={e => mudar('dose', e.target.value)} placeholder="Ex: 2 scoops (3g)" />
-              </div>
-              <div>
-                <label>Vezes ao dia</label>
-                <input
-                  type="number" min="1" max="8"
-                  value={form.vezesAoDia}
-                  onChange={e => mudar('vezesAoDia', e.target.value)}
-                />
-              </div>
-            </div>
-
-            <label>Quando tomar</label>
-            <div className="opcoes-chips">
-              <button
-                type="button"
-                className={'chip-opcao ' + (form.frequencia === 'diario' ? 'ativo' : '')}
-                onClick={() => mudar('frequencia', 'diario')}
-              >
-                Todo dia
-              </button>
-              <button
-                type="button"
-                className={'chip-opcao ' + (form.frequencia === 'dias' ? 'ativo' : '')}
-                onClick={() => mudar('frequencia', 'dias')}
-              >
-                Dias específicos
-              </button>
-            </div>
-
-            {form.frequencia === 'dias' && (
-              <div className="opcoes-chips" style={{ marginTop: 8 }}>
-                {DIAS_SEMANA.map((d, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    className={'chip-opcao ' + (form.dias.includes(i) ? 'ativo' : '')}
-                    onClick={() => alternarDia(i)}
-                  >
-                    {d}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            <div className="linha-2" style={{ marginTop: 14 }}>
-              <div>
-                <label>Horário (opcional)</label>
-                <input type="time" value={form.horario} onChange={e => mudar('horario', e.target.value)} />
-              </div>
-              <div>
-                <label>Indicado por</label>
-                <select value={form.indicadoPor} onChange={e => mudar('indicadoPor', e.target.value)}>
-                  {QUEM_INDICOU.map(q => <option key={q.id} value={q.id}>{q.rotulo}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <label>Observação (opcional)</label>
-            <textarea
-              rows={2}
-              value={form.observacao}
-              onChange={e => mudar('observacao', e.target.value)}
-              placeholder="Ex: tomar junto com o pós-treino"
-            />
-
-            {erro && <div className="erro">{erro}</div>}
-
-            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-              <button className="btn" disabled={salvando}>
-                {salvando ? 'Salvando...' : editandoId ? 'Salvar' : 'Adicionar'}
-              </button>
-              <button
-                type="button" className="btn btn-sec btn-auto"
-                onClick={() => { setForm(null); setEditandoId(null) }}
-              >
-                Cancelar
-              </button>
-            </div>
-          </form>
-        </div>
+        <FormSuplemento
+          form={form}
+          onMudar={setForm}
+          onSalvar={salvar}
+          onCancelar={() => { setForm(null); setEditandoId(null) }}
+          salvando={salvando}
+          editando={!!editandoId}
+          erro={erroAcao}
+        />
       )}
 
-      {/* --- lista --- */}
-      {lista.length === 0 && !form && (
-        <div className="card">
-          <div className="vazio-estado">
-            <div className="ve-icone"><IcAlerta /></div>
-            <h2>Nenhum suplemento cadastrado</h2>
-            <p className="muted">
-              Cadastre o que {podeMarcar ? 'você toma' : 'o aluno toma'} para acompanhar a constância.
-            </p>
-          </div>
-        </div>
+      {visiveis.length === 0 && !form && (
+        <p className="muted">
+          {filtroLista === 'pausados' ? 'Nenhum suplemento pausado.' : 'Nenhum suplemento ativo.'}
+        </p>
       )}
 
-      {lista.map(sup => {
-        const seq = sequencia(sup, sup.id, tomados)
-        const ad = aderencia(sup, sup.id, tomados, 30)
-        const indicou = QUEM_INDICOU.find(q => q.id === sup.indicadoPor)
-        return (
-          <div key={sup.id} className={'sup-card' + (sup.ativo ? '' : ' pausado')}>
-            <div className="sup-card-topo">
-              <div style={{ minWidth: 0 }}>
-                <div className="sup-nome">
-                  {sup.nome}
-                  {sup.marca && <span className="sup-marca">{sup.marca}</span>}
-                </div>
-                <div className="sup-resumo">{resumoSuplemento(sup)}</div>
-              </div>
-              <div className="sup-acoes">
-                <button className="btn btn-ghost btn-sm" onClick={() => editar(sup)} title="Editar"><IcEditar /></button>
-                <button className="btn btn-perigo-sutil btn-sm" onClick={() => apagar(sup)} title="Remover"><IcLixeira /></button>
-              </div>
-            </div>
-
-            <div className="sup-numeros">
-              <div className="sup-num">
-                <IcFogo />
-                <span><strong>{seq}</strong> dia{seq === 1 ? '' : 's'} seguido{seq === 1 ? '' : 's'}</span>
-              </div>
-              <div className="sup-num">
-                <span className="sup-ad">
-                  {ad === null ? '—' : ad + '%'}
-                </span>
-                <span>nos últimos 30 dias</span>
-              </div>
-              {indicou && <span className="sup-tag">{indicou.rotulo}</span>}
-              {!sup.ativo && <span className="sup-tag pausado">Pausado</span>}
-            </div>
-
-            {sup.observacao && <p className="sup-obs">{sup.observacao}</p>}
-
-            <button
-              className="btn btn-ghost btn-sm btn-auto"
-              onClick={() => update(ref(db, `suplementos/${alunoId}/${sup.id}`), { ativo: !sup.ativo })}
-            >
-              {sup.ativo ? 'Pausar' : 'Retomar'}
-            </button>
-          </div>
-        )
-      })}
+      {visiveis.map(sup => (
+        <CardSuplemento
+          key={sup.id}
+          sup={sup}
+          tomados={tomados}
+          onEditar={editar}
+          onPausar={pausar}
+          onRetomar={retomar}
+          onExcluir={excluir}
+        />
+      ))}
     </>
   )
 }

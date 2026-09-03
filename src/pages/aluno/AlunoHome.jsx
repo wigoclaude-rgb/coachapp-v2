@@ -10,12 +10,11 @@ import {
 import Chat from '../../components/Chat.jsx'
 import Diario from './Diario.jsx'
 import Config from '../Config.jsx'
-import Heatmap from '../../components/Heatmap.jsx'
 import Layout from '../../components/Layout.jsx'
 import Tour from '../../components/Tour.jsx'
 import Suplementacao from '../../components/Suplementacao.jsx'
 import AvaliacaoDetalhe from '../../components/AvaliacaoDetalhe.jsx'
-import EvolucaoCorporal from '../../components/EvolucaoCorporal.jsx'
+import Evolucao from '../../components/Evolucao.jsx'
 import { normalizarAvaliacao } from '../../lib/avaliacao'
 import Anexos from '../../components/Anexos.jsx'
 import { organizar } from '../../lib/anexos'
@@ -500,8 +499,9 @@ export default function AlunoHome({ user, perfil, onSair }) {
   const supPendentes = useMemo(() => (
     Object.entries(suplementos)
       .map(([id, s]) => ({ id, ...normalizarSuplemento(s) }))
-      .filter(s => faltaHoje(s, s.id, supTomados))
-  ), [suplementos, supTomados])
+      // `treinouHoje` é o que faz o suplemento de pós-treino entrar na conta.
+      .filter(s => faltaHoje(s, s.id, supTomados, new Date(), seriesFeitasHoje > 0))
+  ), [suplementos, supTomados, seriesFeitasHoje])
 
   const itens = [
     { id: 'treino', label: 'Meu Treino', icone: <IcTreino /> },
@@ -1151,43 +1151,11 @@ export default function AlunoHome({ user, perfil, onSair }) {
       {/* ===== EVOLUÇÃO ===== */}
       {aba === 'evolucao' && (
         <>
-          <div className="metricas-aluno">
-            <div className="metrica">
-              <span className="m-icone"><IcFogo /></span>
-              <div>
-                <div className="m-valor">{sequencia}</div>
-                <div className="m-label">dias seguidos</div>
-              </div>
-            </div>
-            <div className="metrica">
-              <span className="m-icone"><IcCalendario /></span>
-              <div>
-                <div className="m-valor">{treinosNoMes}</div>
-                <div className="m-label">treinos no mês</div>
-              </div>
-            </div>
-            <div className="metrica">
-              <span className="m-icone"><IcHalter /></span>
-              <div>
-                <div className="m-valor">{diasTreinados.size}</div>
-                <div className="m-label">dias treinados</div>
-              </div>
-            </div>
-            <div className="metrica">
-              <span className="m-icone"><IcTrofeu /></span>
-              <div>
-                <div className="m-valor">{listaExec.length}</div>
-                <div className="m-label">séries no total</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="card-titulo"><h2>Calendário de treinos</h2></div>
-            <Heatmap diasTreinados={diasTreinados} />
-          </div>
-
-          <EvolucaoCorporal avaliacoes={avalVisiveis} />
+          <Evolucao
+            execucoes={execucoes}
+            avaliacoes={avalVisiveis}
+            diasSemana={treinoBruto?.diasSemana}
+          />
 
           {anexosDoAluno.length > 0 && (
             <div className="card">

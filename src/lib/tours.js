@@ -74,14 +74,19 @@ export const TOUR_ALUNO_TREINO = [
 
 export const TOUR_ALUNO_EVOLUCAO = [
   {
-    alvo: '.metricas-aluno',
-    titulo: 'Seus números',
-    texto: 'Dias seguidos, treinos no mês e o total acumulado desde que você começou.'
+    alvo: '.ev-kpis',
+    titulo: 'Como está seu mês',
+    texto: 'Treinos feitos, sua frequência, os dias seguidos e quantos recordes você bateu.'
   },
   {
-    alvo: '.heatmap, .card',
-    titulo: 'Calendário',
-    texto: 'Cada quadradinho é um dia. Quanto mais escuro, mais séries você fez naquele dia.'
+    alvo: '.ev-cal-grade',
+    titulo: 'Seu histórico',
+    texto: 'Cada quadradinho é um dia. Os cheios são dias em que você treinou — toque em qualquer um para ver o que fez.'
+  },
+  {
+    alvo: '.ev-filtros',
+    titulo: 'Você está evoluindo?',
+    texto: 'Compare suas semanas por carga, séries ou frequência. A barra escura é a semana atual.'
   }
 ]
 

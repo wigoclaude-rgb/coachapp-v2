@@ -9,7 +9,11 @@ import {
   normalizarPlano, normalizarTemplate, normalizarExercicios
 } from '../../lib/treinoModel'
 import EditorExercicios from '../../components/EditorExercicios.jsx'
+
 import { IcVoltar, IcMais, IcLixeira, IcCheck } from '../../components/Icones.jsx'
+
+// 0 = domingo, alinhado com Date.getDay().
+const DIAS_DA_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
 
 export default function CriarTreino({ user }) {
   const { alunoId } = useParams()
@@ -22,6 +26,8 @@ export default function CriarTreino({ user }) {
   const [indiceAtualExistente, setIndiceAtualExistente] = useState(0)
   // Ausente = ciclo travado, que é como o app sempre funcionou.
   const [permiteEscolha, setPermiteEscolha] = useState(false)
+  // Dias da semana em que o aluno deve treinar. 0 = domingo, como no Date.getDay().
+  const [diasSemana, setDiasSemana] = useState([])
   const [meusTemplates, setMeusTemplates] = useState({})
   const [salvo, setSalvo] = useState(false)
   const [enviando, setEnviando] = useState(false)
@@ -48,6 +54,7 @@ export default function CriarTreino({ user }) {
       setDias(plano.lista)
       setIndiceAtualExistente(plano.indiceAtual)
       setPermiteEscolha(bruto.permiteEscolha === true)
+      setDiasSemana(Array.isArray(bruto.diasSemana) ? bruto.diasSemana : [])
     })
   }, [alunoId, user.uid])
 
@@ -152,7 +159,8 @@ export default function CriarTreino({ user }) {
       indiceAtual,
       atualizadoEm: Date.now(),
       personalId: user.uid,
-      permiteEscolha
+      permiteEscolha,
+      diasSemana: diasSemana.slice().sort()
     }
     await set(ref(db, 'treinos/' + alunoId), novo)
     setTreinoExistente(novo)
@@ -204,6 +212,29 @@ export default function CriarTreino({ user }) {
             </span>
           </span>
         </label>
+
+        {/*
+          Sem estes dias, a tela de Evolução do aluno não tem denominador: não dá
+          para dizer "86% do previsto" nem chamar um dia de perdido. Ficando vazio,
+          ela mostra a média por semana em vez de inventar percentual.
+        */}
+        <label style={{ marginTop: 18 }}>Dias de treino na semana (opcional)</label>
+        <div className="opcoes-chips">
+          {DIAS_DA_SEMANA.map((d, i) => (
+            <button
+              key={i} type="button"
+              className={'chip-opcao ' + (diasSemana.includes(i) ? 'ativo' : '')}
+              onClick={() => setDiasSemana(ds => ds.includes(i) ? ds.filter(x => x !== i) : [...ds, i])}
+              aria-pressed={diasSemana.includes(i)}
+            >
+              {d}
+            </button>
+          ))}
+        </div>
+        <p className="mini" style={{ marginTop: 6 }}>
+          Marcando os dias, o aluno passa a ver a frequência dele em relação ao combinado.
+          Em branco, ele vê a média de treinos por semana.
+        </p>
 
         <label>Aplicar um template</label>
         <select defaultValue="" onChange={e => { aplicarTemplate(e.target.value); e.target.value = '' }}>
