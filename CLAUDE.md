@@ -281,6 +281,8 @@ versão, cole no console, senão o fluxo de pagamento quebra:
    `comprovantes/{alunoUid}`. Sem isso o envio do comprovante falha — e só ele: o
    código trata a falha e registra o pagamento mesmo assim.
 
-3. **Variáveis do Netlify e chaves VAPID** para os lembretes de suplementação —
-   o passo a passo completo está em `netlify/LEIA-ME.md`. Sem isso o app mostra
-   "Os lembretes ainda não foram configurados neste servidor" e o resto funciona.
+3. **Três variáveis no Netlify** para os lembretes de suplementação:
+   `VITE_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` e `FIREBASE_SERVICE_ACCOUNT`.
+   Passo a passo em `netlify/LEIA-ME.md`. Sem elas o app mostra "Os lembretes
+   ainda não foram configurados neste servidor" e o resto funciona igual; o log
+   da função nomeia qual variável está faltando.

@@ -45,18 +45,27 @@ navegador nem ao repositório.
 
 Site → *Site configuration* → **Environment variables**:
 
+São **três**:
+
 | Variável | Valor |
 |---|---|
 | `VITE_VAPID_PUBLIC_KEY` | a chave pública do passo 1 |
-| `VAPID_PUBLIC_KEY` | a mesma chave pública |
 | `VAPID_PRIVATE_KEY` | a chave privada do passo 1 |
-| `VAPID_SUBJECT` | `mailto:seu@email.com` |
-| `FIREBASE_SERVICE_ACCOUNT` | o JSON do passo 2, **numa linha só** |
-| `FIREBASE_DATABASE_URL` | a mesma URL que o app já usa |
+| `FIREBASE_SERVICE_ACCOUNT` | o conteúdo do JSON do passo 2 |
 
-`VITE_VAPID_PUBLIC_KEY` precisa existir no momento do **build** — variável com
-prefixo `VITE_` é lida pelo Vite e embutida no bundle. As outras são lidas em
-tempo de execução pela função.
+A URL do banco a função reaproveita de `VITE_FIREBASE_DATABASE_URL`, que já está
+lá para o site buildar. O assunto VAPID tem padrão; defina `VAPID_SUBJECT` só se
+quiser outro e-mail.
+
+O JSON pode ser colado **como está, com as quebras de linha** — `JSON.parse`
+aceita. Não precisa deixar numa linha só.
+
+`VITE_VAPID_PUBLIC_KEY` precisa existir no momento do **build**: variável com
+prefixo `VITE_` é embutida no bundle pelo Vite. Cadastre antes de publicar, ou
+publique de novo depois. As outras são lidas em tempo de execução.
+
+Faltando alguma, o log diz **qual**:
+`Lembretes: faltam variáveis no Netlify — VAPID_PRIVATE_KEY`
 
 ## 4. Publicar as regras do Realtime Database
 
@@ -71,6 +80,7 @@ só a função, que ignora as regras).
 - Netlify → *Functions* → `lembretes-suplementos` deve aparecer como agendada
 - Os logs mostram uma linha por execução:
   `Lembretes: alunos=3 enviados=1 falhas=0 inscricoesRemovidas=0 ms=412`
+- Faltando variável, o log nomeia qual em vez de só dizer "sem credenciais"
 - No app: Suplementação → **Ativar** em "Notificações neste aparelho", depois
   cadastre um suplemento com horário daqui a 2 minutos
 

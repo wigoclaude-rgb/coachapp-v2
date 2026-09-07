@@ -15,11 +15,13 @@
   `src/lib/lembretes.js`, junto do app, e é testada sem servidor nem celular.
 
   CREDENCIAIS (variáveis de ambiente no Netlify)
-    FIREBASE_SERVICE_ACCOUNT  JSON da conta de serviço, em uma linha
-    FIREBASE_DATABASE_URL     mesma URL do app
-    VAPID_PUBLIC_KEY          igual à VITE_VAPID_PUBLIC_KEY do front
-    VAPID_PRIVATE_KEY         só aqui; nunca no front
-    VAPID_SUBJECT             mailto:seu@email
+    FIREBASE_SERVICE_ACCOUNT  JSON da conta de serviço
+    VITE_VAPID_PUBLIC_KEY     a chave pública (a mesma que o front usa)
+    VAPID_PRIVATE_KEY         a privada; só aqui, nunca no front
+
+  As outras duas são deduzidas: a URL do banco reaproveita a
+  VITE_FIREBASE_DATABASE_URL que o site já tem para buildar, e o assunto VAPID
+  tem um padrão. Cada variável a menos é um passo a menos para errar na mão.
 
   A conta de serviço ignora as regras do Realtime Database. É por isso que ela
   nunca pode chegar ao navegador.
@@ -41,14 +43,15 @@ function firebase() {
     : admin.initializeApp({
         credential: admin.credential.cert(cred),
         databaseURL: process.env.FIREBASE_DATABASE_URL
+          || process.env.VITE_FIREBASE_DATABASE_URL
       })
   return app
 }
 
 function configurarWebPush() {
   webpush.setVapidDetails(
-    process.env.VAPID_SUBJECT || 'mailto:contato@coachapp.app',
-    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_SUBJECT || 'mailto:wigoclaude@gmail.com',
+    process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY,
     process.env.VAPID_PRIVATE_KEY
   )
 }
@@ -68,9 +71,17 @@ function treinouNoDia(execucoes, dia) {
 
 export default async function handler() {
   const inicio = Date.now()
-  if (!process.env.VAPID_PRIVATE_KEY || !process.env.FIREBASE_SERVICE_ACCOUNT) {
-    console.error('Lembretes: credenciais ausentes; nada enviado.')
-    return new Response('sem credenciais', { status: 200 })
+  const faltando = [
+    ['FIREBASE_SERVICE_ACCOUNT', process.env.FIREBASE_SERVICE_ACCOUNT],
+    ['VAPID_PRIVATE_KEY', process.env.VAPID_PRIVATE_KEY],
+    ['VITE_VAPID_PUBLIC_KEY', process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY],
+    ['VITE_FIREBASE_DATABASE_URL', process.env.FIREBASE_DATABASE_URL || process.env.VITE_FIREBASE_DATABASE_URL]
+  ].filter(([, v]) => !v).map(([k]) => k)
+
+  // Diz QUAL falta: "credenciais ausentes" manda a pessoa conferir as quatro.
+  if (faltando.length) {
+    console.error('Lembretes: faltam variáveis no Netlify —', faltando.join(', '))
+    return new Response('faltam: ' + faltando.join(', '), { status: 200 })
   }
 
   configurarWebPush()
