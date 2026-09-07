@@ -166,7 +166,55 @@
     "cobrancas": {
       "$alunoUid": {
         ".read": "auth != null && (auth.uid === $alunoUid || root.child('users/'+$alunoUid+'/personalId').val() === auth.uid)",
-        ".write": "auth != null && (auth.uid === $alunoUid || root.child('users/'+$alunoUid+'/personalId').val() === auth.uid)"
+        "$cobrancaId": {
+          ".write": "auth != null && (root.child('users/'+$alunoUid+'/personalId').val() === auth.uid || (auth.uid === $alunoUid && data.exists() && newData.exists() && (data.child('status').val() === 'pendente' || data.child('status').val() === 'recusado') && newData.child('status').val() === 'em_analise'))",
+          ".validate": "!newData.exists() || newData.hasChildren(['valor', 'vencimento', 'status'])",
+          "valor": {
+            ".validate": "newData.isNumber() && newData.val() > 0 && (root.child('users/'+$alunoUid+'/personalId').val() === auth.uid || !data.exists() || newData.val() === data.val())"
+          },
+          "vencimento": {
+            ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && (root.child('users/'+$alunoUid+'/personalId').val() === auth.uid || !data.exists() || newData.val() === data.val())"
+          },
+          "status": {
+            ".validate": "newData.isString() && newData.val().matches(/^(pendente|em_analise|pago|recusado)$/)"
+          },
+          "tipo": {
+            ".validate": "newData.isString() && (root.child('users/'+$alunoUid+'/personalId').val() === auth.uid || !data.exists() || newData.val() === data.val())"
+          },
+          "personalId": {
+            ".validate": "newData.isString() && (root.child('users/'+$alunoUid+'/personalId').val() === auth.uid || !data.exists() || newData.val() === data.val())"
+          },
+          "criadaEm": {
+            ".validate": "newData.isNumber() && (root.child('users/'+$alunoUid+'/personalId').val() === auth.uid || !data.exists() || newData.val() === data.val())"
+          },
+          "validadaEm": {
+            ".validate": "root.child('users/'+$alunoUid+'/personalId').val() === auth.uid && newData.isNumber()"
+          },
+          "validadaPor": {
+            ".validate": "root.child('users/'+$alunoUid+'/personalId').val() === auth.uid && newData.val() === auth.uid"
+          },
+          "motivoRecusa": {
+            ".validate": "root.child('users/'+$alunoUid+'/personalId').val() === auth.uid && newData.isString() && newData.val().length <= 300"
+          },
+          "pagamento": {
+            ".validate": "newData.hasChild('data')",
+            "data": {
+              ".validate": "newData.isNumber()"
+            },
+            "obs": {
+              ".validate": "newData.isString() && newData.val().length <= 300"
+            },
+            "comprovante": {
+              ".validate": "newData.isString() && newData.val().length <= 700"
+            },
+            "$outro": {
+              ".validate": false
+            }
+          },
+          "$outroCampo": {
+            ".validate": false
+          }
+        }
       }
     },
 

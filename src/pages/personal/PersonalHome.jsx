@@ -212,7 +212,7 @@ export default function PersonalHome({ user, perfil, onSair }) {
 
       const cobs = Object.entries(cobrancas[uid] || {}).map(([id, c]) => ({ id, ...c }))
       const emAtraso = cobs.some(c => vencida(c))
-      const aguardando = cobs.some(c => c.status === 'em_analise')
+      const aguardando = cobs.filter(c => c.status === 'em_analise').length
       const abertas = cobs.filter(c => c.status === 'pendente')
       const proxVenc = abertas.map(c => c.vencimento).sort()[0] || null
       const aReceber = cobs.filter(c => c.status !== 'pago').reduce((s, c) => s + (Number(c.valor) || 0), 0)
@@ -231,7 +231,8 @@ export default function PersonalHome({ user, perfil, onSair }) {
   const assinatura = normalizarAssinatura(assinaturaBruta)
   const treinaramHoje = fichas.filter(f => f.seriesHoje > 0).length
   const aReceberTotal = fichas.reduce((s, f) => s + f.aReceber, 0)
-  const paraValidar = fichas.filter(f => f.aguardando).length
+  // Conta cobranças, não alunos: dois pagamentos do mesmo aluno são dois avisos.
+  const paraValidar = fichas.reduce((n, f) => n + f.aguardando, 0)
   const semPlano = fichas.filter(f => !f.temPlano)
   const inadimplentes = fichas.filter(f => f.emAtraso)
   const parados = fichas.filter(f => f.diasParado === null || f.diasParado > 7)
@@ -801,7 +802,7 @@ export default function PersonalHome({ user, perfil, onSair }) {
                   <div className="la-col-ocultavel la-sub">{rotuloUltimo(f)}</div>
                   <div className="la-col-ocultavel" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {f.emAtraso && <span className="badge vermelho"><i className="ponto" /> Em atraso</span>}
-                    {f.aguardando && <span className="badge amarelo">Validar</span>}
+                    {f.aguardando > 0 && <span className="badge amarelo">Validar</span>}
                     {!f.temPlano && <span className="badge">Sem plano</span>}
                     {f.temPlano && !f.emAtraso && !f.aguardando && (
                       <span className={'badge ' + (f.ativo ? 'verde' : '')}>{f.ativo ? 'Ativo' : 'Parado'}</span>

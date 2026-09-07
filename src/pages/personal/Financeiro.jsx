@@ -3,6 +3,7 @@ import { ref, push, update, remove } from 'firebase/database'
 import { db } from '../../firebase'
 import { fmtData, fmtMoeda, vencida, hojeISO } from '../../lib/util'
 import { notificar } from '../../lib/notify'
+import { selo, legenda, titulo as tituloCobranca, dataBR, EM_ANALISE, PAGO } from '../../lib/cobrancas'
 
 // [NOVO] calcula a data de vencimento da i-ésima cobrança conforme a frequência
 function proximaData(dataISO, freq, i) {
@@ -42,6 +43,10 @@ export default function Financeiro({ user, alunos, cobrancas }) {
   const [tipo, setTipo] = useState('mensal')
   const [repetir, setRepetir] = useState('1') // [NOVO]
   const [msg, setMsg] = useState('')
+  const [recusando, setRecusando] = useState(null)   // id da cobrança sendo recusada
+  const [motivo, setMotivo] = useState('')
+  const [ocupado, setOcupado] = useState(null)       // id em processamento
+  const [erro, setErro] = useState('')
 
   const listaAlunos = Object.entries(alunos)
   const meusIds = new Set(Object.keys(alunos))
@@ -69,14 +74,40 @@ export default function Financeiro({ user, alunos, cobrancas }) {
     setValor(''); setVencimento(''); setRepetir('1')
   }
 
-  async function validar(alunoId, cobId, aprovar) {
-    await update(ref(db, 'cobrancas/' + alunoId + '/' + cobId), {
-      status: aprovar ? 'pago' : 'pendente',
-      validadaEm: Date.now()
-    })
-    notificar(alunoId, aprovar
-      ? 'Pagamento confirmado. Seu treino está liberado.'
-      : 'Seu registro de pagamento não foi aprovado. Fale com o personal.', '/aluno')
+  /*
+    Confirma ou recusa o pagamento que o aluno informou.
+
+    Recusar leva para `recusado`, e não de volta para `pendente`: o aluno precisa
+    saber que o registro dele foi visto e negado, e por quê. Devolver para
+    `pendente` deixava a tela dele idêntica à de quem nunca informou nada.
+
+    Guardamos quem confirmou e quando — é dinheiro, e daqui a seis meses alguém
+    vai querer saber quem deu baixa.
+  */
+  async function validar(cob, aprovar, motivoRecusa = '') {
+    if (ocupado) return
+    setOcupado(cob.cid)
+    setErro('')
+    try {
+      await update(ref(db, 'cobrancas/' + cob.aid + '/' + cob.cid), {
+        status: aprovar ? 'pago' : 'recusado',
+        validadaEm: Date.now(),
+        validadaPor: user.uid,
+        ...(aprovar ? { motivoRecusa: null } : { motivoRecusa: motivoRecusa.trim() })
+      })
+      await notificar(cob.aid, aprovar
+        ? 'Pagamento de ' + fmtMoeda(cob.valor) + ' confirmado. Seu treino está liberado.'
+        : 'Seu personal não confirmou o pagamento de ' + fmtMoeda(cob.valor)
+          + (motivoRecusa.trim() ? ': ' + motivoRecusa.trim() : '.') + ' Você pode informar novamente.',
+        '/aluno')
+      setRecusando(null)
+      setMotivo('')
+    } catch (err) {
+      console.error('Falha ao validar pagamento:', err)
+      setErro('Não foi possível salvar. Verifique sua conexão e tente novamente.')
+    } finally {
+      setOcupado(null)
+    }
   }
 
   // [NOVO] deleta uma cobrança
@@ -93,9 +124,9 @@ export default function Financeiro({ user, alunos, cobrancas }) {
     if (!meusIds.has(aid)) return
     Object.entries(cs || {}).forEach(([cid, c]) => {
       const item = { aid, cid, ...c, aluno: alunos[aid]?.nome || 'Aluno' }
-      if (c.status === 'em_analise') pendentesValidacao.push(item)
-      else if (c.status === 'pago') historico.push(item)
-      else abertas.push(item)
+      if (c.status === EM_ANALISE) pendentesValidacao.push(item)
+      else if (c.status === PAGO) historico.push(item)
+      else abertas.push(item)   // pendente e recusado: as duas ainda são devidas
     })
   })
   historico.sort((a, b) => (b.validadaEm || 0) - (a.validadaEm || 0))
@@ -150,24 +181,79 @@ export default function Financeiro({ user, alunos, cobrancas }) {
 
       {pendentesValidacao.length > 0 && (
         <div className="card destaque-card">
-          <h2>Pagamentos aguardando validação</h2>
-          <p className="muted">Confira no seu extrato se o valor caiu antes de aprovar.</p>
+          <h2>Pagamentos informados pelos alunos</h2>
+          <p className="muted">
+            O aluno avisou que fez o PIX. Confira no seu extrato se o valor caiu antes de confirmar.
+          </p>
+          {erro && <div className="pag-erro" role="alert"><span>{erro}</span></div>}
           {pendentesValidacao.map(c => (
-            <div key={c.cid} className="cobranca-item">
-              <div>
-                <strong>{c.aluno}</strong> · {fmtMoeda(c.valor)} · venc. {c.vencimento.split('-').reverse().join('/')}
-                {c.pagamento && (
-                  <div className="muted">
-                    Registrado em {fmtData(c.pagamento.data)}{c.pagamento.obs ? ' · "' + c.pagamento.obs + '"' : ''}
+            <div key={c.cid} className="pag-validar">
+              <div className="pag-validar-topo">
+                <div>
+                  <strong>{c.aluno}</strong>
+                  <div className="pag-validar-sub">
+                    {tituloCobranca(c)} · vence em {dataBR(c.vencimento)}
                   </div>
+                </div>
+                <span className="pag-validar-valor">{fmtMoeda(c.valor)}</span>
+              </div>
+
+              <div className="pag-validar-info">
+                {c.pagamento?.data && <span>Informado em {fmtData(c.pagamento.data)}</span>}
+                {c.pagamento?.obs && <span className="pag-validar-obs">“{c.pagamento.obs}”</span>}
+                {c.pagamento?.comprovante && (
+                  <a href={c.pagamento.comprovante} target="_blank" rel="noreferrer">Ver comprovante</a>
                 )}
               </div>
-              <div className="aluno-acoes">
-                <button className="btn btn-sm" onClick={() => validar(c.aid, c.cid, true)}>Aprovar</button>
-                <button className="btn btn-sec btn-sm" onClick={() => validar(c.aid, c.cid, false)}>Rejeitar</button>
-                {/* [NOVO] */}
-                <button className="btn btn-sec btn-sm" onClick={() => deletar(c.aid, c.cid)}>Deletar</button>
-              </div>
+
+              {recusando === c.cid ? (
+                <div className="pag-recusa">
+                  <label htmlFor={'motivo-' + c.cid}>
+                    Motivo da recusa <span className="pag-opcional">(o aluno vê este texto)</span>
+                  </label>
+                  <input
+                    id={'motivo-' + c.cid} value={motivo} maxLength={300}
+                    onChange={e => setMotivo(e.target.value)}
+                    placeholder="Ex: não encontrei esse valor no extrato"
+                    disabled={ocupado === c.cid}
+                  />
+                  <div className="aluno-acoes">
+                    <button
+                      className="btn btn-sm" disabled={ocupado === c.cid}
+                      onClick={() => validar(c, false, motivo)}
+                    >
+                      {ocupado === c.cid ? 'Salvando...' : 'Confirmar recusa'}
+                    </button>
+                    <button
+                      className="btn btn-sec btn-sm" disabled={ocupado === c.cid}
+                      onClick={() => { setRecusando(null); setMotivo('') }}
+                    >
+                      Voltar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="aluno-acoes">
+                  <button
+                    className="btn btn-sm" disabled={ocupado === c.cid}
+                    onClick={() => validar(c, true)}
+                  >
+                    {ocupado === c.cid ? 'Salvando...' : 'Confirmar pagamento'}
+                  </button>
+                  <button
+                    className="btn btn-sec btn-sm" disabled={ocupado === c.cid}
+                    onClick={() => { setRecusando(c.cid); setMotivo(''); setErro('') }}
+                  >
+                    Recusar
+                  </button>
+                  <button
+                    className="btn btn-perigo-sutil btn-sm" disabled={ocupado === c.cid}
+                    onClick={() => deletar(c.aid, c.cid)}
+                  >
+                    Deletar
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -181,8 +267,13 @@ export default function Financeiro({ user, alunos, cobrancas }) {
             <div>
               <strong>{c.aluno}</strong> · {fmtMoeda(c.valor)} · {c.tipo}
               <div className={'muted ' + (vencida(c) ? 'texto-vencido' : '')}>
-                Vence em {c.vencimento.split('-').reverse().join('/')} {vencida(c) ? '· VENCIDA (treino bloqueado)' : ''}
+                Vence em {dataBR(c.vencimento)} {vencida(c) ? '· VENCIDA (treino bloqueado)' : ''}
               </div>
+              {c.status === 'recusado' && (
+                <div className="muted">
+                  Você recusou o pagamento informado{c.motivoRecusa ? ': “' + c.motivoRecusa + '”' : ''}
+                </div>
+              )}
             </div>
             {/* [NOVO] */}
             <div className="aluno-acoes">

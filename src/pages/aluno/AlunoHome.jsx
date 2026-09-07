@@ -1,8 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ref, onValue, push, update, remove } from 'firebase/database'
 import { db } from '../../firebase'
-import { fmtData, fmtMoeda, vencida, imagemExercicio, youtubeId, comKg, beep } from '../../lib/util'
+import { fmtData, fmtMoeda, vencida, hojeISO, imagemExercicio, youtubeId, comKg, beep } from '../../lib/util'
 import { notificar } from '../../lib/notify'
+import {
+  organizar as organizarCobrancas, historico as historicoCobrancas,
+  ehAberta, estaVencida, titulo as tituloCobranca, referencia, dataBR,
+  EM_ANALISE, PAGO, RECUSADO
+} from '../../lib/cobrancas'
+import { enviarFoto } from '../../lib/fotos'
+import SituacaoPagamento from '../../components/pagamentos/SituacaoPagamento.jsx'
+import LinhaCobranca from '../../components/pagamentos/LinhaCobranca.jsx'
 import {
   LETRAS, normalizarPlano, indiceSeguro, duracaoEstimada, totalSeries,
   agruparBlocos, chaveSerie, resumoExercicio, cargaNumero
@@ -97,6 +105,12 @@ export default function AlunoHome({ user, perfil, onSair }) {
   const [personal, setPersonal] = useState(null)
   const [pagObs, setPagObs] = useState('')
   const [pagCobId, setPagCobId] = useState(null)
+  const [pagData, setPagData] = useState('')
+  const [pagArquivo, setPagArquivo] = useState(null)
+  const [pagEnviando, setPagEnviando] = useState(false)
+  const [pagErro, setPagErro] = useState('')
+  const [pagOk, setPagOk] = useState(null)
+  const [pixCopiado, setPixCopiado] = useState(false)
 
   // Lista interativa: qual exercício está aberto, carga digitada e erro por exercício.
   const [exAberto, setExAberto] = useState(null)
@@ -185,13 +199,18 @@ export default function AlunoHome({ user, perfil, onSair }) {
   }, [execucoes])
 
   /* ---------- Cobranças ---------- */
-  const listaCob = Object.entries(cobrancas).map(([id, c]) => ({ id, ...c }))
-  const vencidas = listaCob.filter(c => vencida(c))
-  const bloqueado = vencidas.length > 0
-  const pendentes = listaCob.filter(c => c.status === 'pendente').sort((a, b) => a.vencimento.localeCompare(b.vencimento))
-  const emAnalise = listaCob.filter(c => c.status === 'em_analise')
-  const pagas = listaCob.filter(c => c.status === 'pago').sort((a, b) => (b.validadaEm || 0) - (a.validadaEm || 0))
-  const proximaCobranca = pendentes[0]
+  /*
+    `fin` é a leitura da tela: o que está aberto, o que está vencido, o que já foi
+    informado e qual cobrança pode receber o "Já paguei".
+
+    O bloqueio do treino é conta à parte, e de propósito: ele usa `vencida()`, que
+    continua contando a cobrança em análise como devida. Se bastasse informar o
+    pagamento para destravar, o botão "Já paguei" viraria a chave do cadeado.
+  */
+  const fin = useMemo(() => organizarCobrancas(cobrancas), [cobrancas])
+  const extrato = useMemo(() => historicoCobrancas(fin.lista), [fin.lista])
+  const bloqueado = fin.lista.some(c => vencida(c))
+  const proximaCobranca = fin.atual
 
   /* ---------- Execuções e progresso ---------- */
   const listaExec = useMemo(() => Object.values(execucoes).sort((a, b) => b.ts - a.ts), [execucoes])
@@ -480,15 +499,116 @@ export default function AlunoHome({ user, perfil, onSair }) {
     setExecutando(false)
   }
 
+  /* Abre a confirmação já com a data de hoje preenchida — é o caso quase sempre. */
+  function abrirInformar(cob) {
+    setPagCobId(cob.id)
+    setPagData(hojeISO())
+    setPagObs('')
+    setPagArquivo(null)
+    setPagErro('')
+    setPagOk(null)
+  }
+
+  function fecharInformar() {
+    setPagCobId(null); setPagObs(''); setPagArquivo(null)
+    setPagErro(''); setPagOk(null); setPagEnviando(false)
+  }
+
+  /*
+    Traduz a falha para uma frase que o aluno resolve sozinho. O detalhe técnico
+    fica no console — na tela ele não ajuda ninguém.
+  */
+  function mensagemErro(err) {
+    const texto = String(err?.code || err?.message || err)
+    if (texto.toUpperCase().includes('PERMISSION_DENIED')) {
+      return 'Este pagamento já foi informado. Puxe a tela para baixo para ver o status atualizado.'
+    }
+    return 'Não foi possível informar o pagamento. Verifique sua conexão e tente novamente.'
+  }
+
+  /*
+    "Já paguei": o aluno avisa que fez o PIX fora do app. Não movimenta dinheiro,
+    só muda o status para `em_analise` e chama o personal para conferir o extrato.
+
+    A trava contra duplicidade tem duas camadas. Aqui, `pagEnviando` barra o duplo
+    toque. No banco, a regra de `cobrancas` só aceita a transição partindo de
+    `pendente` ou `recusado` — então duas requisições simultâneas não viram dois
+    registros: a segunda é recusada pelo servidor.
+  */
   async function registrarPagamento(e) {
     e.preventDefault()
-    if (!pagCobId) return
-    await update(ref(db, 'cobrancas/' + user.uid + '/' + pagCobId), {
-      status: 'em_analise',
-      pagamento: { data: Date.now(), obs: pagObs }
-    })
-    notificar(perfil.personalId, perfil.nome + ' registrou um pagamento. Valide no Financeiro.', '/personal')
-    setPagCobId(null); setPagObs('')
+    if (pagEnviando) return
+
+    const cob = fin.lista.find(c => c.id === pagCobId)
+    if (!cob) return
+    if (!ehAberta(cob)) {
+      setPagErro('Este pagamento já foi informado.')
+      return
+    }
+
+    setPagEnviando(true)
+    setPagErro('')
+    try {
+      /*
+        O comprovante é opcional e vai para o Storage, não para o banco: o nó de
+        cobranças é lido inteiro toda vez que a tela abre — do aluno e do personal,
+        que carrega o de todos os alunos. Uma imagem em base64 ali dentro pesaria
+        em cada carregamento.
+      */
+      let comprovante = ''
+      if (pagArquivo) {
+        try {
+          comprovante = await enviarFoto(pagArquivo, 'comprovantes/' + user.uid, 1280)
+        } catch (err) {
+          // Perder o anexo não pode custar o registro do pagamento.
+          console.warn('Comprovante não enviado:', err?.code || err)
+        }
+      }
+
+      const quando = pagData ? new Date(pagData + 'T12:00:00').getTime() : Date.now()
+      await update(ref(db, 'cobrancas/' + user.uid + '/' + cob.id), {
+        status: 'em_analise',
+        // Limpa a recusa anterior: o registro é novo, o motivo antigo não vale mais.
+        motivoRecusa: null,
+        pagamento: {
+          data: quando,
+          obs: pagObs.trim(),
+          ...(comprovante ? { comprovante } : {})
+        }
+      })
+
+      await notificar(
+        perfil.personalId,
+        perfil.nome + ' informou o pagamento de ' + fmtMoeda(cob.valor) + ' (' + tituloCobranca(cob) + '). Confirme no Financeiro.',
+        '/personal'
+      )
+      setPagOk({ valor: cob.valor, quando, titulo: tituloCobranca(cob), comprovante: !!comprovante })
+    } catch (err) {
+      console.error('Falha ao informar pagamento:', err)
+      setPagErro(mensagemErro(err))
+    } finally {
+      setPagEnviando(false)
+    }
+  }
+
+  /* Copia a chave PIX. Sem clipboard (navegador antigo, http), cai no seletor. */
+  async function copiarPix() {
+    const chave = personal?.chavePix || ''
+    if (!chave) return
+    try {
+      await navigator.clipboard.writeText(chave)
+    } catch {
+      const campo = document.createElement('textarea')
+      campo.value = chave
+      campo.style.position = 'fixed'
+      campo.style.opacity = '0'
+      document.body.appendChild(campo)
+      campo.select()
+      try { document.execCommand('copy') } catch { /* sem jeito: a chave está na tela */ }
+      document.body.removeChild(campo)
+    }
+    setPixCopiado(true)
+    setTimeout(() => setPixCopiado(false), 2500)
   }
 
   /*
@@ -508,7 +628,7 @@ export default function AlunoHome({ user, perfil, onSair }) {
     { id: 'evolucao', label: 'Evolução', icone: <IcEvolucao /> },
     { id: 'diario', label: 'Check-in', icone: <IcCalendario /> },
     { id: 'suplementos', label: 'Suplementação', icone: <IcSuplemento />, badge: supPendentes.length },
-    { id: 'pagamentos', label: 'Pagamentos', icone: <IcPagamentos />, badge: vencidas.length },
+    { id: 'pagamentos', label: 'Pagamentos', icone: <IcPagamentos />, badge: fin.vencidas.length },
     { id: 'chat', label: 'Chat', icone: <IcChat /> },
     { id: 'config', label: 'Configurações', icone: <IcConfig /> }
   ]
@@ -1245,69 +1365,144 @@ export default function AlunoHome({ user, perfil, onSair }) {
 
       {/* ===== PAGAMENTOS ===== */}
       {aba === 'pagamentos' && (
-        <>
-          {personal?.chavePix && (
-            <div className="card">
-              <div className="card-titulo"><h2>Chave PIX do personal</h2></div>
-              <div className="codigo-box">{personal.chavePix}</div>
-              <p className="mini" style={{ marginTop: 8 }}>Pague pelo seu banco e depois registre o pagamento abaixo.</p>
-            </div>
+        <div className="pag">
+          {/*
+            A ordem responde às perguntas do aluno na ordem em que ele as faz:
+            quanto devo, como pago, o que vem depois, o que já paguei.
+          */}
+          <SituacaoPagamento fin={fin} onInformar={abrirInformar} />
+
+          {(fin.abertas.length > 0 || fin.emAnalise.length > 0) && personal?.chavePix && (
+            <section className="pag-pix">
+              <h2>Pagamento via PIX</h2>
+              <div className="pag-chave">{personal.chavePix}</div>
+              <button className="btn btn-sec pag-copiar" onClick={copiarPix}>
+                {pixCopiado ? 'Chave PIX copiada' : 'Copiar chave PIX'}
+              </button>
+              <p className="pag-passo">
+                Pague pelo aplicativo do seu banco. Depois volte aqui e toque em
+                <strong> Já paguei</strong> para avisar o personal.
+              </p>
+            </section>
           )}
 
-          <div className="card">
-            <div className="card-titulo"><h2>Cobranças em aberto</h2></div>
-            {pendentes.length === 0 && emAnalise.length === 0 && <p className="muted">Nenhuma cobrança em aberto.</p>}
-            {pendentes.map(c => (
-              <div key={c.id} className="cobranca-item">
-                <div>
-                  <strong>{fmtMoeda(c.valor)}</strong> · {c.tipo}
-                  <div className={'mini ' + (vencida(c) ? 'texto-vencido' : '')}>
-                    Vence em {c.vencimento.split('-').reverse().join('/')}{vencida(c) ? ' · vencida' : ''}
-                  </div>
-                </div>
-                <button className="btn btn-sm" onClick={() => setPagCobId(c.id)}>Registrar pagamento</button>
-              </div>
-            ))}
-            {emAnalise.map(c => (
-              <div key={c.id} className="cobranca-item">
-                <div>
-                  <strong>{fmtMoeda(c.valor)}</strong> · {c.tipo}
-                  <div className="mini">Aguardando validação do personal</div>
-                </div>
-                <span className="selo-analise">Em análise</span>
-              </div>
-            ))}
-          </div>
-
-          {pagCobId && (
-            <div className="card destaque-card">
-              <div className="card-titulo"><h2>Registrar pagamento</h2></div>
-              <form onSubmit={registrarPagamento}>
-                <label>Observação (opcional)</label>
-                <input value={pagObs} onChange={e => setPagObs(e.target.value)} placeholder='Ex: "PIX feito às 14h em nome de João"' />
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="btn">Confirmar registro</button>
-                  <button type="button" className="btn btn-sec btn-auto" onClick={() => setPagCobId(null)}>Cancelar</button>
-                </div>
-              </form>
-            </div>
+          {/* Os outros atrasos. O primeiro já está no cartão de cima. */}
+          {fin.outras.length > 0 && (
+            <section className="pag-bloco">
+              <h2>Outras cobranças em aberto</h2>
+              {fin.outras.map(c => (
+                <LinhaCobranca key={c.id} cob={c} podeInformar onInformar={abrirInformar} />
+              ))}
+            </section>
           )}
 
-          <div className="card">
-            <div className="card-titulo"><h2>Histórico</h2></div>
-            {pagas.length === 0 && <p className="muted">Nenhum pagamento validado ainda.</p>}
-            {pagas.map(c => (
-              <div key={c.id} className="cobranca-item">
-                <div>
-                  <strong>{fmtMoeda(c.valor)}</strong> · {c.tipo}
-                  <div className="mini">Validado em {c.validadaEm ? fmtData(c.validadaEm) : '—'}</div>
+          {/* Futuras: informativas. Botão aqui só confundiria. */}
+          {fin.futuras.length > 0 && (
+            <section className="pag-bloco">
+              <h2>Próximas mensalidades</h2>
+              <p className="pag-nota">Ainda não é hora de pagar. Estão aqui para você se programar.</p>
+              {fin.futuras.map(c => (
+                <div key={c.id} className="pag-futura">
+                  <span>{referencia(c) || dataBR(c.vencimento)}</span>
+                  <span className="pag-futura-valor">{fmtMoeda(c.valor)}</span>
                 </div>
-                <span className="selo-pago">Pago</span>
-              </div>
-            ))}
-          </div>
-        </>
+              ))}
+            </section>
+          )}
+
+          <section className="pag-bloco">
+            <h2>Pagamentos confirmados</h2>
+            {extrato.length === 0
+              ? <p className="muted">Nenhum pagamento confirmado ainda.</p>
+              : extrato.map(c => <LinhaCobranca key={c.id} cob={c} podeInformar={false} />)}
+          </section>
+        </div>
       )}
+
+      {/* Confirmação do "Já paguei". Modal de propósito: antes era um formulário
+          no fim da página, e quem tocava no botão não via nada acontecer. */}
+      {pagCobId && (() => {
+        const cob = fin.lista.find(c => c.id === pagCobId)
+        if (!cob) return null
+        return (
+          <div className="pag-modal-fundo" onClick={() => !pagEnviando && fecharInformar()}>
+            <div className="pag-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
+              {pagOk ? (
+                <>
+                  <div className="pag-ok-marca" aria-hidden="true" />
+                  <h2>Pagamento informado</h2>
+                  <p className="pag-modal-sub">
+                    Seu personal foi avisado e vai confirmar assim que conferir o extrato.
+                  </p>
+                  <dl className="pag-resumo">
+                    <div><dt>Valor</dt><dd>{fmtMoeda(pagOk.valor)}</dd></div>
+                    <div><dt>Referente a</dt><dd>{pagOk.titulo}</dd></div>
+                    <div><dt>Data informada</dt><dd>{fmtData(pagOk.quando)}</dd></div>
+                    <div><dt>Status</dt><dd>Aguardando confirmação</dd></div>
+                  </dl>
+                  <button className="btn" onClick={fecharInformar}>Fechar</button>
+                </>
+              ) : (
+                <>
+                  <h2>Informar pagamento</h2>
+                  <p className="pag-modal-sub">
+                    Você está avisando que já fez o PIX desta cobrança. O personal confirma depois.
+                  </p>
+
+                  <dl className="pag-resumo">
+                    <div><dt>Valor</dt><dd>{fmtMoeda(cob.valor)}</dd></div>
+                    <div><dt>Referente a</dt><dd>{tituloCobranca(cob)}</dd></div>
+                    <div><dt>Vencimento</dt><dd>{dataBR(cob.vencimento)}</dd></div>
+                  </dl>
+
+                  <form onSubmit={registrarPagamento}>
+                    <label htmlFor="pag-data">Data do pagamento</label>
+                    <input
+                      id="pag-data" type="date" value={pagData} max={hojeISO()}
+                      onChange={e => setPagData(e.target.value)} disabled={pagEnviando}
+                    />
+
+                    <label htmlFor="pag-obs">Observação <span className="pag-opcional">(opcional)</span></label>
+                    <input
+                      id="pag-obs" value={pagObs} onChange={e => setPagObs(e.target.value)}
+                      maxLength={300} disabled={pagEnviando}
+                      placeholder='Ex: "PIX às 14h em nome de João"'
+                    />
+
+                    <label htmlFor="pag-comp">Comprovante <span className="pag-opcional">(opcional)</span></label>
+                    {/* O seletor nativo mostra "Choose File" em inglês; o rótulo é nosso. */}
+                    <label className={'pag-arquivo' + (pagArquivo ? ' escolhido' : '')}>
+                      <input
+                        id="pag-comp" type="file" accept="image/*" disabled={pagEnviando}
+                        onChange={e => setPagArquivo(e.target.files?.[0] || null)}
+                      />
+                      <span>{pagArquivo ? pagArquivo.name : 'Escolher imagem do comprovante'}</span>
+                    </label>
+
+                    {pagErro && (
+                      <div className="pag-erro" role="alert">
+                        <span>{pagErro}</span>
+                      </div>
+                    )}
+
+                    <div className="pag-modal-acoes">
+                      <button className="btn" disabled={pagEnviando}>
+                        {pagEnviando ? 'Registrando...' : (pagErro ? 'Tentar novamente' : 'Confirmar pagamento')}
+                      </button>
+                      <button
+                        type="button" className="btn btn-sec btn-auto"
+                        onClick={fecharInformar} disabled={pagEnviando}
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </form>
+                </>
+              )}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ===== CHAT ===== */}
       {aba === 'chat' && (

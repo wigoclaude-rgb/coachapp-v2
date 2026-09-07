@@ -5,7 +5,7 @@ Storage). **Não existe backend próprio** — o navegador fala direto com o Fir
 quem protege os dados são as regras do Realtime Database.
 
 Deploy: Netlify (`netlify.toml` já faz build e o redirect de SPA).
-Versão do app exibida ao usuário: **2.1.0** (ver `src/lib/novidades.js`).
+Versão do app exibida ao usuário: **2.2.0** (ver `src/lib/novidades.js`).
 
 ---
 
@@ -103,7 +103,7 @@ e **precisam ser coladas no console do Firebase à mão** — o repositório nã
 | `diario/{alunoUid}` | check-in privado — **só o aluno lê** |
 | `diarioCompartilhado/{alunoUid}` | o que o aluno decide mostrar ao personal |
 | `suplementos` / `suplementosTomados/{alunoUid}` | rotina e doses do dia |
-| `cobrancas/{alunoUid}` | `valor`, `vencimento`, `status`, `tipo` |
+| `cobrancas/{alunoUid}` | `valor`, `vencimento`, `status`, `tipo`, `pagamento{data,obs,comprovante}`, `validadaEm`, `validadaPor`, `motivoRecusa` |
 | `chats/{conversaId}` | `conversaId` = os dois uids concatenados; a regra usa `.contains(auth.uid)` |
 | `presenca/{uid}` | online/visto por último, via `onDisconnect` |
 | `notificacoes/{uid}` | sino do topo |
@@ -130,9 +130,22 @@ e **precisam ser coladas no console do Firebase à mão** — o repositório nã
 
 ## Regras de negócio que importam
 
+- **Pagamento é informado, não processado.** O PIX acontece fora do app. O aluno copia a
+  chave, paga pelo banco e volta para tocar em "Já paguei" — isso só muda o status para
+  `em_analise`. Quem confirma que o dinheiro entrou é o personal. Quatro estados, em
+  `src/lib/cobrancas.js`: `pendente` → `em_analise` → `pago` | `recusado`.
+- **A trava contra pagamento duplicado é do banco, não da tela.** A regra de
+  `cobrancas/$aluno/$cobranca` só aceita a transição partindo de `pendente` ou
+  `recusado`. Entre duas requisições simultâneas, a segunda encontra `em_analise` e é
+  recusada pelo servidor. O `disabled` do botão é conforto, não garantia.
+- **O aluno não escreve `status: 'pago'`.** As regras validam campo a campo: valor,
+  vencimento, tipo e `criadaEm` são imutáveis para ele, e `validadaEm`, `validadaPor` e
+  `motivoRecusa` só aceitam escrita do personal. Antes de Set/2026 o nó inteiro era
+  gravável pelo aluno — dava para se marcar como pago pelo DevTools e destravar o treino.
 - **Bloqueio por inadimplência.** Cobrança vencida (`vencida(c)` em `src/lib/util.js`)
-  → `bloqueado = true` → a aba Meu Treino vira um aviso. O aluno registra o pagamento,
-  a cobrança vai para `em_analise`, o personal valida e libera.
+  → `bloqueado = true` → a aba Meu Treino vira um aviso. `vencida()` continua contando
+  a cobrança em análise como devida, de propósito: se informar o pagamento destravasse,
+  o botão "Já paguei" seria a chave do cadeado.
 - **Carga só sobe pelo aluno.** Se ele lança peso abaixo do plano, o app pergunta o
   motivo e isso aparece na aba Feedback do personal ("Carga abaixo do plano").
 - **Ciclo A/B/C.** O plano é `{ nome, lista: [dias], indiceAtual }`. "Terminei por hoje"
@@ -162,6 +175,7 @@ e **precisam ser coladas no console do Firebase à mão** — o repositório nã
 | `ficha.js` / `cpf.js` | ficha pública e validação de CPF |
 | `anexos.js` / `fotos.js` / `medidas.js` | arquivos e medidas |
 | `atividades.js` | check-in de atividade (tempo, distância) |
+| `cobrancas.js` | estados da cobrança, o que é informável, selos e rótulos |
 | `tours.js` / `novidades.js` | tutorial de primeiro acesso e changelog in-app |
 | `presenca.js` / `notify.js` / `util.js` | presença, notificações, formatação |
 
@@ -220,3 +234,17 @@ Os repositórios `Ccoachapp` e `coachapp-backend` são o MVP de julho, congelado
 ## Estado atual
 
 `main` e a branch de trabalho estão no mesmo commit (`9ee76b8`). Nada pendente.
+
+---
+
+## Pendente de ação manual no console do Firebase
+
+As regras do repositório **não são publicadas pelo deploy**. Depois de subir esta
+versão, cole no console, senão o fluxo de pagamento quebra:
+
+1. **Realtime Database → Regras** → `firebase-regras/database.rules.json`.
+   Sem isso o aluno continua podendo se marcar como pago pelo DevTools; com a versão
+   nova do app e a regra antiga, tudo funciona (a regra antiga é mais permissiva).
+2. **Storage → Regras** → `firebase-regras/storage.rules`, que ganhou o caminho
+   `comprovantes/{alunoUid}`. Sem isso o envio do comprovante falha — e só ele: o
+   código trata a falha e registra o pagamento mesmo assim.

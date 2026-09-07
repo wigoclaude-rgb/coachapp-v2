@@ -2749,3 +2749,205 @@ form.card .av-acoes { padding: 0; }
   /* No celular ocupa a largura toda, acima da barra de navegacao do sistema. */
   .sup-flutuante { right: 12px; left: 12px; bottom: 12px; width: auto; }
 }
+
+/* ==========================================================================
+   PAGAMENTOS
+   O aluno paga o PIX fora do app e volta só para avisar. A tela é construída
+   em torno dessa pergunta única — "o que eu faço agora?" — e por isso tem um
+   cartão dominante no topo, não uma lista de cobranças iguais.
+   ========================================================================== */
+
+.pag { display: flex; flex-direction: column; gap: 16px; }
+
+/* ---------- cartão principal ---------- */
+.pag-hero {
+  background: var(--superficie); border: 1px solid var(--borda);
+  border-radius: var(--raio-lg); padding: 24px;
+  box-shadow: var(--sombra-sm);
+}
+.pag-hero.erro { border-color: var(--erro-borda); background: var(--erro-bg); }
+.pag-hero.analise { border-color: var(--aviso-borda); background: var(--aviso-bg); }
+.pag-hero.em-dia { border-color: var(--sucesso-borda); background: var(--sucesso-bg); }
+
+.pag-hero h2 { font-size: 17px; margin: 10px 0 0; }
+.pag-hero-rotulo {
+  display: block; font-size: var(--t-sm); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em; color: var(--texto-3);
+}
+.pag-hero-valor {
+  display: block; font-family: 'Archivo', system-ui, sans-serif;
+  font-size: 38px; line-height: 1.1; font-weight: 800;
+  color: var(--texto); margin: 6px 0 12px; letter-spacing: -0.02em;
+}
+.pag-hero-meta {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+  font-size: var(--t-sm); color: var(--texto-2);
+}
+.pag-hero-btn { width: 100%; margin-top: 18px; }
+.pag-hero-nota { font-size: var(--t-sm); color: var(--texto-3); margin: 12px 0 0; }
+
+.pag-motivo {
+  display: flex; flex-direction: column; gap: 4px;
+  margin-top: 14px; padding: 12px 14px;
+  background: var(--superficie); border: 1px solid var(--erro-borda);
+  border-radius: var(--raio); font-size: var(--t-sm); color: var(--texto-2);
+}
+
+/* ---------- selo de estado ---------- */
+.pag-selo {
+  display: inline-block; font-size: var(--t-xs); font-weight: 600;
+  padding: 4px 10px; border-radius: var(--raio-full); white-space: nowrap;
+}
+.pag-selo.ok { background: var(--sucesso-bg); color: #15803D; border: 1px solid var(--sucesso-borda); }
+.pag-selo.analise { background: var(--aviso-bg); color: var(--aviso-txt); border: 1px solid var(--aviso-borda); }
+.pag-selo.erro { background: var(--erro-bg); color: var(--erro); border: 1px solid var(--erro-borda); }
+.pag-selo.neutro { background: var(--superficie-2); color: var(--texto-2); border: 1px solid var(--borda); }
+
+/* ---------- PIX ---------- */
+.pag-pix {
+  background: var(--superficie); border: 1px solid var(--borda);
+  border-radius: var(--raio-md); padding: 20px; box-shadow: var(--sombra-xs);
+}
+.pag-pix h2 { font-size: 15px; margin: 0 0 12px; }
+.pag-chave {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 16px; font-weight: 600; color: var(--texto);
+  background: var(--superficie-2); border: 1px solid var(--borda);
+  border-radius: var(--raio); padding: 14px;
+  word-break: break-all; text-align: center;
+}
+.pag-copiar { width: 100%; margin-top: 10px; }
+.pag-passo { font-size: var(--t-sm); color: var(--texto-3); margin: 12px 0 0; line-height: 1.5; }
+
+/* ---------- blocos de lista ---------- */
+.pag-bloco {
+  background: var(--superficie); border: 1px solid var(--borda);
+  border-radius: var(--raio-md); padding: 20px; box-shadow: var(--sombra-xs);
+}
+.pag-bloco h2 { font-size: 15px; margin: 0 0 4px; }
+.pag-nota { font-size: var(--t-sm); color: var(--texto-3); margin: 0 0 12px; }
+
+.pag-linha {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 0; border-bottom: 1px solid var(--borda);
+}
+.pag-linha:last-child { border-bottom: none; padding-bottom: 0; }
+.pag-linha-info { min-width: 0; }
+.pag-linha-topo { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.pag-linha-topo strong { font-size: 14px; }
+.pag-linha-valor { font-weight: 700; color: var(--texto); }
+.pag-linha-sub { display: block; font-size: var(--t-sm); color: var(--texto-3); margin-top: 3px; }
+.pag-linha-dir { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+.pag-futura {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 11px 0; border-bottom: 1px solid var(--borda);
+  font-size: 14px; color: var(--texto-2);
+}
+.pag-futura:last-child { border-bottom: none; padding-bottom: 0; }
+.pag-futura-valor { font-weight: 600; color: var(--texto); }
+
+/* ---------- confirmação "Já paguei" ----------
+   Modal, e não um painel no fim da página: antes o formulário abria abaixo da
+   lista inteira e, no celular, quem tocava no botão não via nada acontecer. */
+.pag-modal-fundo {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(16, 24, 40, 0.55);
+  display: flex; align-items: flex-end; justify-content: center;
+  padding: 0; animation: fadeIn var(--t);
+}
+.pag-modal {
+  background: var(--superficie); width: 100%; max-width: 460px;
+  border-radius: var(--raio-lg) var(--raio-lg) 0 0;
+  padding: 24px; box-shadow: var(--sombra-xl);
+  max-height: 92vh; overflow-y: auto;
+}
+.pag-modal h2 { font-size: 18px; margin: 0 0 6px; }
+.pag-modal-sub { font-size: var(--t-sm); color: var(--texto-3); margin: 0 0 18px; line-height: 1.5; }
+.pag-modal-acoes { display: flex; gap: 8px; margin-top: 18px; }
+.pag-modal-acoes .btn { flex: 1; }
+.pag-opcional { font-weight: 400; color: var(--texto-4); }
+
+.pag-resumo {
+  margin: 0 0 18px; padding: 14px 16px;
+  background: var(--superficie-2); border-radius: var(--raio);
+  display: flex; flex-direction: column; gap: 9px;
+}
+.pag-resumo > div { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.pag-resumo dt { font-size: var(--t-sm); color: var(--texto-3); margin: 0; }
+.pag-resumo dd { margin: 0; font-weight: 600; font-size: 14px; text-align: right; }
+
+.pag-ok-marca {
+  width: 46px; height: 46px; border-radius: var(--raio-full); margin-bottom: 14px;
+  background: var(--sucesso-bg); border: 1px solid var(--sucesso-borda);
+  position: relative;
+}
+.pag-ok-marca::after {
+  content: ''; position: absolute; left: 17px; top: 12px;
+  width: 9px; height: 17px; border: solid var(--sucesso);
+  border-width: 0 2.5px 2.5px 0; transform: rotate(45deg);
+}
+
+.pag-erro {
+  display: flex; gap: 8px; align-items: flex-start;
+  margin-top: 14px; padding: 12px 14px;
+  background: var(--erro-bg); border: 1px solid var(--erro-borda);
+  border-radius: var(--raio); color: var(--erro);
+  font-size: var(--t-sm); line-height: 1.45;
+}
+
+/* ---------- lado do personal ---------- */
+.pag-validar {
+  padding: 16px 0; border-bottom: 1px solid var(--borda);
+}
+.pag-validar:last-child { border-bottom: none; padding-bottom: 0; }
+.pag-validar-topo {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+}
+.pag-validar-sub { font-size: var(--t-sm); color: var(--texto-3); margin-top: 3px; }
+.pag-validar-valor { font-weight: 700; font-size: 16px; white-space: nowrap; }
+.pag-validar-info {
+  display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center;
+  margin: 10px 0 12px; font-size: var(--t-sm); color: var(--texto-2);
+}
+.pag-validar-obs { font-style: italic; color: var(--texto-3); }
+.pag-recusa { margin-top: 10px; }
+.pag-recusa label { display: block; margin-bottom: 6px; }
+
+@media (min-width: 620px) {
+  .pag-modal-fundo { align-items: center; padding: 20px; }
+  .pag-modal { border-radius: var(--raio-lg); }
+  .pag-hero-btn { width: auto; min-width: 220px; }
+}
+
+/* Ajustes de celular: a linha de cobrança e o modal em 390px. */
+.pag-linha { flex-wrap: wrap; }
+.pag-linha-info { flex: 1 1 100%; }
+.pag-linha-dir { margin-left: auto; }
+.pag-linha-topo strong { flex: 1 1 auto; }
+
+.pag-modal-acoes { flex-direction: column-reverse; }
+.pag-modal-acoes .btn { width: 100%; }
+
+/* Seletor de comprovante: o input nativo sai da tela, o rótulo vira o botão. */
+.pag-arquivo {
+  display: block; cursor: pointer;
+  border: 1px dashed var(--borda-forte); border-radius: var(--raio);
+  padding: 14px; text-align: center;
+  font-size: var(--t-sm); color: var(--texto-3);
+  background: var(--superficie-2); transition: border-color var(--t), color var(--t);
+}
+.pag-arquivo:hover { border-color: var(--primaria); color: var(--texto-2); }
+.pag-arquivo.escolhido {
+  border-style: solid; border-color: var(--sucesso-borda);
+  background: var(--sucesso-bg); color: #15803D; font-weight: 600;
+  word-break: break-all;
+}
+.pag-arquivo input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+@media (min-width: 620px) {
+  .pag-linha { flex-wrap: nowrap; }
+  .pag-linha-info { flex: 1 1 auto; }
+  .pag-modal-acoes { flex-direction: row; }
+  .pag-modal-acoes .btn { width: auto; }
+}

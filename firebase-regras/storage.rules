@@ -34,6 +34,16 @@ service firebase.storage {
       allow write, delete: if request.auth != null && imagemValida();
     }
 
+    // Comprovante de PIX enviado pelo aluno junto com o "Já paguei".
+    // O aluno escreve o próprio comprovante; o personal precisa ler para conferir,
+    // e a leitura autenticada já cobre isso — o caminho só sai em `cobrancas`,
+    // que é privado ao aluno e ao personal dele.
+    match /comprovantes/{alunoUid}/{arquivo} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == alunoUid && imagemValida();
+      allow delete: if request.auth != null && request.auth.uid == alunoUid;
+    }
+
     // Imagens de demonstração dos exercícios, por personal.
     match /exercicios/{personalUid}/{arquivo} {
       allow read: if request.auth != null;

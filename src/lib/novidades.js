@@ -13,6 +13,33 @@
 
 export const NOVIDADES = [
   {
+    versao: '2.2.0',
+    data: '7 de setembro de 2026',
+    titulo: 'Pagamentos mais claros',
+    itens: [
+      {
+        para: 'aluno',
+        texto: 'A tela de Pagamentos mostra a mensalidade da vez em destaque, com a chave PIX e um botão para copiar. As mensalidades futuras ficam só como aviso, sem botão.'
+      },
+      {
+        para: 'aluno',
+        texto: 'O botão agora é "Já paguei": você paga pelo banco e avisa aqui. A confirmação abre na hora, com o valor e o mês, e você pode anexar o comprovante.'
+      },
+      {
+        para: 'aluno',
+        texto: 'Se o personal não confirmar o pagamento, você vê o motivo e pode informar de novo.'
+      },
+      {
+        para: 'personal',
+        texto: 'Os pagamentos informados aparecem no topo do Financeiro, com a data, a observação e o comprovante do aluno.'
+      },
+      {
+        para: 'personal',
+        texto: 'Ao recusar um pagamento, você pode escrever o motivo — o aluno lê e corrige.'
+      }
+    ]
+  },
+  {
     versao: '2.1.0',
     data: '20 de agosto de 2026',
     titulo: 'Treino mais fácil de acompanhar',
