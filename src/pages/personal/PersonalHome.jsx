@@ -69,13 +69,29 @@ const TITULOS = {
 
 const DIA = 86400000
 
-const FILTROS = [
-  { id: 'todos', label: 'Todos' },
-  { id: 'ativos', label: 'Ativos (7 dias)' },
-  { id: 'inativos', label: 'Sem treinar' },
-  { id: 'sem_plano', label: 'Sem plano' },
-  { id: 'atraso', label: 'Em atraso' }
+/*
+  Critérios combináveis: cada um é um teste independente, e marcar dois pede as
+  duas coisas ao mesmo tempo. Antes era um chip por vez, então "quem está em
+  atraso E parado" — a lista que o personal realmente precisa ver — não existia.
+*/
+const CRITERIOS = [
+  { id: 'ativos', label: 'Treinando', teste: f => f.ativo },
+  { id: 'inativos', label: 'Sem treinar', teste: f => !f.ativo },
+  { id: 'sem_plano', label: 'Sem plano', teste: f => !f.temPlano },
+  { id: 'atraso', label: 'Em atraso', teste: f => f.emAtraso },
+  { id: 'aguardando', label: 'Pagamento a validar', teste: f => f.aguardando > 0 },
+  { id: 'em_dia', label: 'Em dia', teste: f => !f.emAtraso }
 ]
+
+const ORDENS_ALUNO = [
+  { id: 'relevancia', rotulo: 'Prioridade (atraso, sem plano)' },
+  { id: 'nome', rotulo: 'Nome' },
+  { id: 'devendo', rotulo: 'Maior valor a receber' },
+  { id: 'parado', rotulo: 'Mais tempo sem treinar' },
+  { id: 'recentes', rotulo: 'Treinou mais recentemente' }
+]
+
+const semAcento = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 
 export default function PersonalHome({ user, perfil, onSair }) {
   const [rever, setRever] = useState(false)
@@ -94,7 +110,8 @@ export default function PersonalHome({ user, perfil, onSair }) {
   const navigate = useNavigate()
 
   const [busca, setBusca] = useState('')
-  const [filtro, setFiltro] = useState('todos')
+  const [criterios, setCriterios] = useState([])   // vazio = todos
+  const [ordem, setOrdem] = useState('relevancia')
 
   const [nNome, setNNome] = useState('')
   const [nEmail, setNEmail] = useState('')
@@ -253,22 +270,33 @@ export default function PersonalHome({ user, perfil, onSair }) {
 
   /* ---------- CRM ---------- */
   const visiveis = useMemo(() => {
-    const q = busca.trim().toLowerCase()
+    const q = semAcento(busca).trim()
+    const testes = CRITERIOS.filter(c => criterios.includes(c.id)).map(c => c.teste)
+
+    const porRelevancia = (a, b) => {
+      if (a.emAtraso !== b.emAtraso) return a.emAtraso ? -1 : 1
+      if (a.temPlano !== b.temPlano) return a.temPlano ? 1 : -1
+      return (b.ultimoTs || 0) - (a.ultimoTs || 0)
+    }
+    const ordenadores = {
+      relevancia: porRelevancia,
+      nome: (a, b) => semAcento(a.nome).localeCompare(semAcento(b.nome)),
+      devendo: (a, b) => (b.aReceber || 0) - (a.aReceber || 0) || porRelevancia(a, b),
+      // Quem nunca treinou vem primeiro: é o caso mais urgente, não o menos.
+      parado: (a, b) => (b.diasParado ?? Infinity) - (a.diasParado ?? Infinity),
+      recentes: (a, b) => (b.ultimoTs || 0) - (a.ultimoTs || 0)
+    }
+
     return fichas
       .filter(f => {
-        if (q && !(f.nome || '').toLowerCase().includes(q) && !(f.codigo || '').toLowerCase().includes(q)) return false
-        if (filtro === 'ativos') return f.ativo
-        if (filtro === 'inativos') return !f.ativo
-        if (filtro === 'sem_plano') return !f.temPlano
-        if (filtro === 'atraso') return f.emAtraso
-        return true
+        if (q && !semAcento(f.nome).includes(q) && !semAcento(f.codigo).includes(q)) return false
+        return testes.every(t => t(f))
       })
-      .sort((a, b) => {
-        if (a.emAtraso !== b.emAtraso) return a.emAtraso ? -1 : 1
-        if (a.temPlano !== b.temPlano) return a.temPlano ? 1 : -1
-        return (b.ultimoTs || 0) - (a.ultimoTs || 0)
-      })
-  }, [fichas, busca, filtro])
+      .sort(ordenadores[ordem] || porRelevancia)
+  }, [fichas, busca, criterios, ordem])
+
+  const alternarCriterio = id =>
+    setCriterios(atual => atual.includes(id) ? atual.filter(x => x !== id) : [...atual, id])
 
   /**
    * Cria a conta do aluno com senha temporária. O personal não escolhe a senha,
@@ -662,11 +690,33 @@ export default function PersonalHome({ user, perfil, onSair }) {
           </div>
 
           <div className="barra-filtros">
-            {FILTROS.map(f => (
-              <button key={f.id} className={'filtro-chip ' + (filtro === f.id ? 'ativo' : '')} onClick={() => setFiltro(f.id)}>
-                {f.label}
+            <button
+              className={'filtro-chip ' + (criterios.length === 0 ? 'ativo' : '')}
+              onClick={() => setCriterios([])}
+            >
+              Todos
+            </button>
+            {CRITERIOS.map(c => (
+              <button
+                key={c.id}
+                className={'filtro-chip ' + (criterios.includes(c.id) ? 'ativo' : '')}
+                onClick={() => alternarCriterio(c.id)}
+              >
+                {c.label}
               </button>
             ))}
+          </div>
+
+          <div className="barra-filtros">
+            <div className="fc-campo fc-ordem">
+              <label htmlFor="ord-alunos">Ordenar por</label>
+              <select id="ord-alunos" value={ordem} onChange={e => setOrdem(e.target.value)}>
+                {ORDENS_ALUNO.map(o => <option key={o.id} value={o.id}>{o.rotulo}</option>)}
+              </select>
+            </div>
+            <span className="fc-contagem">
+              {visiveis.length} de {fichas.length} {fichas.length === 1 ? 'aluno' : 'alunos'}
+            </span>
           </div>
 
           {mostrarForm && (
@@ -778,7 +828,7 @@ export default function PersonalHome({ user, perfil, onSair }) {
                 <div className="ve-icone"><IcAlunos /></div>
                 <h2>{fichas.length === 0 ? 'Nenhum aluno ainda' : 'Nada encontrado'}</h2>
                 <p className="muted">
-                  {fichas.length === 0 ? 'Cadastre seu primeiro aluno para começar.' : 'Ajuste a busca ou o filtro.'}
+                  {fichas.length === 0 ? 'Cadastre seu primeiro aluno para começar.' : 'Nenhum aluno com esses critérios. Ajuste a busca ou os filtros.'}
                 </p>
               </div>
             </div>

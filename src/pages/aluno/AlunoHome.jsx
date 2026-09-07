@@ -9,6 +9,7 @@ import {
   EM_ANALISE, PAGO, RECUSADO
 } from '../../lib/cobrancas'
 import { enviarFoto } from '../../lib/fotos'
+import { anosDe, casaStatus } from '../../lib/filtroCobrancas'
 import SituacaoPagamento from '../../components/pagamentos/SituacaoPagamento.jsx'
 import LinhaCobranca from '../../components/pagamentos/LinhaCobranca.jsx'
 import {
@@ -111,6 +112,8 @@ export default function AlunoHome({ user, perfil, onSair }) {
   const [pagErro, setPagErro] = useState('')
   const [pagOk, setPagOk] = useState(null)
   const [pixCopiado, setPixCopiado] = useState(false)
+  const [histAno, setHistAno] = useState('todos')
+  const [histStatus, setHistStatus] = useState('pago')
 
   // Lista interativa: qual exercício está aberto, carga digitada e erro por exercício.
   const [exAberto, setExAberto] = useState(null)
@@ -208,7 +211,19 @@ export default function AlunoHome({ user, perfil, onSair }) {
     pagamento para destravar, o botão "Já paguei" viraria a chave do cadeado.
   */
   const fin = useMemo(() => organizarCobrancas(cobrancas), [cobrancas])
-  const extrato = useMemo(() => historicoCobrancas(fin.lista), [fin.lista])
+  /*
+    O histórico começa nos pagamentos confirmados, que é o que o aluno procura
+    quando abre esse bloco. "Todas" existe para quem quer conferir o ano inteiro
+    — e aí a repetição com o topo da tela é escolha dele, não imposição nossa.
+  */
+  const anosHist = useMemo(() => anosDe(fin.lista), [fin.lista])
+  const extrato = useMemo(() => {
+    const base = histStatus === 'pago' ? historicoCobrancas(fin.lista) : fin.lista
+    return base
+      .filter(c => histAno === 'todos' || String(c.vencimento || '').startsWith(histAno))
+      .filter(c => histStatus === 'pago' || casaStatus(c, histStatus))
+      .sort((a, b) => (b.vencimento || '').localeCompare(a.vencimento || ''))
+  }, [fin.lista, histAno, histStatus])
   const bloqueado = fin.lista.some(c => vencida(c))
   const proximaCobranca = fin.atual
 
@@ -1411,9 +1426,51 @@ export default function AlunoHome({ user, perfil, onSair }) {
           )}
 
           <section className="pag-bloco">
-            <h2>Pagamentos confirmados</h2>
+            <h2>Histórico</h2>
+
+            <div className="barra-filtros">
+              <button
+                className={'filtro-chip ' + (histStatus === 'pago' ? 'ativo' : '')}
+                onClick={() => setHistStatus('pago')}
+              >
+                Pagos
+              </button>
+              <button
+                className={'filtro-chip ' + (histStatus === 'todos' ? 'ativo' : '')}
+                onClick={() => setHistStatus('todos')}
+              >
+                Todas
+              </button>
+            </div>
+
+            {anosHist.length > 1 && (
+              <div className="barra-filtros">
+                <button
+                  className={'filtro-chip ' + (histAno === 'todos' ? 'ativo' : '')}
+                  onClick={() => setHistAno('todos')}
+                >
+                  Todo o período
+                </button>
+                {anosHist.map(a => (
+                  <button
+                    key={a}
+                    className={'filtro-chip ' + (histAno === a ? 'ativo' : '')}
+                    onClick={() => setHistAno(a)}
+                  >
+                    {a}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {extrato.length === 0
-              ? <p className="muted">Nenhum pagamento confirmado ainda.</p>
+              ? (
+                <p className="muted">
+                  {histStatus === 'pago'
+                    ? 'Nenhum pagamento confirmado neste período.'
+                    : 'Nenhuma cobrança neste período.'}
+                </p>
+              )
               : extrato.map(c => <LinhaCobranca key={c.id} cob={c} podeInformar={false} />)}
           </section>
         </div>

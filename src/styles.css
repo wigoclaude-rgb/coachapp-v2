@@ -2951,3 +2951,61 @@ form.card .av-acoes { padding: 0; }
   .pag-modal-acoes { flex-direction: row; }
   .pag-modal-acoes .btn { width: auto; }
 }
+
+/* ==========================================================================
+   FILTRO DE COBRANÇAS
+   Chips e busca sempre à vista; período, valor e ordenação atrás de um toque.
+   ========================================================================== */
+
+.fc { margin-bottom: 4px; }
+.fc .barra-filtros { margin-bottom: 10px; }
+
+.fc-conta {
+  display: inline-block; margin-left: 6px; min-width: 17px; padding: 0 5px;
+  background: var(--primaria); color: #fff; border-radius: var(--raio-full);
+  font-size: var(--t-xs); font-weight: 700; line-height: 17px; text-align: center;
+}
+
+.fc-painel {
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 16px; margin-bottom: 12px;
+  background: var(--superficie-2); border: 1px solid var(--borda);
+  border-radius: var(--raio);
+}
+.fc-par { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fc-campo { display: flex; flex-direction: column; gap: 5px; }
+.fc-campo label { margin: 0; }
+.fc-campo input, .fc-campo select { margin: 0; }
+.fc-ordem { flex: 1; min-width: 200px; }
+
+.fc-totais {
+  display: flex; flex-wrap: wrap; gap: 6px 18px;
+  padding: 12px 0 4px; margin-bottom: 4px;
+  border-top: 1px solid var(--borda);
+  font-size: var(--t-sm); color: var(--texto-3);
+}
+.fc-totais span { font-weight: 700; color: var(--texto); }
+/* Prefixo próprio: `.ok` e `.erro` soltos são caixas de mensagem no projeto inteiro. */
+.fc-totais .t-ok span { color: #15803D; }
+.fc-totais .t-erro span { color: var(--erro); }
+.fc-totais .t-analise span { color: var(--aviso-txt); }
+
+.fc-contagem { font-size: var(--t-sm); color: var(--texto-3); margin-left: auto; }
+
+/* Linha de cobrança na lista filtrada do personal. */
+.fc-linha {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+  padding: 14px 0; border-bottom: 1px solid var(--borda);
+}
+.fc-linha:last-child { border-bottom: none; padding-bottom: 0; }
+.fc-linha-info { flex: 1 1 100%; min-width: 0; }
+.fc-linha-topo { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.fc-linha-valor { font-weight: 700; }
+.fc-linha-sub { display: block; font-size: var(--t-sm); color: var(--texto-3); margin-top: 3px; }
+.fc-linha-dir { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+
+@media (min-width: 620px) {
+  .fc-linha { flex-wrap: nowrap; }
+  .fc-linha-info { flex: 1 1 auto; }
+}

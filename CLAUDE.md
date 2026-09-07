@@ -142,6 +142,13 @@ e **precisam ser coladas no console do Firebase à mão** — o repositório nã
   vencimento, tipo e `criadaEm` são imutáveis para ele, e `validadaEm`, `validadaPor` e
   `motivoRecusa` só aceitam escrita do personal. Antes de Set/2026 o nó inteiro era
   gravável pelo aluno — dava para se marcar como pago pelo DevTools e destravar o treino.
+- **Filtro de cobrança mora numa lib só** (`src/lib/filtroCobrancas.js`). Três telas
+  filtram cobrança; com um `filter` inline em cada uma, "vencida" passaria a significar
+  coisas diferentes em cada canto.
+- **Na lista do Financeiro, a identidade é `aid + '/' + cid`.** O `cid` só é único
+  dentro do nó de cada aluno, e aquela lista mistura todos — com `key={cid}` o React
+  deixava linhas velhas no DOM ao filtrar, e a recusa aberta de um aluno abria a de
+  outro.
 - **Bloqueio por inadimplência.** Cobrança vencida (`vencida(c)` em `src/lib/util.js`)
   → `bloqueado = true` → a aba Meu Treino vira um aviso. `vencida()` continua contando
   a cobrança em análise como devida, de propósito: se informar o pagamento destravasse,
@@ -176,6 +183,7 @@ e **precisam ser coladas no console do Firebase à mão** — o repositório nã
 | `anexos.js` / `fotos.js` / `medidas.js` | arquivos e medidas |
 | `atividades.js` | check-in de atividade (tempo, distância) |
 | `cobrancas.js` | estados da cobrança, o que é informável, selos e rótulos |
+| `filtroCobrancas.js` | busca, status, período, faixa de valor, ordenação e totais |
 | `tours.js` / `novidades.js` | tutorial de primeiro acesso e changelog in-app |
 | `presenca.js` / `notify.js` / `util.js` | presença, notificações, formatação |
 

@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ref, push, update, remove } from 'firebase/database'
 import { db } from '../../firebase'
-import { fmtData, fmtMoeda, vencida, hojeISO } from '../../lib/util'
+import { fmtData, fmtMoeda } from '../../lib/util'
 import { notificar } from '../../lib/notify'
-import { selo, legenda, titulo as tituloCobranca, dataBR, EM_ANALISE, PAGO } from '../../lib/cobrancas'
+import { selo, legenda, titulo as tituloCobranca, dataBR, EM_ANALISE } from '../../lib/cobrancas'
+import { aplicar, totais as somarTotais, filtroVazio } from '../../lib/filtroCobrancas'
+import FiltroCobrancas from '../../components/FiltroCobrancas.jsx'
 
 // [NOVO] calcula a data de vencimento da i-ésima cobrança conforme a frequência
 function proximaData(dataISO, freq, i) {
@@ -47,6 +49,7 @@ export default function Financeiro({ user, alunos, cobrancas }) {
   const [motivo, setMotivo] = useState('')
   const [ocupado, setOcupado] = useState(null)       // id em processamento
   const [erro, setErro] = useState('')
+  const [filtro, setFiltro] = useState(filtroVazio)
 
   const listaAlunos = Object.entries(alunos)
   const meusIds = new Set(Object.keys(alunos))
@@ -86,7 +89,7 @@ export default function Financeiro({ user, alunos, cobrancas }) {
   */
   async function validar(cob, aprovar, motivoRecusa = '') {
     if (ocupado) return
-    setOcupado(cob.cid)
+    setOcupado(cob.chave)
     setErro('')
     try {
       await update(ref(db, 'cobrancas/' + cob.aid + '/' + cob.cid), {
@@ -116,21 +119,38 @@ export default function Financeiro({ user, alunos, cobrancas }) {
     await remove(ref(db, 'cobrancas/' + alunoId + '/' + cobId))
   }
 
-  // Montar listas
-  const pendentesValidacao = []
-  const abertas = []
-  const historico = []
-  Object.entries(cobrancas).forEach(([aid, cs]) => {
-    if (!meusIds.has(aid)) return
-    Object.entries(cs || {}).forEach(([cid, c]) => {
-      const item = { aid, cid, ...c, aluno: alunos[aid]?.nome || 'Aluno' }
-      if (c.status === EM_ANALISE) pendentesValidacao.push(item)
-      else if (c.status === PAGO) historico.push(item)
-      else abertas.push(item)   // pendente e recusado: as duas ainda são devidas
+  /*
+    Uma lista só, filtrada. Antes eram três blocos fixos — "em aberto",
+    "histórico" e a fila de validação — e não havia como perguntar "quanto a
+    Maria me deve de julho": era rolar a página inteira no olho.
+
+    A fila de validação continua fora do filtro, fixa no topo: é o que precisa
+    de ação hoje, e escondê-la atrás de um filtro seria um jeito de perder dinheiro.
+  */
+  const todas = useMemo(() => {
+    const lista = []
+    Object.entries(cobrancas).forEach(([aid, cs]) => {
+      if (!meusIds.has(aid)) return
+      Object.entries(cs || {}).forEach(([cid, c]) => {
+        /*
+          `cid` só é único dentro do nó do aluno. Esta lista mistura todos os
+          alunos, então a identidade aqui precisa carregar os dois — como chave
+          do React e como referência de qual linha está aberta ou em processamento.
+        */
+        lista.push({ aid, cid, chave: aid + '/' + cid, ...c, aluno: alunos[aid]?.nome || 'Aluno' })
+      })
     })
-  })
-  historico.sort((a, b) => (b.validadaEm || 0) - (a.validadaEm || 0))
-  abertas.sort((a, b) => a.vencimento.localeCompare(b.vencimento))
+    return lista
+  }, [cobrancas, alunos])
+
+  const pendentesValidacao = useMemo(
+    () => todas.filter(c => c.status === EM_ANALISE)
+      .sort((a, b) => (a.pagamento?.data || 0) - (b.pagamento?.data || 0)),
+    [todas]
+  )
+
+  const filtradas = useMemo(() => aplicar(todas, filtro), [todas, filtro])
+  const resumo = useMemo(() => somarTotais(filtradas), [filtradas])
 
   return (
     <>
@@ -187,7 +207,7 @@ export default function Financeiro({ user, alunos, cobrancas }) {
           </p>
           {erro && <div className="pag-erro" role="alert"><span>{erro}</span></div>}
           {pendentesValidacao.map(c => (
-            <div key={c.cid} className="pag-validar">
+            <div key={c.chave} className="pag-validar">
               <div className="pag-validar-topo">
                 <div>
                   <strong>{c.aluno}</strong>
@@ -206,26 +226,26 @@ export default function Financeiro({ user, alunos, cobrancas }) {
                 )}
               </div>
 
-              {recusando === c.cid ? (
+              {recusando === c.chave ? (
                 <div className="pag-recusa">
-                  <label htmlFor={'motivo-' + c.cid}>
+                  <label htmlFor={'motivo-' + c.chave}>
                     Motivo da recusa <span className="pag-opcional">(o aluno vê este texto)</span>
                   </label>
                   <input
-                    id={'motivo-' + c.cid} value={motivo} maxLength={300}
+                    id={'motivo-' + c.chave} value={motivo} maxLength={300}
                     onChange={e => setMotivo(e.target.value)}
                     placeholder="Ex: não encontrei esse valor no extrato"
-                    disabled={ocupado === c.cid}
+                    disabled={ocupado === c.chave}
                   />
                   <div className="aluno-acoes">
                     <button
-                      className="btn btn-sm" disabled={ocupado === c.cid}
+                      className="btn btn-sm" disabled={ocupado === c.chave}
                       onClick={() => validar(c, false, motivo)}
                     >
-                      {ocupado === c.cid ? 'Salvando...' : 'Confirmar recusa'}
+                      {ocupado === c.chave ? 'Salvando...' : 'Confirmar recusa'}
                     </button>
                     <button
-                      className="btn btn-sec btn-sm" disabled={ocupado === c.cid}
+                      className="btn btn-sec btn-sm" disabled={ocupado === c.chave}
                       onClick={() => { setRecusando(null); setMotivo('') }}
                     >
                       Voltar
@@ -235,19 +255,19 @@ export default function Financeiro({ user, alunos, cobrancas }) {
               ) : (
                 <div className="aluno-acoes">
                   <button
-                    className="btn btn-sm" disabled={ocupado === c.cid}
+                    className="btn btn-sm" disabled={ocupado === c.chave}
                     onClick={() => validar(c, true)}
                   >
-                    {ocupado === c.cid ? 'Salvando...' : 'Confirmar pagamento'}
+                    {ocupado === c.chave ? 'Salvando...' : 'Confirmar pagamento'}
                   </button>
                   <button
-                    className="btn btn-sec btn-sm" disabled={ocupado === c.cid}
-                    onClick={() => { setRecusando(c.cid); setMotivo(''); setErro('') }}
+                    className="btn btn-sec btn-sm" disabled={ocupado === c.chave}
+                    onClick={() => { setRecusando(c.chave); setMotivo(''); setErro('') }}
                   >
                     Recusar
                   </button>
                   <button
-                    className="btn btn-perigo-sutil btn-sm" disabled={ocupado === c.cid}
+                    className="btn btn-perigo-sutil btn-sm" disabled={ocupado === c.chave}
                     onClick={() => deletar(c.aid, c.cid)}
                   >
                     Deletar
@@ -260,46 +280,42 @@ export default function Financeiro({ user, alunos, cobrancas }) {
       )}
 
       <div className="card">
-        <h2>Cobranças em aberto</h2>
-        {abertas.length === 0 && <p className="muted">Nenhuma cobrança em aberto.</p>}
-        {abertas.map(c => (
-          <div key={c.cid} className="cobranca-item">
-            <div>
-              <strong>{c.aluno}</strong> · {fmtMoeda(c.valor)} · {c.tipo}
-              <div className={'muted ' + (vencida(c) ? 'texto-vencido' : '')}>
-                Vence em {dataBR(c.vencimento)} {vencida(c) ? '· VENCIDA (treino bloqueado)' : ''}
-              </div>
-              {c.status === 'recusado' && (
-                <div className="muted">
-                  Você recusou o pagamento informado{c.motivoRecusa ? ': “' + c.motivoRecusa + '”' : ''}
+        <h2>Todas as cobranças</h2>
+        <FiltroCobrancas filtro={filtro} onFiltro={setFiltro} totais={resumo} />
+
+        {filtradas.length === 0 && (
+          <p className="muted">
+            {todas.length === 0
+              ? 'Nenhuma cobrança lançada ainda.'
+              : 'Nenhuma cobrança com esses filtros. Ajuste os critérios ou toque em Limpar.'}
+          </p>
+        )}
+
+        {filtradas.map(c => {
+          const s = selo(c)
+          return (
+            <div key={c.chave} className="fc-linha">
+              <div className="fc-linha-info">
+                <div className="fc-linha-topo">
+                  <strong>{c.aluno}</strong>
+                  <span className="fc-linha-valor">{fmtMoeda(c.valor)}</span>
                 </div>
-              )}
+                <span className="fc-linha-sub">{tituloCobranca(c)} · {legenda(c)}</span>
+                {c.status === 'recusado' && c.motivoRecusa && (
+                  <span className="fc-linha-sub">Motivo: “{c.motivoRecusa}”</span>
+                )}
+              </div>
+              <div className="fc-linha-dir">
+                <span className={'pag-selo ' + s.tom}>{s.rotulo}</span>
+                <button className="btn btn-perigo-sutil btn-sm" onClick={() => deletar(c.aid, c.cid)}>
+                  Deletar
+                </button>
+              </div>
             </div>
-            {/* [NOVO] */}
-            <div className="aluno-acoes">
-              <button className="btn btn-sec btn-sm" onClick={() => deletar(c.aid, c.cid)}>Deletar</button>
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
-      <div className="card">
-        <h2>Histórico de recebimentos</h2>
-        {historico.length === 0 && <p className="muted">Nenhum pagamento validado ainda.</p>}
-        {historico.map(c => (
-          <div key={c.cid} className="cobranca-item">
-            <div>
-              <strong>{c.aluno}</strong> · {fmtMoeda(c.valor)} · {c.tipo}
-              <div className="muted">Recebido/validado em {c.validadaEm ? fmtData(c.validadaEm) : '-'}</div>
-            </div>
-            {/* [NOVO] envolvi o selo num container para caber o botão deletar */}
-            <div className="aluno-acoes">
-              <span className="selo-pago">Pago</span>
-              <button className="btn btn-sec btn-sm" onClick={() => deletar(c.aid, c.cid)}>Deletar</button>
-            </div>
-          </div>
-        ))}
-      </div>
     </>
   )
 }
