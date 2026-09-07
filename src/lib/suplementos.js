@@ -57,7 +57,9 @@ export const suplementoVazio = () => ({
   indicadoPor: 'proprio',
   observacao: '',
   ativo: true,
-  pausadoAte: null
+  pausadoAte: null,
+  // Ver src/lib/lembretes.js: o que faz o celular tocar.
+  lembrete: { ativo: false, horarios: [], antecedencia: 0, cobrar: true }
 })
 
 /** Preenche o que faltar, para registro antigo não quebrar a tela. */

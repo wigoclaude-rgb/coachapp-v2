@@ -1,6 +1,8 @@
 import {
   DIAS_SEMANA, QUEM_INDICOU, FREQUENCIAS, MOMENTOS, suplementoVazio
 } from '../../lib/suplementos'
+import CampoLembrete from './CampoLembrete.jsx'
+import { normalizarLembrete } from '../../lib/lembretes'
 
 /*
   Cadastro. Fica atrás de um botão de propósito: a tela é de acompanhamento, e
@@ -9,8 +11,23 @@ import {
   A frequência é um seletor e não dois botões porque "apenas dias de treino"
   entrou — e é ela que liga a suplementação ao treino do dia.
 */
-export default function FormSuplemento({ form, onMudar, onSalvar, onCancelar, salvando, editando, erro }) {
+export default function FormSuplemento({ form, onMudar, onSalvar, onCancelar, salvando, editando, erro, uid, podeAtivarPush }) {
   const mudar = (campo, valor) => onMudar({ ...form, [campo]: valor })
+
+  /* Os horários vivem em `lembrete.horarios`, um por dose. `horario` é derivado
+     no salvamento (o primeiro da lista) para o resto da tela continuar lendo. */
+  const vezes = Math.max(1, Number(form.vezesAoDia) || 1)
+  const guardados = normalizarLembrete(form).horarios
+  const horarios = Array.from({ length: vezes }, (_, i) => guardados[i] || '')
+
+  const mudarHorario = (i, valor) => {
+    const novos = [...horarios]
+    novos[i] = valor
+    onMudar({
+      ...form,
+      lembrete: { ...normalizarLembrete(form), horarios: novos.filter(Boolean) }
+    })
+  }
 
   const alternarDia = d => mudar(
     'dias',
@@ -105,12 +122,21 @@ export default function FormSuplemento({ form, onMudar, onSalvar, onCancelar, sa
 
         <div className="linha-2" style={{ marginTop: 14 }}>
           <div>
-            <label htmlFor="sp-hora">Horário</label>
-            <input
-              id="sp-hora" type="time" value={form.horario}
-              onChange={e => mudar('horario', e.target.value)}
-              disabled={form.frequencia === 'treino'}
-            />
+            <label>{vezes === 1 ? 'Horário' : 'Horário de cada dose'}</label>
+            {/*
+              Um campo por dose. Antes havia um horário só para o suplemento
+              inteiro — com "3x ao dia", duas doses ficavam sem hora, e o
+              lembrete não teria como saber quando tocar.
+            */}
+            <div className="lem-horarios">
+              {horarios.map((h, i) => (
+                <input
+                  key={i} type="time" value={h} aria-label={vezes === 1 ? 'Horário' : `${i + 1}ª dose`}
+                  onChange={e => mudarHorario(i, e.target.value)}
+                  disabled={form.frequencia === 'treino'}
+                />
+              ))}
+            </div>
             <p className="mini">
               {form.frequencia === 'treino'
                 ? 'Definido pelo momento do treino.'
@@ -131,6 +157,8 @@ export default function FormSuplemento({ form, onMudar, onSalvar, onCancelar, sa
           onChange={e => mudar('observacao', e.target.value)}
           placeholder="Ex: tomar junto com o pós-treino"
         />
+
+        <CampoLembrete form={form} onMudar={onMudar} uid={uid} podeAtivar={podeAtivarPush} />
 
         {erro && <div className="erro">{erro}</div>}
 

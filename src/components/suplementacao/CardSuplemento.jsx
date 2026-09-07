@@ -34,7 +34,7 @@ export default function CardSuplemento({ sup, tomados, onEditar, onPausar, onRet
   }
 
   return (
-    <div className={'sp-card' + (pausado ? ' pausado' : '')}>
+    <div id={'sup-' + sup.id} className={'sp-card' + (pausado ? ' pausado' : '')}>
       <div className="sp-card-topo">
         <div style={{ minWidth: 0 }}>
           <div className="sp-card-nome">

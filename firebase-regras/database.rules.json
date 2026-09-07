@@ -218,6 +218,29 @@
       }
     },
 
+    "pushSubs": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        "$aparelho": {
+          ".validate": "!newData.exists() || newData.hasChildren(['endpoint', 'p256dh', 'auth'])",
+          "endpoint": { ".validate": "newData.isString() && newData.val().length <= 1000" },
+          "p256dh": { ".validate": "newData.isString() && newData.val().length <= 200" },
+          "auth": { ".validate": "newData.isString() && newData.val().length <= 100" },
+          "tz": { ".validate": "newData.isString() && newData.val().length <= 60" },
+          "criadoEm": { ".validate": "newData.isNumber()" },
+          "$outro": { ".validate": false }
+        }
+      }
+    },
+
+    "lembretesEnviados": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": false
+      }
+    },
+
     "presenca": {
       "$uid": {
         ".read": "auth != null",

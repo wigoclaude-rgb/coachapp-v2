@@ -11,6 +11,8 @@ import Consistencia from './suplementacao/Consistencia.jsx'
 import CardSuplemento from './suplementacao/CardSuplemento.jsx'
 import FormSuplemento from './suplementacao/FormSuplemento.jsx'
 import { IcMais, IcSuplemento } from './Icones.jsx'
+import { normalizarLembrete } from '../lib/lembretes'
+import PainelNotificacoes from './suplementacao/PainelNotificacoes.jsx'
 
 /*
   Acompanhamento da rotina de suplementação.
@@ -23,7 +25,7 @@ import { IcMais, IcSuplemento } from './Icones.jsx'
   `podeMarcar` só é verdadeiro para o aluno: quem toma é ele. O personal cadastra
   e acompanha, mas não confirma dose — senão a aderência deixa de significar algo.
 */
-export default function Suplementacao({ alunoId, podeMarcar = false, quemSou = 'proprio', nomeAluno }) {
+export default function Suplementacao({ alunoId, podeMarcar = false, quemSou = 'proprio', nomeAluno, destacar = null }) {
   const [suplementos, setSuplementos] = useState({})
   const [tomados, setTomados] = useState({})
   const [execucoes, setExecucoes] = useState({})
@@ -38,6 +40,21 @@ export default function Suplementacao({ alunoId, podeMarcar = false, quemSou = '
   const [editandoId, setEditandoId] = useState(null)
   const [salvando, setSalvando] = useState(false)
   const [filtroLista, setFiltroLista] = useState('ativos')
+
+  /*
+    Chegou pela notificação: leva a tela até a dose e a destaca por alguns
+    segundos. Sem isso o aluno abriria a lista inteira e teria que caçar o item
+    — com sete suplementos, o lembrete perde a graça.
+  */
+  useEffect(() => {
+    if (!destacar || carregando) return
+    const alvo = document.getElementById('sup-' + destacar)
+    if (!alvo) return
+    alvo.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    alvo.classList.add('sup-destaque')
+    const t = setTimeout(() => alvo.classList.remove('sup-destaque'), 4000)
+    return () => clearTimeout(t)
+  }, [destacar, carregando, suplementos])
 
   useEffect(() => {
     if (!alunoId) return
@@ -142,15 +159,26 @@ export default function Suplementacao({ alunoId, podeMarcar = false, quemSou = '
     if (!form.nome.trim() || salvando) return
     setSalvando(true); setErroAcao('')
 
+    const vezesAoDia = Math.max(1, Number(form.vezesAoDia) || 1)
+    const lembrete = normalizarLembrete(form)
+    // Nunca mais horários do que doses: reduzir "3x ao dia" para 1 deixaria dois
+    // lembretes órfãos tocando para doses que não existem mais.
+    const horarios = lembrete.horarios.slice(0, vezesAoDia)
+
     const dados = {
       ...form,
       nome: form.nome.trim(),
       marca: form.marca.trim(),
       dose: form.dose.trim(),
       observacao: form.observacao.trim(),
-      vezesAoDia: Math.max(1, Number(form.vezesAoDia) || 1),
-      // Pós-treino não tem hora do relógio; o momento é que manda.
-      horario: form.frequencia === 'treino' ? '' : form.horario
+      vezesAoDia,
+      /*
+        `horario` continua sendo o primeiro da lista. O resto da tela (ordem da
+        rotina, "em 42 min") lê esse campo, e mantê-lo derivado evita duas fontes
+        de verdade — trocar o lembrete das 05:00 para 07:00 reordena a rotina junto.
+      */
+      horario: form.frequencia === 'treino' ? '' : (horarios[0] || ''),
+      lembrete: { ...lembrete, horarios, ativo: lembrete.ativo && horarios.length > 0 }
     }
 
     try {
@@ -279,8 +307,13 @@ export default function Suplementacao({ alunoId, podeMarcar = false, quemSou = '
         </button>
       </div>
 
+      {/* Controle geral dos lembretes: só para quem toma a dose. */}
+      {podeMarcar && !form && <PainelNotificacoes uid={alunoId} />}
+
       {form && (
         <FormSuplemento
+          uid={alunoId}
+          podeAtivarPush={podeMarcar}
           form={form}
           onMudar={setForm}
           onSalvar={salvar}

@@ -13,6 +13,33 @@
 
 export const NOVIDADES = [
   {
+    versao: '2.3.0',
+    data: '8 de setembro de 2026',
+    titulo: 'Lembrete de suplementação no celular',
+    itens: [
+      {
+        para: 'aluno',
+        texto: 'Agora o CoachApp avisa na hora da dose, mesmo com o app fechado. Ative em Suplementação e escolha o horário de cada dose.'
+      },
+      {
+        para: 'aluno',
+        texto: 'Tocando no aviso, o app abre direto no suplemento — é só marcar a dose.'
+      },
+      {
+        para: 'aluno',
+        texto: 'Se você não registrar, o app pergunta uma vez, uma hora depois. Só isso: sem resposta, a dose fica como não registrada, nunca como não tomada.'
+      },
+      {
+        para: 'aluno',
+        texto: 'Dá para silenciar por hoje ou desligar todos os lembretes de uma vez, sem mexer nos seus suplementos.'
+      },
+      {
+        para: 'aluno',
+        texto: 'No iPhone, os lembretes só funcionam com o CoachApp adicionado à tela de início — o app explica como fazer.'
+      }
+    ]
+  },
+  {
     versao: '2.2.0',
     data: '7 de setembro de 2026',
     titulo: 'Pagamentos mais claros',

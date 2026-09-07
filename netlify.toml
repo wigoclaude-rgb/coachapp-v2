@@ -2,7 +2,26 @@
   command = "npm run build"
   publish = "dist"
 
+# A função agendada dos lembretes de suplementação vive aqui.
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# SPA: qualquer rota cai no index.html. Precisa vir DEPOIS das exceções abaixo.
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+
+# O service worker precisa ser servido da raiz e sem cache: é ele que controla
+# as notificações, e uma versão velha presa em cache não recebe correção nenhuma.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Service-Worker-Allowed = "/"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Content-Type = "application/manifest+json"

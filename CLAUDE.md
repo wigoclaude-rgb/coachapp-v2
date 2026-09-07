@@ -4,8 +4,12 @@ App web para personal trainer. React + Vite + Firebase (Auth + Realtime Database
 Storage). **Não existe backend próprio** — o navegador fala direto com o Firebase, e
 quem protege os dados são as regras do Realtime Database.
 
+A única exceção é `netlify/functions/lembretes-suplementos.mjs`, uma função agendada
+que envia os push de suplementação. Ela existe porque com o app fechado nada no
+celular acorda no horário — ver `netlify/LEIA-ME.md`.
+
 Deploy: Netlify (`netlify.toml` já faz build e o redirect de SPA).
-Versão do app exibida ao usuário: **2.2.0** (ver `src/lib/novidades.js`).
+Versão do app exibida ao usuário: **2.3.0** (ver `src/lib/novidades.js`).
 
 ---
 
@@ -106,7 +110,10 @@ e **precisam ser coladas no console do Firebase à mão** — o repositório nã
 | `cobrancas/{alunoUid}` | `valor`, `vencimento`, `status`, `tipo`, `pagamento{data,obs,comprovante}`, `validadaEm`, `validadaPor`, `motivoRecusa` |
 | `chats/{conversaId}` | `conversaId` = os dois uids concatenados; a regra usa `.contains(auth.uid)` |
 | `presenca/{uid}` | online/visto por último, via `onDisconnect` |
-| `notificacoes/{uid}` | sino do topo |
+| `notificacoes/{uid}` | sino do topo (aviso interno, não é push) |
+| `pushSubs/{uid}/{aparelho}` | inscrição de push: `endpoint`, `p256dh`, `auth`, `tz` |
+| `lembretesEnviados/{uid}/{dia}` | o que já foi enviado — é o que impede repetir |
+| `users/{uid}/notificacoes` | `suplementos` (liga/desliga) e `silenciarAte` |
 | `config/suporteUid` | uid da conta de suporte |
 
 ### Decisões de segurança que não devem ser desfeitas
@@ -149,6 +156,21 @@ e **precisam ser coladas no console do Firebase à mão** — o repositório nã
   dentro do nó de cada aluno, e aquela lista mistura todos — com `key={cid}` o React
   deixava linhas velhas no DOM ao filtrar, e a recusa aberta de um aluno abria a de
   outro.
+- **Push exige servidor, e é por isso que existe uma função no Netlify.** Nenhuma API
+  do navegador agenda uma notificação para si mesma com o app fechado (Notification
+  Triggers nunca saiu de teste). A função roda de minuto em minuto e envia; a decisão
+  do que enviar mora em `src/lib/lembretes.js`, testável sem servidor nem celular.
+- **O fuso vem do aparelho, não do servidor.** `pushSubs.tz` é gravado na inscrição e
+  aplicado em `agoraNoFuso()`. Sem isso um aluno em Brasília receberia às 02:00.
+- **`lembretesEnviados` é gravado ANTES do envio.** Se gravar depois e a escrita
+  falhar, a próxima passagem repete a notificação — e quem recebe a mesma cobrança de
+  minuto em minuto desliga tudo. Perder um lembrete é melhor que repetir sem parar.
+- **Teto de 2 avisos por dose por dia**: o principal e uma cobrança 60 min depois.
+  Sem resposta, a dose fica `não registrada` — o app nunca marca "não tomou".
+- **A notificação não marca a dose.** Fazer isso exigiria credencial de escrita do
+  Firebase dentro do service worker. Ela abre o app na dose, e o registro acontece lá.
+- **No iPhone, push só existe com o app na tela de início** (iOS 16.4+). Regra da
+  Apple; `push.js` detecta e explica em vez de falhar em silêncio.
 - **Bloqueio por inadimplência.** Cobrança vencida (`vencida(c)` em `src/lib/util.js`)
   → `bloqueado = true` → a aba Meu Treino vira um aviso. `vencida()` continua contando
   a cobrança em análise como devida, de propósito: se informar o pagamento destravasse,
@@ -183,6 +205,8 @@ e **precisam ser coladas no console do Firebase à mão** — o repositório nã
 | `anexos.js` / `fotos.js` / `medidas.js` | arquivos e medidas |
 | `atividades.js` | check-in de atividade (tempo, distância) |
 | `cobrancas.js` | estados da cobrança, o que é informável, selos e rótulos |
+| `lembretes.js` | quando notificar uma dose: fuso, dias, antecedência, anti-spam |
+| `push.js` | inscrição de push do navegador e o caso do iPhone |
 | `filtroCobrancas.js` | busca, status, período, faixa de valor, ordenação e totais |
 | `tours.js` / `novidades.js` | tutorial de primeiro acesso e changelog in-app |
 | `presenca.js` / `notify.js` / `util.js` | presença, notificações, formatação |
@@ -256,3 +280,7 @@ versão, cole no console, senão o fluxo de pagamento quebra:
 2. **Storage → Regras** → `firebase-regras/storage.rules`, que ganhou o caminho
    `comprovantes/{alunoUid}`. Sem isso o envio do comprovante falha — e só ele: o
    código trata a falha e registra o pagamento mesmo assim.
+
+3. **Variáveis do Netlify e chaves VAPID** para os lembretes de suplementação —
+   o passo a passo completo está em `netlify/LEIA-ME.md`. Sem isso o app mostra
+   "Os lembretes ainda não foram configurados neste servidor" e o resto funciona.

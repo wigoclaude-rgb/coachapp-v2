@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { ref, onValue, push, update, remove } from 'firebase/database'
 import { db } from '../../firebase'
 import { fmtData, fmtMoeda, vencida, hojeISO, imagemExercicio, youtubeId, comKg, beep } from '../../lib/util'
@@ -37,6 +38,8 @@ import {
   IcFogo, IcCalendario, IcCheck, IcHalter, IcAlerta, IcTrofeu, IcVideo, IcSeta, IcFechar,
   IcSuplemento
 } from '../../components/Icones.jsx'
+
+const ABAS_VALIDAS = new Set(['treino', 'evolucao', 'diario', 'suplementos', 'pagamentos', 'chat', 'config'])
 
 const TITULOS = {
   treino: { t: 'Meu Treino', s: 'Seu plano de hoje' },
@@ -96,7 +99,14 @@ function calcularSequencia(diasSet) {
 }
 
 export default function AlunoHome({ user, perfil, onSair }) {
-  const [aba, setAba] = useState('treino')
+  /*
+    A notificação abre em /aluno?aba=suplementos&sup=ID. Sem ler isso aqui, o
+    aluno cairia na tela de treino e teria que procurar a dose — que é
+    exatamente o que o lembrete existe para evitar.
+  */
+  const [params, setParams] = useSearchParams()
+  const [aba, setAba] = useState(() => ABAS_VALIDAS.has(params.get('aba')) ? params.get('aba') : 'treino')
+  const supDestaque = params.get('sup') || null
   const [treinoBruto, setTreinoBruto] = useState(null)
   const [feitas, setFeitas] = useState({})
   const [cobrancas, setCobrancas] = useState({})
@@ -664,7 +674,8 @@ export default function AlunoHome({ user, perfil, onSair }) {
   return (
     <Layout
       user={user} perfil={perfil} onSair={onSair} itens={itens}
-      abaAtiva={aba} onAba={a => { setAba(a); setRever(false) }}
+      abaAtiva={aba}
+      onAba={a => { setAba(a); setRever(false); if (params.has('sup') || params.has('aba')) setParams({}, { replace: true }) }}
       roleLabel="Aluno" titulo={meta.t} subtitulo={meta.s}
       onAjuda={tourDaAba ? () => setRever(true) : undefined}
     >
@@ -1579,7 +1590,9 @@ export default function AlunoHome({ user, perfil, onSair }) {
       {aba === 'diario' && <Diario user={user} perfil={perfil} />}
 
       {aba === 'suplementos' && (
-        <Suplementacao alunoId={user.uid} podeMarcar quemSou="proprio" />
+        <Suplementacao alunoId={user.uid} podeMarcar quemSou="proprio" 
+          destacar={supDestaque}
+        />
       )}
 
       {aba === 'config' && <Config user={user} perfil={perfil} />}
