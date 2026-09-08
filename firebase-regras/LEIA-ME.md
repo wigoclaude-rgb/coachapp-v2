@@ -14,6 +14,19 @@ abrindo o DevTools.
 3. Apague tudo e cole o conteúdo de `database.rules.json`
 4. **Publicar**
 
+### Duas regras que parecem redundantes e não são
+
+**`users/$uid` tem três casos de leitura, não dois.** O terceiro —
+`root.child('users/'+auth.uid+'/personalId').val() === $uid` — é o aluno lendo o
+perfil do **próprio personal**. É dali que sai a chave PIX na tela de pagamentos
+(`AlunoHome.jsx`, o `onValue` em `users/{personalId}`). Sem esse caso o cartão do
+PIX simplesmente não aparece, e nada acusa o motivo: o `onValue` falha calado.
+
+Essa linha ficou meses só no console, sem estar aqui no arquivo. Em Set/2026 quase
+foi perdida numa republicação. **Se você editar as regras direto no console,
+traga a mudança para este arquivo** — senão o próximo que colar o arquivo desfaz
+o seu ajuste.
+
 ### O que essas regras garantem
 
 | Nó | Quem lê | Quem escreve |
