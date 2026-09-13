@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ref, onValue, push, update, remove } from 'firebase/database'
 import { db } from '../../firebase'
@@ -11,6 +11,9 @@ import {
 } from '../../lib/cobrancas'
 import { enviarFoto } from '../../lib/fotos'
 import { anosDe, casaStatus } from '../../lib/filtroCobrancas'
+import { montarPainel } from '../../lib/painel'
+import { recordes, prsNoMes } from '../../lib/evolucao'
+import Inicio from '../../components/aluno/Inicio.jsx'
 import SituacaoPagamento from '../../components/pagamentos/SituacaoPagamento.jsx'
 import LinhaCobranca from '../../components/pagamentos/LinhaCobranca.jsx'
 import {
@@ -34,16 +37,17 @@ import { registrarDose } from '../../lib/doses'
 import {
   TOUR_ALUNO_TREINO, TOUR_ALUNO_EVOLUCAO, TOUR_ALUNO_DIARIO, TOUR_ALUNO_PAGAMENTOS
 } from '../../lib/tours'
-import {
+import { IcInicio,
   IcTreino, IcEvolucao, IcPagamentos, IcChat, IcConfig,
   IcFogo, IcCalendario, IcCheck, IcHalter, IcAlerta, IcTrofeu, IcVideo, IcSeta, IcFechar,
   IcSuplemento
 } from '../../components/Icones.jsx'
 
-const ABAS_VALIDAS = new Set(['treino', 'evolucao', 'diario', 'suplementos', 'pagamentos', 'chat', 'config'])
+const ABAS_VALIDAS = new Set(['inicio', 'treino', 'evolucao', 'diario', 'suplementos', 'pagamentos', 'chat', 'config'])
 
 const TITULOS = {
-  treino: { t: 'Meu Treino', s: 'Seu plano de hoje' },
+  inicio: { t: 'Início', s: 'O que precisa de você hoje' },
+  treino: { t: 'Treino', s: 'Seu plano de hoje' },
   evolucao: { t: 'Evolução', s: 'Acompanhe seu progresso' },
   diario: { t: 'Check-in', s: 'Seu registro do dia — privado' },
   suplementos: { t: 'Suplementação', s: 'O que você toma e a constância' },
@@ -106,7 +110,7 @@ export default function AlunoHome({ user, perfil, onSair }) {
     exatamente o que o lembrete existe para evitar.
   */
   const [params, setParams] = useSearchParams()
-  const [aba, setAba] = useState(() => ABAS_VALIDAS.has(params.get('aba')) ? params.get('aba') : 'treino')
+  const [aba, setAba] = useState(() => ABAS_VALIDAS.has(params.get('aba')) ? params.get('aba') : 'inicio')
   const supDestaque = params.get('sup') || null
   const [treinoBruto, setTreinoBruto] = useState(null)
   const [feitas, setFeitas] = useState({})
@@ -151,6 +155,10 @@ export default function AlunoHome({ user, perfil, onSair }) {
   const [supDispensado, setSupDispensado] = useState(false)
   const [avalAberta, setAvalAberta] = useState(null)
   const [anexos, setAnexos] = useState({})
+  // A Home precisa saber se há mensagem nova e se o check-in de hoje foi feito.
+  // Os dois nós já são legíveis pelo aluno; só não eram carregados aqui.
+  const [mensagens, setMensagens] = useState({})
+  const [diario, setDiario] = useState({})
   /*
     Treino que o aluno escolheu para hoje, quando o personal libera.
     Vive só na tela: amanhã volta a valer o ciclo, senão uma troca pontual
@@ -192,7 +200,9 @@ export default function AlunoHome({ user, perfil, onSair }) {
     const u9 = onValue(ref(db, 'suplementosTomados/' + user.uid), s => setSupTomados(s.val() || {}))
     // Só o metadado; o arquivo em si é lido ao abrir.
     const u10 = onValue(ref(db, 'anexos/' + user.uid), s => setAnexos(s.val() || {}))
-    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8(); u9(); u10() }
+    const u11 = onValue(ref(db, 'chats/' + perfil.personalId + '_' + user.uid), s => setMensagens(s.val() || {}))
+    const u12 = onValue(ref(db, 'diario/' + user.uid), s => setDiario(s.val() || {}))
+    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8(); u9(); u10(); u11(); u12() }
   }, [user.uid, perfil.personalId])
 
   /*
@@ -650,8 +660,102 @@ export default function AlunoHome({ user, perfil, onSair }) {
       .filter(s => faltaHoje(s, s.id, supTomados, new Date(), seriesFeitasHoje > 0))
   ), [suplementos, supTomados, seriesFeitasHoje])
 
+  /*
+    O painel da Home. Tudo aqui já existia na tela — o que faltava era alguém
+    olhar o conjunto e decidir o que vem primeiro. Quem decide é lib/painel.js.
+  */
+  const naoLidas = useMemo(() => (
+    Object.values(mensagens).filter(m => m && m.de !== user.uid && !m.lidaEm).length
+  ), [mensagens, user.uid])
+
+  const checkinFeito = useMemo(() => {
+    const hoje = diaISO(Date.now())
+    return Object.values(diario).some(r => r?.ts && diaISO(r.ts) === hoje)
+  }, [diario])
+
+  const painel = useMemo(() => montarPainel({
+    nome: perfil.nome,
+    temPlano: !!plano && totalDias > 0,
+    temSuplementos: Object.keys(suplementos).length > 0,
+    bloqueado,
+    seriesDoDia,
+    seriesFeitas: seriesFeitasHoje,
+    minutosRestantes,
+    nomeTreino: nomeTreinoHoje,
+    resumoTreino: seriesDoDia
+      ? `${seriesDoDia} ${seriesDoDia === 1 ? 'série' : 'séries'} · cerca de ${minutos} min`
+      : 'Sem séries programadas',
+    proximoTreino: proximoDoCiclo,
+    // Plano existe mas o dia da vez não tem exercício: é descanso, não falha.
+    ehDescanso: !!plano && totalDias > 0 && seriesDoDia === 0,
+    treinoPendente: seriesDoDia > 0 && seriesFeitasHoje === 0,
+    cobrancaVencida: fin.vencidas.length > 0,
+    cobrancaValor: fin.vencidas.length ? fmtMoeda(fin.totalVencido) : '',
+    dosesPendentes: supPendentes.length,
+    primeiraDose: supPendentes[0] || null,
+    checkinPendente: !checkinFeito,
+    mensagensNaoLidas: naoLidas
+  }), [
+    perfil.nome, plano, totalDias, suplementos, bloqueado, seriesDoDia, seriesFeitasHoje,
+    minutosRestantes, minutos, nomeTreinoHoje, proximoDoCiclo, fin, supPendentes,
+    checkinFeito, naoLidas
+  ])
+
+  /* Números reais do mês, das mesmas funções que a aba Evolução usa. */
+  const resumoMes = useMemo(() => {
+    if (listaExec.length === 0) return null
+    /*
+      `treinosNoMes` e `sequencia` já existiam nesta tela, calculados para a aba
+      Evolução — a Home reaproveita em vez de recalcular. Só os recordes vêm de
+      `lib/evolucao`, e precisam da lista do mais antigo para o mais novo: uma
+      carga só é recorde se superar tudo que veio ANTES dela, e `listaExec` está
+      ordenada ao contrário.
+    */
+    const { marcos } = recordes([...listaExec].sort((a, b) => a.ts - b.ts))
+    return { treinos: treinosNoMes, sequencia, recordes: prsNoMes(marcos) }
+  }, [listaExec, treinosNoMes, sequencia])
+
+  const proximoTreinoBloco = useMemo(() => {
+    if (!ciclico || !proximoDoCiclo) return null
+    const feito = seriesDoDia > 0 && seriesFeitasHoje >= seriesDoDia
+    return { nome: proximoDoCiclo, quando: feito ? 'Depois deste' : 'Na sequência' }
+  }, [ciclico, proximoDoCiclo, seriesDoDia, seriesFeitasHoje])
+
+  /* Um lugar só para trocar de aba — a Home, o menu e o teclado usam o mesmo. */
+  const irPara = useCallback(a => {
+    setAba(a)
+    setRever(false)
+    if (params.has('sup') || params.has('aba')) setParams({}, { replace: true })
+  }, [params, setParams])
+
+  /*
+    Atalhos de teclado, só no desktop e só para NAVEGAR — nenhum registra dose,
+    conclui série ou envia nada. Um número digitado por engano no máximo troca de
+    aba, e isso se desfaz com outro número.
+
+    Ignora quando o foco está num campo de texto: senão digitar "2" no chat
+    jogaria a pessoa para o treino no meio da frase.
+  */
+  useEffect(() => {
+    function aoTeclar(e) {
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      const alvo = e.target
+      const digitando = alvo && (
+        alvo.tagName === 'INPUT' || alvo.tagName === 'TEXTAREA' ||
+        alvo.tagName === 'SELECT' || alvo.isContentEditable
+      )
+      if (digitando) return
+      const ordem = ['inicio', 'treino', 'evolucao', 'diario', 'suplementos', 'pagamentos', 'chat']
+      const i = Number(e.key) - 1
+      if (Number.isInteger(i) && i >= 0 && i < ordem.length) irPara(ordem[i])
+    }
+    window.addEventListener('keydown', aoTeclar)
+    return () => window.removeEventListener('keydown', aoTeclar)
+  }, [irPara])
+
   const itens = [
-    { id: 'treino', label: 'Meu Treino', icone: <IcTreino /> },
+    { id: 'inicio', label: 'Início', icone: <IcInicio /> },
+    { id: 'treino', label: 'Treino', icone: <IcTreino /> },
     { id: 'evolucao', label: 'Evolução', icone: <IcEvolucao /> },
     { id: 'diario', label: 'Check-in', icone: <IcCalendario /> },
     { id: 'suplementos', label: 'Suplementação', icone: <IcSuplemento />, badge: supPendentes.length },
@@ -661,7 +765,7 @@ export default function AlunoHome({ user, perfil, onSair }) {
   ]
 
 
-  const meta = TITULOS[aba] || TITULOS.treino
+  const meta = TITULOS[aba] || TITULOS.inicio
 
   /* Tour da aba atual. `rever` força a exibição mesmo já tendo sido concluído. */
   const TOURS = {
@@ -677,7 +781,7 @@ export default function AlunoHome({ user, perfil, onSair }) {
     <Layout
       user={user} perfil={perfil} onSair={onSair} itens={itens}
       abaAtiva={aba}
-      onAba={a => { setAba(a); setRever(false); if (params.has('sup') || params.has('aba')) setParams({}, { replace: true }) }}
+      onAba={irPara}
       roleLabel="Aluno" titulo={meta.t} subtitulo={meta.s}
       onAjuda={tourDaAba ? () => setRever(true) : undefined}
     >
@@ -791,7 +895,12 @@ export default function AlunoHome({ user, perfil, onSair }) {
         da própria aba de suplementação, onde seria redundante.
         Enquanto não houver push, é este aviso que faz o papel do lembrete.
       */}
-      {supPendentes.length > 0 && aba !== 'suplementos' && !supDispensado && (() => {
+      {/*
+        O aviso flutuante não aparece no Início: a Home já lista a dose pendente
+        com botão próprio, e o balão por cima seria o mesmo pedido duas vezes na
+        mesma tela — ainda por cima tapando o bloco de baixo.
+      */}
+      {supPendentes.length > 0 && aba !== 'suplementos' && aba !== 'inicio' && !supDispensado && (() => {
         const sup = supPendentes[0]
         const feitas = registroDoDia(supTomados, sup.id, diaSup(), sup.vezesAoDia)?.vezes || 0
         const outros = supPendentes.length - 1
@@ -842,6 +951,17 @@ export default function AlunoHome({ user, perfil, onSair }) {
             Pular descanso
           </button>
         </div>
+      )}
+
+      {/* ===== INÍCIO ===== */}
+      {aba === 'inicio' && (
+        <Inicio
+          painel={painel}
+          resumo={resumoMes}
+          proximo={proximoTreinoBloco}
+          carregando={!perfil}
+          onIr={irPara}
+        />
       )}
 
       {/* ===== TREINO ===== */}

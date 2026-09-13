@@ -3252,3 +3252,144 @@ button.sp-dose-txt:disabled { cursor: default; }
 .fd-item-selo.parcial,
 .sp-hist-dia.parcial .sp-hist-sinal,
 .sp-legenda i.parcial { padding-bottom: 0.32em; }
+
+/* ==========================================================================
+   INÍCIO — a Home do aluno
+   Três níveis de informação, não seis cards: um bloco grande para o foco,
+   linhas para as pendências, chips para o resto.
+   ========================================================================== */
+
+.in { display: flex; flex-direction: column; gap: 20px; }
+
+.in-topo h2 {
+  font-family: 'Archivo', system-ui, sans-serif;
+  font-size: 24px; font-weight: 800; letter-spacing: -0.02em; margin: 0;
+}
+.in-topo p { margin: 2px 0 0; font-size: var(--t-sm); color: var(--texto-3); }
+
+/* ---------- o foco ---------- */
+.in-foco {
+  background: var(--superficie); border: 1px solid var(--borda);
+  border-radius: var(--raio-lg); padding: 24px; box-shadow: var(--sombra-sm);
+}
+.in-foco.bloqueado { background: var(--erro-bg); border-color: var(--erro-borda); }
+.in-foco.treino_concluido { background: var(--sucesso-bg); border-color: var(--sucesso-borda); }
+.in-foco.descanso, .in-foco.sem_plano { background: var(--superficie-2); }
+
+.in-foco-rot {
+  display: block; font-size: var(--t-xs); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--texto-3);
+}
+.in-foco h3 {
+  display: flex; align-items: center; gap: 8px;
+  font-family: 'Archivo', system-ui, sans-serif;
+  font-size: 26px; font-weight: 800; letter-spacing: -0.02em;
+  line-height: 1.15; margin: 8px 0 0;
+}
+.in-foco h3 svg { width: 22px; height: 22px; color: var(--sucesso); flex-shrink: 0; }
+.in-foco-sub { margin: 6px 0 0; font-size: 14px; color: var(--texto-2); line-height: 1.5; }
+.in-foco-btn { width: 100%; margin-top: 18px; }
+
+.in-barra {
+  height: 6px; border-radius: var(--raio-full); overflow: hidden;
+  background: var(--borda); margin-top: 16px;
+}
+.in-barra-fill { height: 100%; background: var(--primaria); border-radius: var(--raio-full); }
+
+/* ---------- blocos secundários ---------- */
+.in-bloco {
+  background: var(--superficie); border: 1px solid var(--borda);
+  border-radius: var(--raio-md); padding: 18px 20px; box-shadow: var(--sombra-xs);
+}
+.in-bloco h4 {
+  margin: 0 0 12px; font-size: var(--t-xs); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--texto-3);
+}
+
+/* ---------- pendências: linhas, não caixas ---------- */
+.in-pend { list-style: none; margin: 0; padding: 0; }
+.in-pend li { border-bottom: 1px solid var(--borda); }
+.in-pend li:last-child { border-bottom: none; }
+
+.in-pend-linha {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 13px 0; background: none; border: none; font: inherit;
+  text-align: left; cursor: pointer;
+}
+.in-pend-marca {
+  width: 7px; height: 7px; border-radius: var(--raio-full);
+  background: var(--texto-4); flex-shrink: 0;
+}
+.in-pend li.urgente .in-pend-marca { background: var(--erro); }
+.in-pend-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.in-pend-txt strong { font-size: 14px; }
+.in-pend-txt span { font-size: var(--t-sm); color: var(--texto-3); }
+.in-pend li.urgente .in-pend-txt strong { color: var(--erro); }
+.in-pend-acao {
+  display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;
+  font-size: var(--t-sm); font-weight: 600; color: var(--primaria);
+}
+.in-pend-acao svg { width: 13px; height: 13px; }
+.in-pend-linha:hover .in-pend-acao { text-decoration: underline; }
+
+.in-em-dia {
+  display: flex; align-items: center; gap: 8px; margin: 0;
+  padding: 14px 18px; border-radius: var(--raio-md);
+  background: var(--sucesso-bg); border: 1px solid var(--sucesso-borda);
+  color: #15803D; font-size: 14px; font-weight: 500;
+}
+.in-em-dia svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+/* ---------- duas colunas no desktop ---------- */
+.in-duplo { display: grid; grid-template-columns: 1fr; gap: 16px; }
+
+.in-nums { display: flex; gap: 24px; flex-wrap: wrap; }
+.in-nums div { display: flex; flex-direction: column; }
+.in-nums strong {
+  font-family: 'Archivo', system-ui, sans-serif;
+  font-size: 26px; font-weight: 800; line-height: 1; letter-spacing: -0.02em;
+}
+.in-nums span { font-size: var(--t-sm); color: var(--texto-3); margin-top: 3px; }
+
+.in-link {
+  display: inline-flex; align-items: center; gap: 4px; margin-top: 14px;
+  background: none; border: none; padding: 0; font: inherit;
+  font-size: var(--t-sm); font-weight: 600; color: var(--primaria); cursor: pointer;
+}
+.in-link svg { width: 13px; height: 13px; }
+
+.in-proximo { display: flex; align-items: center; gap: 12px; }
+.in-proximo-icone {
+  width: 38px; height: 38px; border-radius: var(--raio); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--superficie-2); color: var(--texto-3);
+}
+.in-proximo-icone svg { width: 19px; height: 19px; }
+.in-proximo strong { display: block; font-size: 15px; }
+.in-proximo span { font-size: var(--t-sm); color: var(--texto-3); }
+
+/* ---------- atalhos ---------- */
+.in-atalhos { display: flex; flex-wrap: wrap; gap: 8px; }
+.in-atalho {
+  padding: 9px 15px; border-radius: var(--raio-full);
+  border: 1px solid var(--borda); background: var(--superficie);
+  font: inherit; font-size: var(--t-md); font-weight: 500; color: var(--texto-2);
+  cursor: pointer; transition: border-color var(--t-rapida), color var(--t-rapida);
+}
+.in-atalho:hover { border-color: var(--borda-forte); color: var(--texto); }
+
+/* ---------- carregando ---------- */
+.in-esqueleto {
+  height: 150px; border-radius: var(--raio-lg);
+  background: linear-gradient(90deg, var(--superficie-2) 25%, var(--borda) 50%, var(--superficie-2) 75%);
+  background-size: 200% 100%; animation: brilho 1.4s linear infinite;
+}
+.in-esqueleto.curto { height: 80px; }
+@keyframes brilho { from { background-position: 200% 0 } to { background-position: -200% 0 } }
+
+@media (min-width: 720px) {
+  .in-duplo { grid-template-columns: 1fr 1fr; }
+  .in-foco-btn { width: auto; min-width: 220px; }
+  .in-topo h2 { font-size: 28px; }
+  .in-foco h3 { font-size: 30px; }
+}

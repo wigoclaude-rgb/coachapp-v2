@@ -9,7 +9,7 @@ que envia os push de suplementação. Ela existe porque com o app fechado nada n
 celular acorda no horário — ver `netlify/LEIA-ME.md`.
 
 Deploy: Netlify (`netlify.toml` já faz build e o redirect de SPA).
-Versão do app exibida ao usuário: **2.4.0** (ver `src/lib/novidades.js`).
+Versão do app exibida ao usuário: **2.5.0** (ver `src/lib/novidades.js`).
 
 ---
 
@@ -73,8 +73,11 @@ não rotas. Trocar de aba não muda a URL nem entra no histórico do navegador.
 Início · Alunos · Financeiro · Chat · Templates · Avaliação física · Meu treino ·
 Suplementação · Meu plano · Ajuda do app · Configurações
 
-**Aluno** (`src/pages/aluno/AlunoHome.jsx`, 1336 linhas)
-Meu Treino · Evolução · Check-in · Suplementação · Pagamentos · Chat · Configurações
+**Aluno** (`src/pages/aluno/AlunoHome.jsx`)
+**Início** · Treino · Evolução · Check-in · Suplementação · Pagamentos · Chat · Configurações
+
+A aba padrão é `inicio` (era `treino`). No desktop, as teclas 1–7 trocam de aba —
+só navegam, e são ignoradas quando o foco está num campo de texto.
 
 **Ficha do aluno** (`src/pages/personal/AlunoDetalhe.jsx`)
 Perfil · Avaliação física · Fotos · Diário · Suplementos · Feedback · Relatórios ·
@@ -157,6 +160,15 @@ e **precisam ser coladas no console do Firebase à mão** — o repositório nã
   dentro do nó de cada aluno, e aquela lista mistura todos — com `key={cid}` o React
   deixava linhas velhas no DOM ao filtrar, e a recusa aberta de um aluno abria a de
   outro.
+- **A Home tem UM foco por vez.** `src/lib/painel.js` decide qual é, e a tela só
+  desenha. Inadimplência vence o treino: com a mensalidade vencida o treino está
+  bloqueado, e oferecer "Começar treino" para quem vai bater numa parede é pior do
+  que não oferecer nada.
+- **Nada aparece duas vezes na mesma tela.** O que já é o foco não vira linha na
+  lista; o que já tem botão na lista não vira atalho (a comparação é pela ABA de
+  destino, não pelo id — os ids não batem de propósito). E o aviso flutuante de
+  suplemento não aparece no Início, onde a dose já está listada.
+- **Bloco sem conteúdo não aparece**, e nada anuncia que está vazio.
 - **NÃO REGISTRADO ≠ NÃO TOMADO.** É a regra que sustenta a tela de suplementação.
   A ausência de registro nunca é convertida em falha: `nao_registrado` não é um valor
   gravado, é a falta de declaração. Até Set/2026 `historico()` fazia
@@ -221,6 +233,7 @@ e **precisam ser coladas no console do Firebase à mão** — o repositório nã
 | `anexos.js` / `fotos.js` / `medidas.js` | arquivos e medidas |
 | `atividades.js` | check-in de atividade (tempo, distância) |
 | `cobrancas.js` | estados da cobrança, o que é informável, selos e rótulos |
+| `painel.js` | o que a Home do aluno mostra e em que ordem |
 | `lembretes.js` | quando notificar uma dose: fuso, dias, antecedência, anti-spam |
 | `doses.js` | escrita da dose, em transação — o único lugar que grava |
 | `push.js` | inscrição de push do navegador e o caso do iPhone |

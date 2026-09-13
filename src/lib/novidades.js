@@ -13,6 +13,29 @@
 
 export const NOVIDADES = [
   {
+    versao: '2.5.0',
+    data: '13 de setembro de 2026',
+    titulo: 'O app agora abre no Início',
+    itens: [
+      {
+        para: 'aluno',
+        texto: 'Ao entrar, você vê o que precisa de você hoje: o treino da vez, doses sem registro, check-in e mensagens novas — tudo numa tela só.'
+      },
+      {
+        para: 'aluno',
+        texto: '"Meu Treino" virou "Treino" e continua onde estava, com tudo igual. Ele deixou de ser a primeira tela, mas está a um toque no menu.'
+      },
+      {
+        para: 'aluno',
+        texto: 'A tela muda conforme o seu dia: treino por começar, em andamento, concluído ou dia de descanso — e some o que não tem nada para mostrar.'
+      },
+      {
+        para: 'aluno',
+        texto: 'No computador, as teclas de 1 a 7 trocam de tela. Só navegam: nenhuma registra dose nem conclui série.'
+      }
+    ]
+  },
+  {
     versao: '2.4.0',
     data: '13 de setembro de 2026',
     titulo: 'Esquecer de registrar não é mais "não tomei"',
