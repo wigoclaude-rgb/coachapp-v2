@@ -18,7 +18,10 @@ export default function CadastroPersonal() {
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, senha)
       await set(ref(db, 'users/' + cred.user.uid), {
-        role: 'personal', nome, email, foto: '', chavePix: '', telefone: ''
+        role: 'personal', nome, email, foto: '', chavePix: '', telefone: '',
+        // Sem isto o painel não consegue dizer quantos entraram no período.
+        // Contas criadas antes de Set/2026 não têm, e o admin mostra quantas são.
+        criadoEm: Date.now()
       })
       navigate('/')
     } catch (err) {

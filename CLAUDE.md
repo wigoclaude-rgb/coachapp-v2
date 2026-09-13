@@ -54,6 +54,7 @@ tela `CriarSenha` até ele definir a senha dele.
 /admin/login            login do master
 /admin                  painel master
 /admin/personals        lista de personais
+/admin/alunos           todos os alunos da plataforma — só consulta
 /admin/personals/:id    ficha de um personal (plano, limite, status)
 /admin/suporte          chat de suporte com os personais
 /personal/*             painel do personal (abas por estado, não por URL)
@@ -207,6 +208,39 @@ e **precisam ser coladas no console do Firebase à mão** — o repositório nã
   Firebase dentro do service worker. Ela abre o app na dose, e o registro acontece lá.
 - **No iPhone, push só existe com o app na tela de início** (iOS 16.4+). Regra da
   Apple; `push.js` detecta e explica em vez de falhar em silêncio.
+- **O admin vê a plataforma, não o conteúdo dela.** As regras liberam para ele
+  `users`, `personals`, `planos` e `adminLogs` — mais `presenca` e `config`, que são
+  de qualquer autenticado. Cobrança, treino, execução, avaliação, diário e
+  suplementação ficam restritos ao par personal↔aluno e o admin **não lê**, de
+  propósito: são dados de saúde e de dinheiro de terceiros. Todo número do painel
+  sai desses nós; o que não sai, não é estimado — está escrito no cabeçalho de
+  `src/lib/admin.js`.
+- **O MRR do painel é projeção, não caixa.** Não existe em lugar nenhum do banco um
+  registro de pagamento DA PLATAFORMA — só o estado atual de cada assinatura. O
+  número é `Pro ativos × preço`, e a tela diz isso embaixo dele. Faturamento de
+  verdade (histórico, mês a mês, quem pagou quando) exige um nó novo que ninguém
+  escreve hoje.
+- **Não há ação administrativa sobre aluno.** A lista existe para consulta e busca.
+  Bloquear um aluno ou trocá-lo de personal exigiria escrita em `users/{aluno}`,
+  que hoje só o próprio aluno e o personal dele podem fazer. Abrir isso ao admin é
+  mudança de arquitetura, não de tela — e o rodapé da tela explica isso a quem
+  procurar o botão.
+- **"Em atraso" e "vencida" são coisas diferentes** e a tela não pode misturá-las:
+  `past_due` é uma marca que o admin põe à mão na ficha; `vencida` é a data que
+  passou sozinha. Por isso o número diz "marcados em atraso" — senão "0 em atraso"
+  ao lado de "1 assinatura vencida" parece contradição.
+- **O número do alerta fica num selo, separado do texto**, então o texto concorda
+  com ele: `alertas()` carrega as duas formas e escolhe. Sem isso a tela escrevia
+  "1 assinaturas vencidas". O detalhe embaixo é neutro ao número, para servir a 1 e
+  a 20 sem uma terceira variação.
+- **`rotuloAcesso()` é o único lugar que monta o selo de último acesso.** As duas
+  listas mostravam o mesmo dado e cada uma escrevia o seu: as duas diziam "1 dias",
+  e quem nunca entrou era "Nunca entrou" numa e "Nunca visto" na outra.
+- **Ctrl+K só abre a busca.** Nenhuma tecla executa ação administrativa: bloquear
+  ou mudar plano por engano não tem desfazer.
+- **As classes do painel são `.adm-*`.** A casca antiga (`.admin-wrap`, `.admin-topo`,
+  `.admin-nav`, `.admin-cards`, `.admin-mrr`…) foi removida do CSS junto com a tela
+  que a usava. O que sobrou de `.admin-*` é só o que a ficha do personal ainda usa.
 - **Bloqueio por inadimplência.** Cobrança vencida (`vencida(c)` em `src/lib/util.js`)
   → `bloqueado = true` → a aba Meu Treino vira um aviso. `vencida()` continua contando
   a cobrança em análise como devida, de propósito: se informar o pagamento destravasse,
@@ -242,6 +276,7 @@ e **precisam ser coladas no console do Firebase à mão** — o repositório nã
 | `atividades.js` | check-in de atividade (tempo, distância) |
 | `cobrancas.js` | estados da cobrança, o que é informável, selos e rótulos |
 | `painel.js` | o que a Home do aluno mostra, em que ordem, e as ações rápidas |
+| `admin.js` | listas da plataforma, visão geral, alertas, busca global e logs |
 | `lembretes.js` | quando notificar uma dose: fuso, dias, antecedência, anti-spam |
 | `doses.js` | escrita da dose, em transação — o único lugar que grava |
 | `push.js` | inscrição de push do navegador e o caso do iPhone |
@@ -309,7 +344,11 @@ Confira com `git log --oneline -1 origin/main` — esta linha envelhece rápido.
 O que foi entregue depois da V2 original (Set/2026), em ordem:
 pagamentos com "Já paguei" e quatro estados → filtros de cobrança →
 lembretes de suplementação por push → "não registrado ≠ não tomado" →
-Home do aluno.
+Home do aluno → painel WIGO ADMIN.
+
+O painel do admin não gerou entrada em `novidades.js`: o changelog é lido por aluno
+e por personal, e nenhum dos dois viu nada mudar. O admin não tem registro em
+`users/`, então nunca vê a tela de novidades.
 
 ---
 
@@ -334,3 +373,11 @@ versão, cole no console, senão o fluxo de pagamento quebra:
 4. **Realtime Database → Regras** de novo, se você publicou antes de 13/09/2026:
    `suplementosTomados` ganhou validação de campo (`estado`, `vezes`, `ts`,
    `retroativo`). Sem ela o app funciona, mas nada impede um campo inválido.
+
+5. **Realtime Database → Regras** mais uma vez, pelo painel do admin: `presenca`
+   ganhou `.read` no nível do nó para quem está em `admins/`. Antes só
+   `presenca/$uid` era legível, e regra de filho não permite ler o pai — o painel
+   levava PERMISSION_DENIED ao carregar "último acesso". Sem essa regra o admin
+   ainda funciona: as listas mostram `—` na coluna e a Visão geral avisa que os
+   números de acesso estão sem base. Nenhum dado novo fica exposto: qualquer
+   autenticado já lia `presenca/$uid` um a um.

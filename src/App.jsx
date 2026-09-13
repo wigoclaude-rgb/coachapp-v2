@@ -17,6 +17,7 @@ import GuardAdmin from './components/GuardAdmin.jsx'
 import AdminLogin from './pages/admin/AdminLogin.jsx'
 import AdminHome from './pages/admin/AdminHome.jsx'
 import AdminPersonals from './pages/admin/AdminPersonals.jsx'
+import AdminAlunos from './pages/admin/AdminAlunos.jsx'
 import AdminFicha from './pages/admin/AdminFicha.jsx'
 import AdminSuporte from './pages/admin/AdminSuporte.jsx'
 
@@ -81,6 +82,9 @@ export default function App() {
         <Route path="/admin" element={<GuardAdmin><AdminHome /></GuardAdmin>} />
         <Route path="/admin/personals" element={
           <GuardAdmin>{uid => <AdminPersonals adminUid={uid} />}</GuardAdmin>
+        } />
+        <Route path="/admin/alunos" element={
+          <GuardAdmin><AdminAlunos /></GuardAdmin>
         } />
         <Route path="/admin/personals/:id" element={
           <GuardAdmin>{uid => <AdminFicha adminUid={uid} />}</GuardAdmin>

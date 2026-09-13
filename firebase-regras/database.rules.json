@@ -253,6 +253,7 @@
     },
 
     "presenca": {
+      ".read": "auth != null && root.child('admins/'+auth.uid).val() === true",
       "$uid": {
         ".read": "auth != null",
         ".write": "auth != null && auth.uid === $uid"
