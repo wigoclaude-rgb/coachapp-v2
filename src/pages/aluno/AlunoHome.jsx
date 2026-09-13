@@ -12,7 +12,7 @@ import {
 import { enviarFoto } from '../../lib/fotos'
 import { anosDe, casaStatus } from '../../lib/filtroCobrancas'
 import { montarPainel } from '../../lib/painel'
-import { recordes, prsNoMes } from '../../lib/evolucao'
+import { recordes, prsNoMes, frequenciaDoMes, evolucaoDeCarga } from '../../lib/evolucao'
 import Inicio from '../../components/aluno/Inicio.jsx'
 import SituacaoPagamento from '../../components/pagamentos/SituacaoPagamento.jsx'
 import LinhaCobranca from '../../components/pagamentos/LinhaCobranca.jsx'
@@ -159,6 +159,7 @@ export default function AlunoHome({ user, perfil, onSair }) {
   // Os dois nós já são legíveis pelo aluno; só não eram carregados aqui.
   const [mensagens, setMensagens] = useState({})
   const [diario, setDiario] = useState({})
+  const [avisos, setAvisos] = useState({})
   /*
     Treino que o aluno escolheu para hoje, quando o personal libera.
     Vive só na tela: amanhã volta a valer o ciclo, senão uma troca pontual
@@ -202,7 +203,8 @@ export default function AlunoHome({ user, perfil, onSair }) {
     const u10 = onValue(ref(db, 'anexos/' + user.uid), s => setAnexos(s.val() || {}))
     const u11 = onValue(ref(db, 'chats/' + perfil.personalId + '_' + user.uid), s => setMensagens(s.val() || {}))
     const u12 = onValue(ref(db, 'diario/' + user.uid), s => setDiario(s.val() || {}))
-    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8(); u9(); u10(); u11(); u12() }
+    const u13 = onValue(ref(db, 'notificacoes/' + user.uid), s => setAvisos(s.val() || {}))
+    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8(); u9(); u10(); u11(); u12(); u13() }
   }, [user.uid, perfil.personalId])
 
   /*
@@ -685,6 +687,12 @@ export default function AlunoHome({ user, perfil, onSair }) {
     resumoTreino: seriesDoDia
       ? `${seriesDoDia} ${seriesDoDia === 1 ? 'série' : 'séries'} · cerca de ${minutos} min`
       : 'Sem séries programadas',
+    /*
+      O que o treino tem. O personal nomeia o dia ("Treino D") e não existe campo
+      de grupo muscular — então os exercícios falam por si, em vez de a tela
+      adivinhar "Quadríceps e Posteriores" a partir do nome.
+    */
+    exerciciosDoDia: exerciciosHoje.map(e => e.nome).filter(Boolean),
     proximoTreino: proximoDoCiclo,
     // Plano existe mas o dia da vez não tem exercício: é descanso, não falha.
     ehDescanso: !!plano && totalDias > 0 && seriesDoDia === 0,
@@ -711,9 +719,25 @@ export default function AlunoHome({ user, perfil, onSair }) {
       carga só é recorde se superar tudo que veio ANTES dela, e `listaExec` está
       ordenada ao contrário.
     */
-    const { marcos } = recordes([...listaExec].sort((a, b) => a.ts - b.ts))
-    return { treinos: treinosNoMes, sequencia, recordes: prsNoMes(marcos) }
-  }, [listaExec, treinosNoMes, sequencia])
+    const { marcos, melhor } = recordes([...listaExec].sort((a, b) => a.ts - b.ts))
+    return {
+      treinos: treinosNoMes,
+      sequencia,
+      recordes: prsNoMes(marcos),
+      // Percentual real: dias treinados sobre dias previstos pelo personal.
+      // Sem `diasSemana` definido, vira média semanal — e a tela diz qual é.
+      frequencia: frequenciaDoMes(diasTreinados, treinoBruto?.diasSemana),
+      carga: evolucaoDeCarga(melhor)
+    }
+  }, [listaExec, treinosNoMes, sequencia, diasTreinados, treinoBruto])
+
+  /* As três últimas novidades — o mesmo nó do sino, resumido na Home. */
+  const atualizacoes = useMemo(() => (
+    Object.entries(avisos)
+      .map(([id, a]) => ({ id, ...a }))
+      .sort((a, b) => b.ts - a.ts)
+      .slice(0, 3)
+  ), [avisos])
 
   const proximoTreinoBloco = useMemo(() => {
     if (!ciclico || !proximoDoCiclo) return null
@@ -959,6 +983,7 @@ export default function AlunoHome({ user, perfil, onSair }) {
           painel={painel}
           resumo={resumoMes}
           proximo={proximoTreinoBloco}
+          atualizacoes={atualizacoes}
           carregando={!perfil}
           onIr={irPara}
         />

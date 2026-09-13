@@ -136,6 +136,26 @@ export function melhoresResultados(melhor, limite = 5) {
     .slice(0, limite)
 }
 
+/**
+ * Quanto a carga subiu, em média, desde a primeira vez que cada exercício foi
+ * registrado. Só entram os que têm base de comparação e ganho real.
+ *
+ * É a média dos ganhos percentuais por exercício, e não a soma dos pesos: somar
+ * kg mistura agachamento com rosca e o número passa a dizer mais sobre quais
+ * exercícios a pessoa faz do que sobre a evolução dela.
+ *
+ * `null` quando não há de onde tirar — melhor não mostrar do que mostrar 0%
+ * para quem acabou de começar.
+ */
+export function evolucaoDeCarga(melhor) {
+  const ganhos = Object.values(melhor)
+    .filter(m => m.primeiro > 0 && m.maximo > m.primeiro)
+    .map(m => (m.maximo - m.primeiro) / m.primeiro)
+  if (ganhos.length === 0) return null
+  const media = ganhos.reduce((a, b) => a + b, 0) / ganhos.length
+  return { pct: Math.round(media * 100), exercicios: ganhos.length }
+}
+
 /* ============================ séries no tempo ============================ */
 
 /** Segunda-feira da semana de uma data. */

@@ -41,7 +41,7 @@ export function saudacao(nome, agora = new Date()) {
  */
 export function montarFoco({
   bloqueado, temPlano, seriesDoDia, seriesFeitas, minutosRestantes,
-  nomeTreino, resumoTreino, proximoTreino, ehDescanso
+  nomeTreino, resumoTreino, proximoTreino, ehDescanso, exerciciosDoDia
 }) {
   if (bloqueado) {
     return {
@@ -95,6 +95,7 @@ export function montarFoco({
     tipo: 'treino',
     titulo: nomeTreino || 'Treino de hoje',
     subtitulo: resumoTreino,
+    exercicios: exerciciosDoDia || [],
     acao: { rotulo: 'Começar treino', aba: 'treino' },
     progresso: 0
   }
@@ -119,6 +120,7 @@ export function montarPendencias({
   if (cobrancaVencida) {
     itens.push({
       id: 'pagamento', tipo: 'pagamento', urgente: true,
+      selo: 'Vencida',
       titulo: 'Mensalidade vencida',
       detalhe: cobrancaValor ? `${cobrancaValor} · seu treino fica bloqueado até a confirmação` : 'Seu treino fica bloqueado',
       acao: { rotulo: 'Ver', aba: 'pagamentos' }
@@ -128,6 +130,7 @@ export function montarPendencias({
   if (mensagensNaoLidas > 0) {
     itens.push({
       id: 'chat', tipo: 'chat', urgente: false,
+      selo: 'Nova',
       titulo: mensagensNaoLidas === 1 ? 'Nova mensagem do personal' : `${mensagensNaoLidas} mensagens novas`,
       detalhe: 'Do seu personal',
       acao: { rotulo: 'Abrir', aba: 'chat' }
@@ -137,6 +140,7 @@ export function montarPendencias({
   if (dosesPendentes > 0) {
     itens.push({
       id: 'suplemento', tipo: 'suplemento', urgente: false,
+      selo: 'Dose pendente',
       titulo: dosesPendentes === 1 && primeiraDose
         ? `${primeiraDose.nome} ainda não registrado`
         : `${dosesPendentes} doses sem registro hoje`,
@@ -155,6 +159,7 @@ export function montarPendencias({
   if (treinoPendente && !cobrancaVencida) {
     itens.push({
       id: 'treino', tipo: 'treino', urgente: false,
+      selo: 'Não iniciado',
       titulo: `${nomeTreino || 'Treino'} ainda não começou`,
       detalhe: 'Previsto para hoje',
       acao: { rotulo: 'Começar', aba: 'treino' }
@@ -164,6 +169,7 @@ export function montarPendencias({
   if (checkinPendente) {
     itens.push({
       id: 'checkin', tipo: 'checkin', urgente: false,
+      selo: 'Disponível',
       titulo: 'Check-in de hoje',
       detalhe: 'Peso, medidas, como você se sentiu — leva um minuto',
       acao: { rotulo: 'Fazer', aba: 'diario' }
@@ -210,6 +216,57 @@ export function montarAtalhos({ pendencias = [], temSuplementos, temTreino, foco
     .slice(0, maximo)
 }
 
+/* ---------------- ações rápidas ---------------- */
+
+/**
+ * A grade de atalhos do topo. Diferente das pendências: aqui estão os CAMINHOS,
+ * lá está o que precisa ser resolvido.
+ *
+ * A primeira posição é contextual — recebe o que faz mais sentido agora, e é a
+ * única destacada. As outras são fixas, porque atalho que muda de lugar deixa de
+ * ser atalho: a mão aprende a posição antes de a pessoa ler o rótulo.
+ */
+export function montarAcoes({ foco, dosesPendentes, checkinPendente, mensagensNaoLidas, temSuplementos }) {
+  const principal = foco?.acao
+    ? { id: 'principal', rotulo: rotuloDaAba(foco.acao.aba), sub: foco.acao.rotulo, aba: foco.acao.aba, destaque: true }
+    : null
+
+  const fixas = [
+    temSuplementos && {
+      id: 'suplementos', rotulo: 'Suplementação', aba: 'suplementos',
+      sub: dosesPendentes > 0
+        ? (dosesPendentes === 1 ? '1 dose pendente' : `${dosesPendentes} doses pendentes`)
+        : 'Registrar dose'
+    },
+    {
+      id: 'diario', rotulo: 'Check-in', aba: 'diario',
+      sub: checkinPendente ? 'Responder' : 'Feito hoje'
+    },
+    {
+      id: 'chat', rotulo: 'Chat', aba: 'chat',
+      sub: mensagensNaoLidas > 0
+        ? (mensagensNaoLidas === 1 ? '1 mensagem nova' : `${mensagensNaoLidas} novas`)
+        : 'Ver mensagens'
+    }
+  ].filter(Boolean)
+
+  const usadas = new Set([principal?.aba, ...fixas.map(f => f.aba)].filter(Boolean))
+  const resto = TODOS_ATALHOS.filter(a => !usadas.has(a.aba))
+
+  return {
+    grade: [principal, ...fixas].filter(Boolean).slice(0, 4),
+    // "Ver mais" só existe se realmente sobrou destino — botão que abre lista
+    // vazia é pior do que botão nenhum.
+    resto
+  }
+}
+
+const ROTULOS_ABA = {
+  inicio: 'Início', treino: 'Treino', evolucao: 'Evolução', diario: 'Check-in',
+  suplementos: 'Suplementação', pagamentos: 'Pagamentos', chat: 'Chat', config: 'Configurações'
+}
+const rotuloDaAba = aba => ROTULOS_ABA[aba] || aba
+
 /* ---------------- o painel inteiro ---------------- */
 
 /** Junta tudo. É o que a tela consome. */
@@ -226,6 +283,13 @@ export function montarPainel(dados) {
     saudacao: saudacao(nome, agora),
     foco,
     pendencias,
+    acoes: montarAcoes({
+      foco,
+      dosesPendentes: dados.dosesPendentes,
+      checkinPendente: dados.checkinPendente,
+      mensagensNaoLidas: dados.mensagensNaoLidas,
+      temSuplementos: dados.temSuplementos
+    }),
     atalhos: montarAtalhos({
       pendencias,
       foco,

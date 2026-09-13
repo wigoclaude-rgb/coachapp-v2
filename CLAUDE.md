@@ -160,6 +160,14 @@ e **precisam ser coladas no console do Firebase à mão** — o repositório nã
   dentro do nó de cada aluno, e aquela lista mistura todos — com `key={cid}` o React
   deixava linhas velhas no DOM ao filtrar, e a recusa aberta de um aluno abria a de
   outro.
+- **Os números da Home são reais.** Frequência vem de `frequenciaDoMes` (dias
+  treinados sobre os previstos pelo personal em `treinos/{uid}.diasSemana`); sem esse
+  campo vira média semanal, e a tela diz qual das duas está mostrando. A evolução de
+  carga é `evolucaoDeCarga`: média do ganho percentual POR EXERCÍCIO desde a primeira
+  vez — somar kg misturaria agachamento com rosca e o número diria mais sobre quais
+  exercícios a pessoa faz do que sobre a evolução dela. Sem base, o bloco não aparece.
+- **O cartão do topo usa gradiente e textura, não foto.** Não há banco de imagens no
+  projeto, e um `<img>` externo quebraria offline e no primeiro carregamento.
 - **A Home tem UM foco por vez.** `src/lib/painel.js` decide qual é, e a tela só
   desenha. Inadimplência vence o treino: com a mensalidade vencida o treino está
   bloqueado, e oferecer "Começar treino" para quem vai bater numa parede é pior do
@@ -233,7 +241,7 @@ e **precisam ser coladas no console do Firebase à mão** — o repositório nã
 | `anexos.js` / `fotos.js` / `medidas.js` | arquivos e medidas |
 | `atividades.js` | check-in de atividade (tempo, distância) |
 | `cobrancas.js` | estados da cobrança, o que é informável, selos e rótulos |
-| `painel.js` | o que a Home do aluno mostra e em que ordem |
+| `painel.js` | o que a Home do aluno mostra, em que ordem, e as ações rápidas |
 | `lembretes.js` | quando notificar uma dose: fuso, dias, antecedência, anti-spam |
 | `doses.js` | escrita da dose, em transação — o único lugar que grava |
 | `push.js` | inscrição de push do navegador e o caso do iPhone |
