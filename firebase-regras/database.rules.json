@@ -87,7 +87,18 @@
     "suplementosTomados": {
       "$alunoUid": {
         ".read": "auth != null && (auth.uid === $alunoUid || root.child('users/'+$alunoUid+'/personalId').val() === auth.uid)",
-        ".write": "auth != null && auth.uid === $alunoUid"
+        ".write": "auth != null && auth.uid === $alunoUid",
+        "$dia": {
+          ".validate": "$dia.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
+          "$suplementoId": {
+            ".validate": "!newData.exists() || newData.hasChildren(['estado'])",
+            "estado": { ".validate": "newData.isString() && newData.val().matches(/^(tomado|parcial|nao_tomado)$/)" },
+            "vezes": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 24" },
+            "ts": { ".validate": "newData.isNumber()" },
+            "retroativo": { ".validate": "newData.isBoolean()" },
+            "$outro": { ".validate": false }
+          }
+        }
       }
     },
 

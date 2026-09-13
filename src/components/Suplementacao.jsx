@@ -2,14 +2,18 @@ import { useEffect, useMemo, useState } from 'react'
 import { ref, onValue, push, update, remove } from 'firebase/database'
 import { db } from '../firebase'
 import {
-  diaISO, suplementoVazio, normalizarSuplemento, estaPausado,
-  rotinaDeHoje, sequencia, melhorSequencia, vezesNoDia
+  diaISO, suplementoVazio, normalizarSuplemento, estaPausado, tocaHoje,
+  rotinaDeHoje, sequencia, melhorSequencia, registroDoDia,
+  TOMADO, NAO_REGISTRADO
 } from '../lib/suplementos'
+import { registrarDose, desfazerDose, limparDose, mensagemErroDose } from '../lib/doses'
 import { agruparBlocos, normalizarPlano, indiceSeguro } from '../lib/treinoModel'
 import RotinaHoje from './suplementacao/RotinaHoje.jsx'
 import Consistencia from './suplementacao/Consistencia.jsx'
 import CardSuplemento from './suplementacao/CardSuplemento.jsx'
 import FormSuplemento from './suplementacao/FormSuplemento.jsx'
+import FolhaDose from './suplementacao/FolhaDose.jsx'
+import DiaDetalhe from './suplementacao/DiaDetalhe.jsx'
 import { IcMais, IcSuplemento } from './Icones.jsx'
 import { normalizarLembrete } from '../lib/lembretes'
 import PainelNotificacoes from './suplementacao/PainelNotificacoes.jsx'
@@ -35,6 +39,9 @@ export default function Suplementacao({ alunoId, podeMarcar = false, quemSou = '
   const [erroCarga, setErroCarga] = useState('')
   const [erroAcao, setErroAcao] = useState('')
   const [marcando, setMarcando] = useState('')
+  // { sup, dia } — a dose aberta na folha de registro, de hoje ou de outro dia.
+  const [doseAberta, setDoseAberta] = useState(null)
+  const [diaAberto, setDiaAberto] = useState(null)
 
   const [form, setForm] = useState(null)
   const [editandoId, setEditandoId] = useState(null)
@@ -114,44 +121,80 @@ export default function Suplementacao({ alunoId, podeMarcar = false, quemSou = '
     return lista
   }, [lista, filtroLista])
 
+  /*
+    "Havia dose prevista neste dia?" — precisa saber se houve treino NAQUELE dia,
+    senão um pós-treino aparece como omissão em todo dia de descanso. Antes o
+    histórico passava `treinou = true` para todos os dias, de tão difícil que era
+    responder isso sem os dados de execução em mãos.
+  */
+  const diasComTreino = useMemo(() => {
+    const set = new Set()
+    Object.values(execucoes || {}).forEach(e => { if (e?.ts) set.add(diaISO(new Date(e.ts))) })
+    return set
+  }, [execucoes])
+
+  const previstoNoDia = useMemo(
+    () => (sup, data) => tocaHoje(sup, data, diasComTreino.has(diaISO(data))),
+    [diasComTreino]
+  )
+
   /* ---------------- ações ---------------- */
 
-  async function marcar(sup) {
-    if (!podeMarcar || marcando) return
-    const dia = diaISO()
-    const feitas = vezesNoDia(tomados, sup.id, dia)
-    if (feitas >= sup.vezesAoDia) return      // já completo: evita registro duplicado
+  /*
+    Um toque = "tomei". É o caso de 9 em cada 10 vezes, e ele não passa por
+    formulário nenhum. Os outros dois estados ficam na folha, a um toque de
+    distância no texto da dose.
 
+    A contagem vem do servidor, dentro de uma transação (ver lib/doses.js): o
+    duplo toque não cria dois registros nem pula uma dose.
+  */
+  async function registrar(sup, estado, dia = diaISO()) {
+    if (!podeMarcar || marcando) return
     setMarcando(sup.id); setErroAcao('')
     try {
-      await update(ref(db, `suplementosTomados/${alunoId}/${dia}/${sup.id}`), {
-        vezes: feitas + 1, ts: Date.now()
-      })
+      await registrarDose({ alunoId, supId: sup.id, dia, estado, vezesAoDia: sup.vezesAoDia })
+      setDoseAberta(null)
     } catch (err) {
-      setErroAcao('Não foi possível registrar a dose. Tente de novo.')
-      console.warn('Falha ao marcar dose:', err)
+      setErroAcao(mensagemErroDose(err))
+      console.warn('Falha ao registrar dose:', err)
     }
     setMarcando('')
   }
 
-  async function desmarcar(sup) {
+  async function desfazer(sup, dia = diaISO()) {
     if (!podeMarcar || marcando) return
-    const dia = diaISO()
-    const feitas = vezesNoDia(tomados, sup.id, dia)
-    if (feitas <= 0) return
-
     setMarcando(sup.id); setErroAcao('')
     try {
-      if (feitas === 1) await remove(ref(db, `suplementosTomados/${alunoId}/${dia}/${sup.id}`))
-      else await update(ref(db, `suplementosTomados/${alunoId}/${dia}/${sup.id}`), { vezes: feitas - 1 })
+      await desfazerDose({ alunoId, supId: sup.id, dia, vezesAoDia: sup.vezesAoDia })
     } catch (err) {
-      setErroAcao('Não foi possível desfazer. Tente de novo.')
+      setErroAcao(mensagemErroDose(err))
+      console.warn('Falha ao desfazer dose:', err)
     }
     setMarcando('')
   }
 
+  /* Apagar ≠ dizer que não tomou: o dia volta a "não registrado". */
+  async function apagarRegistro(sup, dia) {
+    if (!podeMarcar || marcando) return
+    setMarcando(sup.id); setErroAcao('')
+    try {
+      await limparDose({ alunoId, supId: sup.id, dia })
+      setDoseAberta(null)
+    } catch (err) {
+      setErroAcao(mensagemErroDose(err))
+    }
+    setMarcando('')
+  }
+
+  /* Atalho para quem toma tudo junto. Sequencial: cada dose tem a sua transação,
+     e dispará-las em paralelo faria uma competir com a outra. */
   async function marcarTodas() {
-    for (const s of rotina.pendentes) await marcar(s)
+    if (!podeMarcar || marcando) return
+    setErroAcao('')
+    for (const s of rotina.pendentes) {
+      // eslint-disable-next-line no-await-in-loop
+      await registrar(s, TOMADO)
+    }
   }
 
   async function salvar(e) {
@@ -203,7 +246,6 @@ export default function Suplementacao({ alunoId, podeMarcar = false, quemSou = '
     if (!confirm(`Remover ${sup.nome} da sua rotina?\n\nO histórico de doses já registradas é mantido.`)) return
     await remove(ref(db, `suplementos/${alunoId}/${sup.id}`))
   }
-
   function editar(sup) {
     const { id, ...resto } = sup
     setForm({ ...suplementoVazio(), ...resto })
@@ -255,8 +297,9 @@ export default function Suplementacao({ alunoId, podeMarcar = false, quemSou = '
         podeMarcar={podeMarcar}
         nomeAluno={nomeAluno}
         treinoDeHoje={treinoDeHoje}
-        onMarcar={marcar}
-        onDesmarcar={desmarcar}
+        onMarcar={s => registrar(s, TOMADO)}
+        onDesfazer={s => desfazer(s)}
+        onAbrirFolha={s => setDoseAberta({ sup: s, dia: diaISO() })}
         marcando={marcando}
       />
 
@@ -276,6 +319,8 @@ export default function Suplementacao({ alunoId, podeMarcar = false, quemSou = '
       )}
 
       <Consistencia
+        onAbrirDia={setDiaAberto}
+        previsto={previstoNoDia}
         lista={lista}
         tomados={tomados}
         sequenciaAtual={seqAtual}
@@ -309,6 +354,42 @@ export default function Suplementacao({ alunoId, podeMarcar = false, quemSou = '
 
       {/* Controle geral dos lembretes: só para quem toma a dose. */}
       {podeMarcar && !form && <PainelNotificacoes uid={alunoId} />}
+
+      {/*
+        Um dia do histórico, aberto para conferir e corrigir.
+        Some enquanto a folha de dose está aberta: dois painéis empilhados
+        escurecem o fundo duas vezes. Fechar a folha traz o dia de volta, que é
+        para onde a pessoa espera voltar.
+      */}
+      {diaAberto && !doseAberta && (
+        <DiaDetalhe
+          dia={diaAberto}
+          podeEditar={podeMarcar}
+          onFechar={() => setDiaAberto(null)}
+          onAbrirDose={it => {
+            const sup = lista.find(x => x.id === it.id)
+            if (sup) setDoseAberta({ sup, dia: diaAberto.iso })
+          }}
+        />
+      )}
+
+      {/* A pergunta "o que aconteceu com esta dose?", de hoje ou de outro dia. */}
+      {doseAberta && (() => {
+        const reg = registroDoDia(tomados, doseAberta.sup.id, doseAberta.dia, doseAberta.sup.vezesAoDia)
+        return (
+          <FolhaDose
+            sup={doseAberta.sup}
+            dia={doseAberta.dia}
+            estadoAtual={reg ? reg.estado : NAO_REGISTRADO}
+            vezes={reg?.vezes || 0}
+            salvando={marcando === doseAberta.sup.id}
+            erro={erroAcao}
+            onEscolher={estado => registrar(doseAberta.sup, estado, doseAberta.dia)}
+            onLimpar={() => apagarRegistro(doseAberta.sup, doseAberta.dia)}
+            onFechar={() => { setDoseAberta(null); setErroAcao('') }}
+          />
+        )
+      })()}
 
       {form && (
         <FormSuplemento

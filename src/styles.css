@@ -3085,3 +3085,170 @@ form.card .av-acoes { padding: 0; }
   0%, 100% { box-shadow: 0 0 0 3px var(--primaria-suave-2); }
   50% { box-shadow: 0 0 0 7px var(--primaria-suave-2); }
 }
+
+/* ==========================================================================
+   ESTADOS DA DOSE
+   "não registrado" tem cor e símbolo próprios, separados de "não tomado" —
+   a tela precisa mostrar que são coisas diferentes, não só o dado saber.
+   ========================================================================== */
+
+.sp-marcar.parcial { border-color: var(--aviso-borda); background: var(--aviso-bg); color: var(--aviso-txt); font-weight: 700; }
+.sp-marcar.nao_tomado { border-color: var(--erro-borda); background: var(--erro-bg); color: var(--erro); font-weight: 700; }
+
+/* O texto da dose virou botão: tira a aparência de botão, mantém o alvo de toque. */
+button.sp-dose-txt {
+  background: none; border: none; padding: 0; margin: 0; font: inherit;
+  text-align: left; cursor: pointer; min-width: 0; flex: 1;
+  display: flex; flex-direction: column; gap: 2px;
+}
+button.sp-dose-txt:disabled { cursor: default; }
+
+/* Quebra da adesão: onde os números do percentual vieram. */
+.sp-quebra {
+  display: flex; flex-wrap: wrap; gap: 6px 16px;
+  margin: 12px 0 0; font-size: var(--t-sm); color: var(--texto-3);
+}
+.sp-quebra strong { color: var(--texto); }
+.sp-quebra .tomado strong { color: #15803D; }
+.sp-quebra .parcial strong { color: var(--aviso-txt); }
+.sp-quebra .nao_tomado strong { color: var(--erro); }
+.sp-quebra .nao_registrado strong { color: var(--texto-2); }
+
+.sp-nota-registro {
+  margin: 10px 0 0; padding: 10px 12px;
+  background: var(--superficie-2); border-radius: var(--raio-sm);
+  font-size: var(--t-sm); color: var(--texto-2); line-height: 1.45;
+}
+
+/* Grade do histórico: agora com o dia do mês e tocável. */
+.sp-hist { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 14px; }
+.sp-hist-dia {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  width: 34px; height: 38px; gap: 1px; padding: 0;
+  border: 1px solid var(--borda); border-radius: var(--raio-sm);
+  background: var(--superficie); cursor: pointer; font-family: inherit;
+  transition: transform var(--t-rapida), border-color var(--t-rapida);
+}
+.sp-hist-dia:hover:not(:disabled) { transform: translateY(-1px); border-color: var(--borda-forte); }
+.sp-hist-dia:disabled { opacity: .35; cursor: default; }
+.sp-hist-num { font-size: 10px; color: var(--texto-4); line-height: 1; }
+.sp-hist-sinal { font-size: 13px; font-weight: 700; line-height: 1; }
+
+.sp-hist-dia.tomado { background: var(--sucesso-bg); border-color: var(--sucesso-borda); }
+.sp-hist-dia.tomado .sp-hist-sinal { color: #15803D; }
+.sp-hist-dia.parcial { background: var(--aviso-bg); border-color: var(--aviso-borda); }
+.sp-hist-dia.parcial .sp-hist-sinal { color: var(--aviso-txt); }
+.sp-hist-dia.nao_tomado { background: var(--erro-bg); border-color: var(--erro-borda); }
+.sp-hist-dia.nao_tomado .sp-hist-sinal { color: var(--erro); }
+/* Não registrado é neutro de propósito: não é falha, é ausência de resposta. */
+.sp-hist-dia.nao_registrado { background: var(--superficie-2); border-style: dashed; }
+.sp-hist-dia.nao_registrado .sp-hist-sinal { color: var(--texto-4); }
+.sp-hist-dia.sem_dose .sp-hist-sinal { color: var(--borda-forte); }
+
+.sp-legenda i.tomado { color: #15803D; }
+.sp-legenda i.parcial { color: var(--aviso-txt); }
+.sp-legenda i.nao_tomado { color: var(--erro); }
+.sp-legenda i.nao_registrado { color: var(--texto-4); }
+
+/* ---------- folha de registro / detalhe do dia ---------- */
+.fd-fundo {
+  position: fixed; inset: 0; z-index: 200; background: rgba(16, 24, 40, .55);
+  display: flex; align-items: flex-end; justify-content: center; animation: fadeIn var(--t);
+}
+.fd {
+  background: var(--superficie); width: 100%; max-width: 460px;
+  border-radius: var(--raio-lg) var(--raio-lg) 0 0; padding: 24px;
+  box-shadow: var(--sombra-xl); max-height: 92vh; overflow-y: auto;
+}
+.fd h2 { font-size: 18px; margin: 0 0 4px; }
+.fd-sup { display: flex; flex-direction: column; gap: 2px; margin: 14px 0; }
+.fd-sup strong { font-size: 16px; }
+.fd-sup span { font-size: var(--t-sm); color: var(--texto-3); }
+.fd-quando { font-size: var(--t-sm); color: var(--texto-3); }
+.fd-atual {
+  margin: 0 0 14px; padding: 10px 12px; background: var(--superficie-2);
+  border-radius: var(--raio-sm); font-size: var(--t-sm); color: var(--texto-2);
+}
+.fd-pergunta { margin: 0 0 10px; font-size: 14px; font-weight: 600; }
+
+.fd-opcoes { display: flex; flex-direction: column; gap: 8px; }
+.fd-op {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 14px 16px; border: 1px solid var(--borda); border-radius: var(--raio);
+  background: var(--superficie); font: inherit; font-size: 15px; cursor: pointer;
+  text-align: left; transition: border-color var(--t-rapida), background var(--t-rapida);
+}
+.fd-op:hover:not(:disabled) { border-color: var(--borda-forte); }
+.fd-op:disabled { opacity: .6; cursor: default; }
+.fd-op-simbolo {
+  width: 28px; height: 28px; flex-shrink: 0; border-radius: var(--raio-full);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 15px;
+}
+.fd-op.tomado .fd-op-simbolo { background: var(--sucesso-bg); color: #15803D; }
+.fd-op.parcial .fd-op-simbolo { background: var(--aviso-bg); color: var(--aviso-txt); }
+.fd-op.nao_tomado .fd-op-simbolo { background: var(--erro-bg); color: var(--erro); }
+.fd-op.atual { border-color: var(--texto); background: var(--superficie-2); font-weight: 600; }
+
+.fd-erro {
+  margin-top: 12px; padding: 10px 12px; background: var(--erro-bg);
+  border: 1px solid var(--erro-borda); border-radius: var(--raio);
+  color: var(--erro); font-size: var(--t-sm);
+}
+.fd-rodape { display: flex; gap: 8px; margin-top: 18px; }
+.fd-rodape .btn { flex: 1; }
+.fd-nota { margin: 14px 0 0; font-size: var(--t-sm); color: var(--texto-3); line-height: 1.5; }
+.fd-vazio { margin: 16px 0; color: var(--texto-3); font-size: 14px; }
+
+.fd-lista { list-style: none; padding: 0; margin: 16px 0 0; display: flex; flex-direction: column; gap: 8px; }
+.fd-item {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 12px 14px; border: 1px solid var(--borda); border-radius: var(--raio);
+  background: var(--superficie); font: inherit; text-align: left; cursor: pointer;
+}
+.fd-item:disabled { cursor: default; }
+.fd-item:hover:not(:disabled) { border-color: var(--borda-forte); }
+.fd-item-selo {
+  width: 28px; height: 28px; flex-shrink: 0; border-radius: var(--raio-full);
+  display: flex; align-items: center; justify-content: center; font-weight: 700;
+  background: var(--superficie-2); color: var(--texto-3);
+}
+.fd-item-selo.tomado { background: var(--sucesso-bg); color: #15803D; }
+.fd-item-selo.parcial { background: var(--aviso-bg); color: var(--aviso-txt); }
+.fd-item-selo.nao_tomado { background: var(--erro-bg); color: var(--erro); }
+.fd-item-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.fd-item-txt strong { font-size: 14px; }
+.fd-item-txt span { font-size: var(--t-sm); color: var(--texto-3); }
+.fd-item-estado.nao_registrado { color: var(--texto-2); font-weight: 600; }
+.fd-item-estado.nao_tomado { color: var(--erro); font-weight: 600; }
+.fd-item-acao { font-size: var(--t-sm); color: var(--primaria); font-weight: 600; flex-shrink: 0; }
+
+@media (min-width: 620px) {
+  .fd-fundo { align-items: center; padding: 20px; }
+  .fd { border-radius: var(--raio-lg); }
+}
+
+/* Alinhamento dos símbolos (✓ · × ?) — precisam ficar no centro ótico do
+   círculo, não apoiados na linha de base da fonte. Centralização explícita em
+   todos os lugares onde uma marca aparece dentro de um contorno. */
+.sp-marcar,
+.fd-op-simbolo,
+.fd-item-selo,
+.sp-hist-sinal,
+.sp-legenda i {
+  display: inline-flex; align-items: center; justify-content: center;
+  line-height: 1; text-align: center; font-variant-numeric: tabular-nums;
+}
+.sp-marcar svg, .fd-item-selo svg { display: block; }
+.sp-legenda i {
+  width: 18px; height: 18px; flex-shrink: 0;
+  border-radius: var(--raio-sm); background: var(--superficie-2);
+  font-size: 11px; font-weight: 700; font-style: normal;
+}
+.sp-legenda span { display: inline-flex; align-items: center; gap: 6px; }
+/* O ponto do "parcial" senta na base da fonte: sobe para o meio do círculo. */
+.sp-marcar.parcial span,
+.fd-op.parcial .fd-op-simbolo,
+.fd-item-selo.parcial,
+.sp-hist-dia.parcial .sp-hist-sinal,
+.sp-legenda i.parcial { padding-bottom: 0.32em; }

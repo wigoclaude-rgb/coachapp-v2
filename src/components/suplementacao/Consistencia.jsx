@@ -1,5 +1,8 @@
 import { useMemo, useState } from 'react'
-import { historico, aderenciaGeral } from '../../lib/suplementos'
+import {
+  historico, aderenciaGeral, SIMBOLOS, ROTULOS_ESTADO,
+  TOMADO, PARCIAL, NAO_TOMADO, NAO_REGISTRADO, SEM_DOSE
+} from '../../lib/suplementos'
 
 const JANELAS = [
   { id: 7, rotulo: '7 dias' },
@@ -15,7 +18,7 @@ const DOW = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
   Percentual sempre acompanhado do denominador — "87%" sozinho não deixa ninguém
   agir, e esconde se veio de 26 doses ou de 3.
 */
-export default function Consistencia({ lista, tomados, sequenciaAtual, melhor }) {
+export default function Consistencia({ lista, tomados, sequenciaAtual, melhor, onAbrirDia, previsto }) {
   const [janela, setJanela] = useState(30)
   const [filtro, setFiltro] = useState('todos')
 
@@ -24,17 +27,23 @@ export default function Consistencia({ lista, tomados, sequenciaAtual, melhor })
     [lista, filtro]
   )
 
-  const ades = useMemo(() => aderenciaGeral(alvo, tomados, janela), [alvo, tomados, janela])
-  const dias = useMemo(() => historico(alvo, tomados, janela), [alvo, tomados, janela])
+  const ades = useMemo(
+    () => aderenciaGeral(alvo, tomados, janela, new Date(), previsto),
+    [alvo, tomados, janela, previsto]
+  )
+  const dias = useMemo(
+    () => historico(alvo, tomados, janela, new Date(), previsto),
+    [alvo, tomados, janela, previsto]
+  )
 
-  const comDados = dias.some(d => d.esperadas > 0)
+  const comDados = dias.some(d => d.previstas > 0)
 
   return (
     <section className="card">
       <div className="card-titulo">
         <div style={{ minWidth: 0 }}>
           <h2>Sua consistência</h2>
-          <p className="mini">Doses marcadas sobre as doses previstas no período.</p>
+          <p className="mini">Sobre o que você informou. Dia sem resposta fica de fora da conta.</p>
         </div>
       </div>
 
@@ -72,41 +81,79 @@ export default function Consistencia({ lista, tomados, sequenciaAtual, melhor })
         <>
           <div className="sp-consist">
             <div className="sp-consist-num">
-              <strong>{ades ? ades.pct : 0}%</strong>
-              <span>{ades ? `${ades.cumpridas} de ${ades.esperadas} doses` : 'sem doses previstas'}</span>
+              <strong>{ades?.pct === null || !ades ? '—' : ades.pct + '%'}</strong>
+              <span>
+                {!ades || ades.pct === null
+                  ? 'nenhuma dose informada ainda'
+                  : `${ades.informadas} ${ades.informadas === 1 ? 'dose informada' : 'doses informadas'} de ${ades.previstas} previstas`}
+              </span>
             </div>
-            <div className="sp-barra">
-              <div className="sp-barra-fill" style={{ width: (ades?.pct || 0) + '%' }} />
-            </div>
+            {ades?.pct !== null && (
+              <div className="sp-barra">
+                <div className="sp-barra-fill" style={{ width: (ades?.pct || 0) + '%' }} />
+              </div>
+            )}
           </div>
+
+          {/* O detalhe é o que torna o percentual avaliável. Sem ele, "63%" não
+              diz se faltou tomar ou faltou registrar — coisas bem diferentes. */}
+          {ades && (
+            <div className="sp-quebra">
+              <span className="tomado"><strong>{ades.tomadas}</strong> {ades.tomadas === 1 ? 'tomada' : 'tomadas'}</span>
+              {ades.parciais > 0 && <span className="parcial"><strong>{ades.parciais}</strong> {ades.parciais > 1 ? 'parciais' : 'parcial'}</span>}
+              {ades.naoTomadas > 0 && <span className="nao_tomado"><strong>{ades.naoTomadas}</strong> não {ades.naoTomadas === 1 ? 'tomada' : 'tomadas'}</span>}
+              {ades.naoRegistradas > 0 && (
+                <span className="nao_registrado">
+                  <strong>{ades.naoRegistradas}</strong> sem registro
+                </span>
+              )}
+            </div>
+          )}
+
+          {ades?.naoRegistradas > 0 && (
+            <p className="sp-nota-registro">
+              As {ades.naoRegistradas} sem registro não entram no percentual — o app
+              não sabe o que aconteceu nelas. Toque num dia abaixo para informar.
+            </p>
+          )}
 
           {(sequenciaAtual > 0 || melhor > 0) && filtro === 'todos' && (
             <div className="sp-seqs">
-              <span><strong>{sequenciaAtual}</strong> {sequenciaAtual === 1 ? 'dia seguido' : 'dias seguidos'}</span>
+              <span><strong>{sequenciaAtual}</strong> {sequenciaAtual === 1 ? 'dia seguido' : 'dias seguidos'} registrados</span>
               {melhor > sequenciaAtual && <span>Melhor sequência: <strong>{melhor}</strong> dias</span>}
             </div>
           )}
 
-          {/* Estado por dia. O símbolo distingue os casos sem depender de cor. */}
-          <div className="sp-hist" role="img" aria-label={`Histórico dos últimos ${janela} dias`}>
-            {dias.map(d => (
-              <span
-                key={d.iso}
-                className={'sp-hist-dia ' + d.estado}
-                title={`${DOW[d.data.getDay()]} ${d.data.getDate()}/${d.data.getMonth() + 1} · ${
-                  d.esperadas === 0 ? 'sem doses previstas' : `${d.cumpridas} de ${d.esperadas}`
-                }`}
-              >
-                {d.estado === 'ok' ? '✓' : d.estado === 'falhou' ? '×' : d.estado === 'parcial' ? '·' : ''}
-              </span>
-            ))}
+          {/* Cada dia é tocável: é assim que se corrige um esquecimento. */}
+          <div className="sp-hist">
+            {dias.map(d => {
+              const vazio = d.estado === SEM_DOSE
+              return (
+                <button
+                  key={d.iso}
+                  type="button"
+                  className={'sp-hist-dia ' + d.estado + (d.futuro ? ' futuro' : '')}
+                  onClick={() => onAbrirDia && onAbrirDia(d)}
+                  disabled={d.futuro}
+                  title={`${DOW[d.data.getDay()]} ${d.data.getDate()}/${d.data.getMonth() + 1} · ${
+                    vazio ? 'sem dose prevista' : ROTULOS_ESTADO[d.estado]
+                  }`}
+                >
+                  <span className="sp-hist-num">{d.data.getDate()}</span>
+                  <span className="sp-hist-sinal" aria-hidden="true">
+                    {vazio ? '—' : SIMBOLOS[d.estado]}
+                  </span>
+                </button>
+              )
+            })}
           </div>
 
           <div className="sp-legenda">
-            <span><i>✓</i> tomado</span>
-            <span><i>·</i> parcial</span>
-            <span><i>×</i> não tomado</span>
-            <span><i /> sem dose prevista</span>
+            <span><i className="tomado">✓</i> tomado</span>
+            <span><i className="parcial">·</i> parcial</span>
+            <span><i className="nao_tomado">×</i> não tomado</span>
+            <span><i className="nao_registrado">?</i> não registrado</span>
+            <span><i>—</i> sem dose prevista</span>
           </div>
         </>
       )}

@@ -9,7 +9,7 @@ que envia os push de suplementação. Ela existe porque com o app fechado nada n
 celular acorda no horário — ver `netlify/LEIA-ME.md`.
 
 Deploy: Netlify (`netlify.toml` já faz build e o redirect de SPA).
-Versão do app exibida ao usuário: **2.3.0** (ver `src/lib/novidades.js`).
+Versão do app exibida ao usuário: **2.4.0** (ver `src/lib/novidades.js`).
 
 ---
 
@@ -106,7 +106,8 @@ e **precisam ser coladas no console do Firebase à mão** — o repositório nã
 | `anexos` / `anexosDados/{alunoUid}` | metadado e conteúdo base64, separados de propósito |
 | `diario/{alunoUid}` | check-in privado — **só o aluno lê** |
 | `diarioCompartilhado/{alunoUid}` | o que o aluno decide mostrar ao personal |
-| `suplementos` / `suplementosTomados/{alunoUid}` | rotina e doses do dia |
+| `suplementos/{alunoUid}` | rotina: dose, frequência, `lembrete{ativo,horarios,antecedencia,cobrar}` |
+| `suplementosTomados/{alunoUid}/{dia}/{supId}` | `estado` (tomado\|parcial\|nao_tomado), `vezes`, `ts`, `retroativo` |
 | `cobrancas/{alunoUid}` | `valor`, `vencimento`, `status`, `tipo`, `pagamento{data,obs,comprovante}`, `validadaEm`, `validadaPor`, `motivoRecusa` |
 | `chats/{conversaId}` | `conversaId` = os dois uids concatenados; a regra usa `.contains(auth.uid)` |
 | `presenca/{uid}` | online/visto por último, via `onDisconnect` |
@@ -156,6 +157,21 @@ e **precisam ser coladas no console do Firebase à mão** — o repositório nã
   dentro do nó de cada aluno, e aquela lista mistura todos — com `key={cid}` o React
   deixava linhas velhas no DOM ao filtrar, e a recusa aberta de um aluno abria a de
   outro.
+- **NÃO REGISTRADO ≠ NÃO TOMADO.** É a regra que sustenta a tela de suplementação.
+  A ausência de registro nunca é convertida em falha: `nao_registrado` não é um valor
+  gravado, é a falta de declaração. Até Set/2026 `historico()` fazia
+  `cumpridas > 0 ? 'parcial' : 'falhou'`, e quem tomava mas esquecia de abrir o app
+  via × "não tomou" no histórico e a adesão despencando.
+- **A adesão é sobre o que foi informado**, não sobre o calendário: dose sem registro
+  fica fora do percentual e aparece contada ao lado. Contar o silêncio como falha
+  mentia para baixo; contar como acerto mentiria para cima. Parcial vale meia dose,
+  e a tela diz isso.
+- **Toda escrita de dose passa por `src/lib/doses.js`**, em `runTransaction`. Quatro
+  telas registram dose e cada uma fazia `update({ vezes: feitas + 1 })` lendo um
+  estado React possivelmente velho — dois toques rápidos liam o mesmo `feitas`. Agora
+  a conta é do servidor, e o duplo toque é inofensivo de verdade.
+- **Registrar e corrigir são a mesma ação** (`FolhaDose`), para hoje e para qualquer
+  dia passado. Separar em dois fluxos faria a correção parecer exceção quando é rotina.
 - **Push exige servidor, e é por isso que existe uma função no Netlify.** Nenhuma API
   do navegador agenda uma notificação para si mesma com o app fechado (Notification
   Triggers nunca saiu de teste). A função roda de minuto em minuto e envia; a decisão
@@ -206,6 +222,7 @@ e **precisam ser coladas no console do Firebase à mão** — o repositório nã
 | `atividades.js` | check-in de atividade (tempo, distância) |
 | `cobrancas.js` | estados da cobrança, o que é informável, selos e rótulos |
 | `lembretes.js` | quando notificar uma dose: fuso, dias, antecedência, anti-spam |
+| `doses.js` | escrita da dose, em transação — o único lugar que grava |
 | `push.js` | inscrição de push do navegador e o caso do iPhone |
 | `filtroCobrancas.js` | busca, status, período, faixa de valor, ordenação e totais |
 | `tours.js` / `novidades.js` | tutorial de primeiro acesso e changelog in-app |
@@ -286,3 +303,7 @@ versão, cole no console, senão o fluxo de pagamento quebra:
    Passo a passo em `netlify/LEIA-ME.md`. Sem elas o app mostra "Os lembretes
    ainda não foram configurados neste servidor" e o resto funciona igual; o log
    da função nomeia qual variável está faltando.
+
+4. **Realtime Database → Regras** de novo, se você publicou antes de 13/09/2026:
+   `suplementosTomados` ganhou validação de campo (`estado`, `vezes`, `ts`,
+   `retroativo`). Sem ela o app funciona, mas nada impede um campo inválido.

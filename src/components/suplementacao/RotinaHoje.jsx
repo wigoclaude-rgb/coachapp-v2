@@ -1,4 +1,7 @@
-import { rotuloMomento, faltamPara } from '../../lib/suplementos'
+import {
+  rotuloMomento, faltamPara, SIMBOLOS, ROTULOS_ESTADO,
+  TOMADO, PARCIAL, NAO_TOMADO
+} from '../../lib/suplementos'
 import { IcCheck, IcAlerta, IcRelogio, IcHalter } from '../Icones.jsx'
 
 /*
@@ -13,9 +16,9 @@ import { IcCheck, IcAlerta, IcRelogio, IcHalter } from '../Icones.jsx'
   atrasada, depois horário mais próximo, e as concluídas por último.
 */
 export default function RotinaHoje({
-  rotina, podeMarcar, nomeAluno, treinoDeHoje, onMarcar, onDesmarcar, marcando
+  rotina, podeMarcar, nomeAluno, treinoDeHoje, onMarcar, onDesfazer, onAbrirFolha, marcando
 }) {
-  const { itens, dosesFeitas, dosesTotal, pct, tudoFeito, pendentes } = rotina
+  const { itens, dosesFeitas, dosesTotal, dosesTomadas, pct, tudoFeito, pendentes } = rotina
   if (itens.length === 0) return null
 
   const emFoco = pendentes[0]?.id
@@ -27,7 +30,7 @@ export default function RotinaHoje({
           <h2>Hoje</h2>
           <p className="mini">
             {podeMarcar
-              ? 'Toque na bolinha ao tomar cada dose.'
+              ? 'Toque na bolinha ao tomar. Para outra resposta, toque no nome.'
               : `Quem marca é ${(nomeAluno || 'o aluno').split(' ')[0]}.`}
           </p>
         </div>
@@ -36,14 +39,21 @@ export default function RotinaHoje({
       <div className="sp-progresso">
         <div className="sp-prog-txt">
           <strong>{dosesFeitas}</strong>
-          <span>de {dosesTotal} {dosesTotal === 1 ? 'dose concluída' : 'doses concluídas'}</span>
+          <span>
+            de {dosesTotal} {dosesTotal === 1 ? 'dose registrada' : 'doses registradas'}
+            {dosesFeitas > dosesTomadas && ` · ${dosesTomadas} tomada${dosesTomadas === 1 ? '' : 's'}`}
+          </span>
         </div>
         <div className="sp-barra">
           <div className="sp-barra-fill" style={{ width: pct + '%' }} />
         </div>
       </div>
 
-      {tudoFeito && <p className="sp-tudo-certo"><IcCheck /> Tudo certo por hoje.</p>}
+      {tudoFeito && (
+        <p className="sp-tudo-certo">
+          <IcCheck /> {dosesTomadas === dosesTotal ? 'Tudo certo por hoje.' : 'Dia respondido.'}
+        </p>
+      )}
 
       <ul className="sp-doses">
         {itens.map(s => {
@@ -55,7 +65,7 @@ export default function RotinaHoje({
               key={s.id}
               className={
                 'sp-dose' +
-                (s.completo ? ' feita' : '') +
+                (s.resolvido ? ' feita' : '') +
                 (s.atrasada ? ' atrasada' : '') +
                 (foco ? ' foco' : '')
               }
@@ -67,10 +77,15 @@ export default function RotinaHoje({
               )}
 
               <div className="sp-dose-linha">
+                {/*
+                  A bolinha é o caminho curto: um toque e a dose está tomada.
+                  Ela nunca vira "não tomei" — para isso a pessoa abre a folha,
+                  porque declarar que não tomou merece uma confirmação consciente.
+                */}
                 <button
                   type="button"
-                  className={'sp-marcar' + (s.completo ? ' feita' : '')}
-                  onClick={() => (s.completo ? onDesmarcar(s) : onMarcar(s))}
+                  className={'sp-marcar ' + s.estado}
+                  onClick={() => (s.completo ? onDesfazer(s) : onMarcar(s))}
                   disabled={!podeMarcar || marcando === s.id}
                   aria-pressed={s.completo}
                   aria-label={
@@ -79,10 +94,18 @@ export default function RotinaHoje({
                       : `Marcar a dose de ${s.nome} como tomada`
                   }
                 >
-                  {s.completo && <IcCheck />}
+                  {s.completo
+                    ? <IcCheck />
+                    : s.estado !== 'nao_registrado' && <span aria-hidden="true">{SIMBOLOS[s.estado]}</span>}
                 </button>
 
-                <div className="sp-dose-txt">
+                <button
+                  type="button"
+                  className="sp-dose-txt"
+                  onClick={() => podeMarcar && onAbrirFolha(s)}
+                  disabled={!podeMarcar}
+                  aria-label={`Registrar outra resposta para ${s.nome}`}
+                >
                   <span className="sp-dose-nome">{s.nome}</span>
                   <span className="sp-dose-meta">
                     {[s.dose, s.marca].filter(Boolean).join(' · ')}
@@ -96,19 +119,23 @@ export default function RotinaHoje({
                   )}
 
                   <span className="sp-dose-quando">
-                    {s.completo && s.vezesAoDia === 1 && s.hora
-                      ? `Tomada às ${s.hora}`
-                      : s.completo
-                        ? 'Concluída'
-                        : porTreino
-                          ? rotuloMomento(s.momento)
-                          : s.atrasada
-                            ? `Programada para ${s.horario} · ainda não marcada`
-                            : s.horario
-                              ? `Às ${s.horario}${s.minutosAte !== null ? ' · ' + faltamPara(s.minutosAte) : ''}`
-                              : 'Sem horário definido'}
+                    {s.estado === NAO_TOMADO
+                      ? ROTULOS_ESTADO[NAO_TOMADO]
+                      : s.estado === PARCIAL && s.vezesAoDia === 1
+                        ? 'Tomada parcialmente'
+                        : s.completo && s.vezesAoDia === 1 && s.hora
+                          ? `Tomada às ${s.hora}`
+                          : s.completo
+                            ? 'Concluída'
+                            : porTreino
+                            ? rotuloMomento(s.momento)
+                            : s.atrasada
+                              ? `Dose atrasada · estava prevista para ${s.horario}`
+                              : s.horario
+                                ? `Às ${s.horario}${s.minutosAte !== null ? ' · ' + faltamPara(s.minutosAte) : ''}`
+                                : 'Sem horário definido'}
                   </span>
-                </div>
+                </button>
 
                 <span className="sp-dose-lado">
                   {s.vezesAoDia > 1 && (

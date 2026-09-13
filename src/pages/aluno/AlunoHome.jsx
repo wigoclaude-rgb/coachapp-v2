@@ -29,7 +29,8 @@ import { normalizarAvaliacao } from '../../lib/avaliacao'
 import Anexos from '../../components/Anexos.jsx'
 import { organizar } from '../../lib/anexos'
 // `diaISO` daqui já existe no arquivo para a sequência de treinos; o alias evita a colisão.
-import { normalizarSuplemento, faltaHoje, vezesNoDia, diaISO as diaSup } from '../../lib/suplementos'
+import { normalizarSuplemento, faltaHoje, registroDoDia, TOMADO, diaISO as diaSup } from '../../lib/suplementos'
+import { registrarDose } from '../../lib/doses'
 import {
   TOUR_ALUNO_TREINO, TOUR_ALUNO_EVOLUCAO, TOUR_ALUNO_DIARIO, TOUR_ALUNO_PAGAMENTOS
 } from '../../lib/tours'
@@ -461,14 +462,15 @@ export default function AlunoHome({ user, perfil, onSair }) {
   }
 
   /** Marca a dose direto do aviso flutuante, sem sair da tela onde a pessoa está. */
+  /*
+    Marca a dose direto do aviso flutuante, sem sair da tela onde a pessoa está.
+    Usa a mesma transação da tela de suplementação — dois avisos abertos, ou um
+    toque repetido, não viram dois registros.
+  */
   async function marcarSuplemento(sup) {
-    const dia = diaSup()
-    const feitas = vezesNoDia(supTomados, sup.id, dia)
-    if (feitas >= sup.vezesAoDia) return
     try {
-      await update(ref(db, `suplementosTomados/${user.uid}/${dia}/${sup.id}`), {
-        vezes: feitas + 1,
-        ts: Date.now()
+      await registrarDose({
+        alunoId: user.uid, supId: sup.id, estado: TOMADO, vezesAoDia: sup.vezesAoDia
       })
     } catch (err) {
       console.warn('Falha ao marcar suplemento:', err)
@@ -791,7 +793,7 @@ export default function AlunoHome({ user, perfil, onSair }) {
       */}
       {supPendentes.length > 0 && aba !== 'suplementos' && !supDispensado && (() => {
         const sup = supPendentes[0]
-        const feitas = vezesNoDia(supTomados, sup.id, diaSup())
+        const feitas = registroDoDia(supTomados, sup.id, diaSup(), sup.vezesAoDia)?.vezes || 0
         const outros = supPendentes.length - 1
         return (
           <div className="sup-flutuante" role="status">

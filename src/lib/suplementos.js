@@ -39,6 +39,82 @@ export const MOMENTOS = [
 
 export const rotuloMomento = id => MOMENTOS.find(m => m.id === id)?.rotulo || ''
 
+/* ==================== estados da dose ====================
+
+  O aluno declara o que aconteceu. Antes existia só um contador `vezes`, e a
+  ausência de registro era lida como falha: quem tomou a creatina e esqueceu de
+  abrir o app aparecia no histórico com × "não tomou".
+
+  Isso é diferente de não ter tomado, e o dado precisa dizer qual dos dois foi.
+  Por isso `nao_registrado` NÃO é um valor gravado — é a ausência de declaração,
+  e nada no sistema converte um no outro.
+
+    tomado          o aluno disse que tomou
+    parcial         o aluno disse que tomou parte
+    nao_tomado      o aluno disse que não tomou
+    nao_registrado  ninguém disse nada ainda      (derivado)
+    sem_dose        não havia dose prevista        (derivado)
+*/
+
+export const TOMADO = 'tomado'
+export const PARCIAL = 'parcial'
+export const NAO_TOMADO = 'nao_tomado'
+export const NAO_REGISTRADO = 'nao_registrado'
+export const SEM_DOSE = 'sem_dose'
+
+/** Os três que o aluno escolhe. Os outros dois são conclusões, não opções. */
+export const ESTADOS_DECLARAVEIS = [
+  { id: TOMADO, rotulo: 'Tomei', simbolo: '✓' },
+  { id: PARCIAL, rotulo: 'Tomei parcialmente', simbolo: '·' },
+  { id: NAO_TOMADO, rotulo: 'Não tomei', simbolo: '×' }
+]
+
+export const SIMBOLOS = {
+  [TOMADO]: '✓', [PARCIAL]: '·', [NAO_TOMADO]: '×',
+  [NAO_REGISTRADO]: '?', [SEM_DOSE]: ''
+}
+
+export const ROTULOS_ESTADO = {
+  [TOMADO]: 'Tomado',
+  [PARCIAL]: 'Parcial',
+  [NAO_TOMADO]: 'Não tomado',
+  [NAO_REGISTRADO]: 'Não registrado',
+  [SEM_DOSE]: 'Sem dose prevista'
+}
+
+const DECLARADOS = [TOMADO, PARCIAL, NAO_TOMADO]
+export const ehDeclarado = e => DECLARADOS.includes(e)
+
+/**
+ * Lê o registro bruto de um dia e devolve o estado declarado, ou null.
+ *
+ * Migração: registro antigo tem `vezes` e não tem `estado`. Como só existia
+ * registro quando a pessoa marcou pelo menos uma dose, ele vira `tomado` ou
+ * `parcial` conforme a contagem — nenhum histórico antigo vira "não tomou".
+ */
+export function registroDoDia(tomados, supId, dia, vezesAoDia = 1) {
+  const bruto = tomados?.[dia]?.[supId]
+  if (!bruto) return null
+
+  const vezes = Number(bruto.vezes) || 0
+  const estado = ehDeclarado(bruto.estado)
+    ? bruto.estado
+    : (vezes >= vezesAoDia ? TOMADO : vezes > 0 ? PARCIAL : null)
+
+  if (!estado) return null
+  return { estado, vezes, ts: bruto.ts || null, retroativo: bruto.retroativo === true }
+}
+
+/**
+ * O estado de um suplemento num dia: o que a tela pinta.
+ * `previstaNoDia` diz se havia dose — sem ela, o dia é descanso, não omissão.
+ */
+export function estadoNoDia(sup, supId, tomados, dia, previstaNoDia) {
+  if (!previstaNoDia) return SEM_DOSE
+  const r = registroDoDia(tomados, supId, dia, sup?.vezesAoDia || 1)
+  return r ? r.estado : NAO_REGISTRADO
+}
+
 /** 2026-09-02 — chave do dia, no fuso local. */
 export const diaISO = (d = new Date()) =>
   d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
@@ -121,10 +197,18 @@ export function horaDaDose(tomados, supId, dia) {
   return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')
 }
 
-/** Falta tomar hoje? */
+/**
+ * Falta resolver hoje? É o que acende o aviso flutuante e o badge do menu.
+ *
+ * Quem declarou "não tomei" não é mais cobrado: ele já respondeu. Cobrar de novo
+ * seria o app discordando de uma informação que a própria pessoa deu.
+ */
 export function faltaHoje(sup, supId, tomados, hoje = new Date(), treinou = false) {
   if (!tocaHoje(sup, hoje, treinou)) return false
-  return vezesNoDia(tomados, supId, diaISO(hoje)) < sup.vezesAoDia
+  const r = registroDoDia(tomados, supId, diaISO(hoje), sup.vezesAoDia)
+  if (!r) return true                       // não registrado: falta responder
+  if (r.estado === NAO_TOMADO) return false // respondeu, e a resposta foi não
+  return r.vezes < sup.vezesAoDia           // parcial com dose restante
 }
 
 /* ==================== o dia ==================== */
@@ -141,17 +225,23 @@ export function rotinaDeHoje(lista, tomados, agora = new Date(), treinou = false
   const doDia = lista
     .filter(s => tocaHoje(s, agora, treinou))
     .map(s => {
-      const feitas = vezesNoDia(tomados, s.id, dia)
-      const completo = feitas >= s.vezesAoDia
+      const reg = registroDoDia(tomados, s.id, dia, s.vezesAoDia)
+      const estado = reg ? reg.estado : NAO_REGISTRADO
+      const feitas = reg?.vezes || 0
+      // `completo` é a dose cheia; `resolvido` é ter respondido, seja o que for.
+      const completo = estado === TOMADO
+      const resolvido = ehDeclarado(estado)
       const min = horarioEmMinutos(s.horario)
       return {
         ...s,
         feitas,
+        estado,
+        resolvido,
         completo,
         hora: horaDaDose(tomados, s.id, dia),
         minutosDoHorario: min,
-        atrasada: !completo && min !== null && min < minutosAgora,
-        minutosAte: !completo && min !== null && min >= minutosAgora ? min - minutosAgora : null
+        atrasada: !resolvido && min !== null && min < minutosAgora,
+        minutosAte: !resolvido && min !== null && min >= minutosAgora ? min - minutosAgora : null
       }
     })
 
@@ -169,7 +259,7 @@ export function rotinaDeHoje(lista, tomados, agora = new Date(), treinou = false
     treino — justamente quando ele deveria acertar.
   */
   doDia.sort((a, b) => {
-    if (a.completo !== b.completo) return a.completo ? 1 : -1
+    if (a.resolvido !== b.resolvido) return a.resolvido ? 1 : -1
 
     const aPos = treinou && a.frequencia === 'treino'
     const bPos = treinou && b.frequencia === 'treino'
@@ -183,16 +273,23 @@ export function rotinaDeHoje(lista, tomados, agora = new Date(), treinou = false
     return (a.nome || '').localeCompare(b.nome || '')
   })
 
-  const dosesTotal = doDia.reduce((n, s) => n + s.vezesAoDia, 0)
-  const dosesFeitas = doDia.reduce((n, s) => n + Math.min(s.feitas, s.vezesAoDia), 0)
+  /*
+    O contador do topo conta o que foi RESPONDIDO, não só o que foi tomado —
+    "1 de 2 doses registradas". Quem disse "não tomei" resolveu o dia dele, e
+    a barra precisa refletir isso, senão o app fica devendo para sempre.
+  */
+  const dosesTotal = doDia.length
+  const dosesFeitas = doDia.filter(s => s.resolvido).length
+  const dosesTomadas = doDia.filter(s => s.completo).length
 
   return {
     itens: doDia,
     dosesTotal,
     dosesFeitas,
     pct: dosesTotal ? Math.round((dosesFeitas / dosesTotal) * 100) : 0,
+    dosesTomadas,
     tudoFeito: dosesTotal > 0 && dosesFeitas >= dosesTotal,
-    pendentes: doDia.filter(s => !s.completo)
+    pendentes: doDia.filter(s => !s.resolvido)
   }
 }
 
@@ -207,6 +304,10 @@ export function proximaDose(rotina) {
   return rotina.pendentes.find(s => s.atrasada) || rotina.pendentes[0] || null
 }
 
+/** Caminho da dose no banco. Um lugar só, para os quatro pontos que escrevem. */
+export const caminhoDose = (alunoId, dia, supId) =>
+  `suplementosTomados/${alunoId}/${dia}/${supId}`
+
 /** "em 42 min" / "em 2h10" — só quando existe horário no futuro. */
 export function faltamPara(minutos) {
   if (minutos === null || minutos === undefined) return ''
@@ -218,24 +319,47 @@ export function faltamPara(minutos) {
 
 /* ==================== constância ==================== */
 
+/*
+  Como a adesão é calculada, e por que assim.
+
+  O percentual é sobre o que o aluno INFORMOU, não sobre o calendário. Dose que
+  ele não registrou fica fora da conta e aparece ao lado, contada à parte.
+
+  A alternativa — tratar o silêncio como falha — é o que existia antes, e mentia:
+  quem tomava direitinho mas só abria o app duas vezes por semana via 30% de
+  adesão. O número virava motivo para desistir do app, não para tomar o suplemento.
+
+  Contar o silêncio como acerto mentiria na direção oposta. Por isso ele não entra
+  no percentual, mas fica visível: "82% — 18 de 22 doses informadas · 9 sem registro"
+  é uma frase que a pessoa consegue avaliar sozinha.
+
+  Parcial vale meia dose. É convenção, e a tela diz isso.
+*/
+
+export const PESO = { [TOMADO]: 1, [PARCIAL]: 0.5, [NAO_TOMADO]: 0 }
+
 /**
- * Dias seguidos cumprindo a dose cheia, contando de hoje para trás.
- * Dia em que o suplemento não toca é pulado, não quebra a sequência — quem toma
- * só de segunda a sexta não perde a conta no domingo.
+ * Dias seguidos com dose registrada, de hoje para trás.
+ *
+ * Dia sem dose prevista é pulado, não quebra. Dia não registrado QUEBRA: uma
+ * sequência é a prova de um hábito, e não dá para provar o que não foi anotado.
+ * A tela chama isso de "dias seguidos registrados", para o nome não prometer
+ * mais do que o dado sustenta.
  */
-export function sequencia(sup, supId, tomados, hoje = new Date()) {
+export function sequencia(sup, supId, tomados, hoje = new Date(), previsto = null) {
   if (!sup) return 0
+  const toca = previsto || ((s, d) => tocaHoje(s, d, true))
   const cursor = meiaNoite(hoje)
 
   // Hoje ainda incompleto não zera a conta: o dia não acabou.
-  if (tocaHoje(sup, cursor, true) && vezesNoDia(tomados, supId, diaISO(cursor)) < sup.vezesAoDia) {
+  if (toca(sup, cursor) && registroDoDia(tomados, supId, diaISO(cursor), sup.vezesAoDia)?.estado !== TOMADO) {
     cursor.setDate(cursor.getDate() - 1)
   }
 
   let n = 0
   for (let i = 0; i < 400; i++) {
-    if (tocaHoje(sup, cursor, true)) {
-      if (vezesNoDia(tomados, supId, diaISO(cursor)) >= sup.vezesAoDia) n++
+    if (toca(sup, cursor)) {
+      if (registroDoDia(tomados, supId, diaISO(cursor), sup.vezesAoDia)?.estado === TOMADO) n++
       else break
     }
     cursor.setDate(cursor.getDate() - 1)
@@ -244,15 +368,16 @@ export function sequencia(sup, supId, tomados, hoje = new Date()) {
 }
 
 /** A maior sequência já alcançada, para dar régua à sequência atual. */
-export function melhorSequencia(sup, supId, tomados, janela = 365, hoje = new Date()) {
+export function melhorSequencia(sup, supId, tomados, janela = 365, hoje = new Date(), previsto = null) {
   if (!sup) return 0
+  const toca = previsto || ((s, d) => tocaHoje(s, d, true))
   const cursor = meiaNoite(hoje)
   let melhor = 0
   let atual = 0
 
   for (let i = 0; i < janela; i++) {
-    if (tocaHoje(sup, cursor, true)) {
-      if (vezesNoDia(tomados, supId, diaISO(cursor)) >= sup.vezesAoDia) {
+    if (toca(sup, cursor)) {
+      if (registroDoDia(tomados, supId, diaISO(cursor), sup.vezesAoDia)?.estado === TOMADO) {
         atual++
         if (atual > melhor) melhor = atual
       } else atual = 0
@@ -263,15 +388,18 @@ export function melhorSequencia(sup, supId, tomados, janela = 365, hoje = new Da
 }
 
 /**
- * Adesão de um suplemento: doses cumpridas sobre doses esperadas.
- * Devolve null quando nada era esperado — suplemento recém-cadastrado marcando
- * 0% é injusto e desanima antes de a rotina começar.
+ * Adesão de um suplemento no período.
+ *
+ * Devolve os quatro números separados, porque é isso que permite à tela ser
+ * honesta: o percentual sozinho esconde de onde veio. `null` quando nada era
+ * previsto — suplemento recém-cadastrado marcando 0% desanima antes de começar.
  */
-export function aderencia(sup, supId, tomados, janela = 30, hoje = new Date()) {
+export function aderencia(sup, supId, tomados, janela = 30, hoje = new Date(), previsto = null) {
   if (!sup) return null
-  let esperadas = 0
-  let cumpridas = 0
+  const toca = previsto || ((s, d) => tocaHoje(s, d, true))
   const cursor = meiaNoite(hoje)
+
+  let previstas = 0, tomadas = 0, parciais = 0, naoTomadas = 0, naoRegistradas = 0
 
   /*
     Compara dia com dia, não instante com instante: cadastrado às 10h, o `inicio`
@@ -281,59 +409,88 @@ export function aderencia(sup, supId, tomados, janela = 30, hoje = new Date()) {
   const desde = sup.inicio ? meiaNoite(new Date(sup.inicio)) : null
 
   for (let i = 0; i < janela; i++) {
-    if (desde && cursor.getTime() >= desde.getTime() && tocaHoje(sup, cursor, true)) {
-      esperadas += sup.vezesAoDia
-      cumpridas += Math.min(vezesNoDia(tomados, supId, diaISO(cursor)), sup.vezesAoDia)
+    if (desde && cursor.getTime() >= desde.getTime() && toca(sup, cursor)) {
+      previstas++
+      const r = registroDoDia(tomados, supId, diaISO(cursor), sup.vezesAoDia)
+      if (!r) naoRegistradas++
+      else if (r.estado === TOMADO) tomadas++
+      else if (r.estado === PARCIAL) parciais++
+      else naoTomadas++
     }
     cursor.setDate(cursor.getDate() - 1)
   }
-  if (esperadas === 0) return null
-  return { pct: Math.round((cumpridas / esperadas) * 100), cumpridas, esperadas }
+
+  if (previstas === 0) return null
+  const informadas = tomadas + parciais + naoTomadas
+  const pontos = tomadas * PESO[TOMADO] + parciais * PESO[PARCIAL]
+  return {
+    previstas, tomadas, parciais, naoTomadas, naoRegistradas, informadas,
+    pct: informadas === 0 ? null : Math.round((pontos / informadas) * 100)
+  }
 }
 
 /** Adesão somada de todos os suplementos — a régua da rotina inteira. */
-export function aderenciaGeral(lista, tomados, janela = 30, hoje = new Date()) {
-  let cumpridas = 0
-  let esperadas = 0
+export function aderenciaGeral(lista, tomados, janela = 30, hoje = new Date(), previsto = null) {
+  const t = { previstas: 0, tomadas: 0, parciais: 0, naoTomadas: 0, naoRegistradas: 0, informadas: 0 }
   lista.forEach(s => {
-    const a = aderencia(s, s.id, tomados, janela, hoje)
-    if (a) { cumpridas += a.cumpridas; esperadas += a.esperadas }
+    const a = aderencia(s, s.id, tomados, janela, hoje, previsto)
+    if (!a) return
+    Object.keys(t).forEach(k => { t[k] += a[k] })
   })
-  if (esperadas === 0) return null
-  return { pct: Math.round((cumpridas / esperadas) * 100), cumpridas, esperadas }
+  if (t.previstas === 0) return null
+  const pontos = t.tomadas * PESO[TOMADO] + t.parciais * PESO[PARCIAL]
+  return { ...t, pct: t.informadas === 0 ? null : Math.round((pontos / t.informadas) * 100) }
 }
 
 /* ==================== histórico ==================== */
 
 /**
- * Um item por dia, do mais antigo para o mais novo.
- * `esperadas: 0` marca dia em que nada era devido — não é falha, é descanso, e
- * a tela precisa distinguir os dois.
+ * Um item por dia, do mais antigo para o mais novo, com o detalhe de cada
+ * suplemento — é o que permite tocar num dia e corrigir a dose daquele dia.
+ *
+ * O estado do DIA é o pior entre os suplementos, com uma ordem de gravidade:
+ * não tomado > não registrado > parcial > tomado. Assim um dia com três acertos
+ * e uma omissão não se pinta de verde.
  */
-export function historico(lista, tomados, janela = 30, hoje = new Date()) {
+const GRAVIDADE = { [NAO_TOMADO]: 4, [NAO_REGISTRADO]: 3, [PARCIAL]: 2, [TOMADO]: 1 }
+
+export function historico(lista, tomados, janela = 30, hoje = new Date(), previsto = null) {
+  const toca = previsto || ((s, d) => tocaHoje(s, d, true))
   const saida = []
   const cursor = meiaNoite(hoje)
   cursor.setDate(cursor.getDate() - (janela - 1))
+  const hojeISO = diaISO(hoje)
 
   for (let i = 0; i < janela; i++) {
     const iso = diaISO(cursor)
-    let esperadas = 0
-    let cumpridas = 0
+    const itens = []
 
     lista.forEach(s => {
       const desde = s.inicio ? meiaNoite(new Date(s.inicio)) : null
       if (!desde || cursor.getTime() < desde.getTime()) return
-      if (!tocaHoje(s, cursor, true)) return
-      esperadas += s.vezesAoDia
-      cumpridas += Math.min(vezesNoDia(tomados, s.id, iso), s.vezesAoDia)
+      if (!toca(s, cursor)) return
+      const r = registroDoDia(tomados, s.id, iso, s.vezesAoDia)
+      itens.push({
+        id: s.id, nome: s.nome, dose: s.dose, horario: s.horario, vezesAoDia: s.vezesAoDia,
+        estado: r ? r.estado : NAO_REGISTRADO,
+        vezes: r?.vezes || 0,
+        ts: r?.ts || null
+      })
     })
+
+    const pior = itens.reduce(
+      (acc, it) => (GRAVIDADE[it.estado] > GRAVIDADE[acc] ? it.estado : acc),
+      TOMADO
+    )
 
     saida.push({
       iso,
       data: new Date(cursor),
-      esperadas,
-      cumpridas,
-      estado: esperadas === 0 ? 'nada' : cumpridas >= esperadas ? 'ok' : cumpridas > 0 ? 'parcial' : 'falhou'
+      itens,
+      futuro: iso > hojeISO,
+      estado: itens.length === 0 ? SEM_DOSE : pior,
+      previstas: itens.length,
+      informadas: itens.filter(it => ehDeclarado(it.estado)).length
     })
     cursor.setDate(cursor.getDate() + 1)
   }

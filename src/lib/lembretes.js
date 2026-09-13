@@ -164,9 +164,17 @@ export function lembretesDevidos({
     if (pausadoNoDia(sup, dia)) return
     if (!valeNoDia(sup, diaSemana, treinouHoje)) return
 
-    const registradas = Number(doDia[id]?.vezes) || 0
+    const reg = doDia[id]
+    const registradas = Number(reg?.vezes) || 0
     const vezesAoDia = Math.max(1, Number(sup.vezesAoDia) || 1)
     if (registradas >= vezesAoDia) return   // dia inteiro concluído
+
+    /*
+      Quem declarou "não tomei" já respondeu. Insistir seria o app discordando de
+      uma informação que a própria pessoa deu — e é assim que se ensina alguém a
+      desligar as notificações.
+    */
+    if (reg?.estado === 'nao_tomado') return
 
     lembrete.horarios.forEach(horario => {
       const alvo = emMinutos(horario)

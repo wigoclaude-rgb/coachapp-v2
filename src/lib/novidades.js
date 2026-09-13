@@ -13,6 +13,37 @@
 
 export const NOVIDADES = [
   {
+    versao: '2.4.0',
+    data: '13 de setembro de 2026',
+    titulo: 'Esquecer de registrar não é mais "não tomei"',
+    itens: [
+      {
+        para: 'aluno',
+        texto: 'Dia sem registro agora aparece como "? não registrado", e não mais como "× não tomou". São coisas diferentes, e o app parou de concluir por você.'
+      },
+      {
+        para: 'aluno',
+        texto: 'Toque em qualquer dia do histórico para ver o que estava previsto e informar o que aconteceu — inclusive em dias passados. A consistência se refaz na hora.'
+      },
+      {
+        para: 'aluno',
+        texto: 'Ao registrar, você escolhe: tomei, tomei parcialmente ou não tomei. Um toque na bolinha continua sendo o caminho curto para "tomei".'
+      },
+      {
+        para: 'aluno',
+        texto: 'A consistência passou a mostrar de onde vem o número: quantas tomadas, quantas parciais, quantas não tomadas e quantas ficaram sem registro. As sem registro não entram na conta.'
+      },
+      {
+        para: 'aluno',
+        texto: 'Quem responde "não tomei" para de receber lembrete daquela dose. Você já respondeu.'
+      },
+      {
+        para: 'personal',
+        texto: 'A aderência do aluno agora separa o que ele não tomou do que ele não informou — o número ficou mais justo com quem treina e esquece de anotar.'
+      }
+    ]
+  },
+  {
     versao: '2.3.0',
     data: '8 de setembro de 2026',
     titulo: 'Lembrete de suplementação no celular',

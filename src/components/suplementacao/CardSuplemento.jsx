@@ -111,8 +111,16 @@ export default function CardSuplemento({ sup, tomados, onEditar, onPausar, onRet
       {!pausado && (
         <div className="sp-card-nums">
           <span>
-            {ades ? <><strong>{ades.pct}%</strong> de adesão · {ades.cumpridas} de {ades.esperadas} doses</>
-                  : 'Sem doses previstas ainda'}
+            {!ades
+              ? 'Sem doses previstas ainda'
+              : ades.pct === null
+                ? 'Nenhuma dose informada ainda'
+                : (
+                  <>
+                    <strong>{ades.pct}%</strong> de adesão · {ades.informadas} de {ades.previstas} informadas
+                    {ades.naoRegistradas > 0 ? ` · ${ades.naoRegistradas} sem registro` : ''}
+                  </>
+                )}
           </span>
           {seq > 0 && <span><strong>{seq}</strong> {seq === 1 ? 'dia seguido' : 'dias seguidos'}</span>}
         </div>
