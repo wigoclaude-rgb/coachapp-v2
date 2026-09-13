@@ -303,7 +303,13 @@ Os repositórios `Ccoachapp` e `coachapp-backend` são o MVP de julho, congelado
 
 ## Estado atual
 
-`main` e a branch de trabalho estão no mesmo commit (`9ee76b8`). Nada pendente.
+`main` e a branch `claude/code-coach-repository-6j37zm` estão no mesmo commit.
+Confira com `git log --oneline -1 origin/main` — esta linha envelhece rápido.
+
+O que foi entregue depois da V2 original (Set/2026), em ordem:
+pagamentos com "Já paguei" e quatro estados → filtros de cobrança →
+lembretes de suplementação por push → "não registrado ≠ não tomado" →
+Home do aluno.
 
 ---
 
