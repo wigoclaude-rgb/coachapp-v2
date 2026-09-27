@@ -1,0 +1,12 @@
+/* Barril dos primitivos: uma linha de import por tela, em vez de sete. */
+export { default as Botao } from './Botao.jsx'
+export { default as Campo } from './Campo.jsx'
+export { default as Selo } from './Selo.jsx'
+export { default as Avatar } from './Avatar.jsx'
+export { default as Progresso } from './Progresso.jsx'
+export { default as Modal } from './Modal.jsx'
+export { default as Gaveta } from './Gaveta.jsx'
+export { default as Estado } from './Estado.jsx'
+export { Abas, Pilulas } from './Abas.jsx'
+export { Esqueleto, EsqueletoLista, EsqueletoTexto } from './Esqueleto.jsx'
+export { ProvedorDeAvisos, useAviso } from './Avisos.jsx'

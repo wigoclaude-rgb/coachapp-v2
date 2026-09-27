@@ -1,0 +1,157 @@
+/* ==========================================================================
+   COACHAPP 3.0 · TOKENS
+   --------------------------------------------------------------------------
+   Camada nova, convivendo com a antiga de propósito. Os tokens velhos
+   (`--t-base`, `--raio`, …) continuam intactos porque 684 classes dependem
+   deles; trocá-los de uma vez deslocaria o app inteiro numa tacada só, sem
+   ninguém conseguir dizer o que quebrou.
+
+   Cada tela reconstruída passa a usar os tokens daqui. Quando a última migrar,
+   a camada antiga sai junto com as classes que a usavam.
+
+   Dois problemas da camada antiga que NÃO se repetem aqui:
+
+   1. `--t-` significava duas coisas — `--t-lg` era tamanho de texto e
+      `--t-rapida` era duração de transição. Aqui texto é `--fonte-*` e
+      tempo é `--dur-*`.
+   2. Sete pares eram o mesmo valor com nomes diferentes (`--erro`/`--alerta`,
+      `--branco`/`--superficie`, `--borda`/`--borda-2`…). Cada valor aqui tem
+      UM nome. Se dois conceitos compartilham a cor, ainda assim são dois
+      tokens — mas apontando um para o outro, nunca repetindo o hexadecimal.
+   ========================================================================== */
+
+:root {
+  /* --- Marca ---------------------------------------------------------------
+     Vermelho escuro é a cor do CoachApp, mas é cara: usada em tudo, para de
+     significar alguma coisa. Fica para a ação principal da tela e para o que
+     é urgente de verdade. Todo o resto é neutro. */
+  --marca:            #7F1D1D;
+  --marca-forte:      #6D1B2A;
+  --marca-escura:     #5C1414;
+  --marca-fraca:      #FBF3F3;
+  --marca-linha:      #F0DCDC;
+  --marca-contraste:  #FFFFFF;
+
+  /* --- Superfícies, do fundo para cima --- */
+  --base:       #FAFAFA;
+  --nivel-1:    #FFFFFF;
+  --nivel-2:    #F4F4F5;
+  --nivel-3:    #EBEBED;
+  --invertido:  #14161A;
+
+  /* --- Texto, do mais forte ao mais fraco --- */
+  --tinta:        #101828;
+  --tinta-2:      #475467;
+  --tinta-3:      #667085;
+  --tinta-fraca:  #98A2B3;
+  --tinta-clara:  #FFFFFF;
+
+  /* --- Linhas --- */
+  --linha:        #EAECF0;
+  --linha-forte:  #D0D5DD;
+
+  /* --- Significado. Nunca sozinhos: sempre com ícone ou texto, porque cor
+         isolada não comunica para quem não distingue (item 60 do brief). --- */
+  --ok:         #15803D;
+  --ok-fundo:   #F0FDF4;
+  --ok-linha:   #BBF7D0;
+
+  --atencao:        #B45309;
+  --atencao-fundo:  #FFFBEB;
+  --atencao-linha:  #FDE68A;
+
+  --perigo:        #B42318;
+  --perigo-fundo:  #FEF3F2;
+  --perigo-linha:  #FECDCA;
+
+  --aviso-info:        #175CD3;
+  --aviso-info-fundo:  #EFF8FF;
+  --aviso-info-linha:  #B2DDFF;
+
+  /* --- Tipografia. Pixels inteiros: a escala antiga tinha 11.5 / 12.5 / 13.5
+         e meio pixel não existe na tela — o navegador arredonda de um jeito
+         em cada zoom, e o texto "dança" entre tamanhos. --- */
+  --fonte-titulo: 'Archivo', system-ui, -apple-system, sans-serif;
+  --fonte-texto:  'Inter', system-ui, -apple-system, sans-serif;
+  --fonte-num:    'Archivo', system-ui, sans-serif;
+
+  --fonte-12: 12px;
+  --fonte-13: 13px;
+  --fonte-14: 14px;
+  --fonte-16: 16px;
+  --fonte-18: 18px;
+  --fonte-22: 22px;
+  --fonte-28: 28px;
+  --fonte-36: 36px;
+  --fonte-48: 48px;
+
+  --peso-normal: 400;
+  --peso-medio:  500;
+  --peso-forte:  600;
+  --peso-pesado: 800;
+
+  --altura-apertada: 1.2;
+  --altura-normal:   1.5;
+
+  /* --- Espaço. Múltiplos de 4: qualquer medida do app cai na grade, e
+         "um pouquinho mais" deixa de ser uma decisão por componente. --- */
+  --e-1:  4px;
+  --e-2:  8px;
+  --e-3:  12px;
+  --e-4:  16px;
+  --e-5:  20px;
+  --e-6:  24px;
+  --e-8:  32px;
+  --e-10: 40px;
+  --e-12: 48px;
+  --e-16: 64px;
+
+  /* --- Cantos --- */
+  --canto-1:    6px;
+  --canto-2:    10px;
+  --canto-3:    14px;
+  --canto-4:    20px;
+  --canto-pilula: 999px;
+
+  /* --- Profundidade. Sombra marca elevação real (o que flutua sobre a tela),
+         não decora cartão parado. --- */
+  --sombra-1: 0 1px 2px rgba(16, 24, 40, .05);
+  --sombra-2: 0 4px 12px rgba(16, 24, 40, .08);
+  --sombra-3: 0 12px 32px rgba(16, 24, 40, .12);
+  --sombra-4: 0 24px 56px rgba(16, 24, 40, .18);
+
+  /* --- Tempo. Separado de `--fonte-*` de propósito. --- */
+  --dur-instante: 80ms;
+  --dur-rapido:   150ms;
+  --dur-normal:   240ms;
+  --dur-lento:    420ms;
+  --curva:        cubic-bezier(.4, 0, .2, 1);
+  --curva-saida:  cubic-bezier(.16, 1, .3, 1);
+
+  /* --- Camadas. Números nomeados; z-index solto vira leilão. --- */
+  --z-base:    1;
+  --z-grudado: 10;
+  --z-nav:     20;
+  --z-gaveta:  40;
+  --z-modal:   50;
+  --z-aviso:   60;
+  --z-treino:  70;
+
+  /* --- Alvo de toque. 44px é o mínimo confortável no celular, e o treino
+         acontece com a mão suada e o celular na bancada. --- */
+  --toque: 44px;
+
+  /* --- Respiro do aparelho (notch, barra de gestos do iPhone) --- */
+  --seguro-topo:   env(safe-area-inset-top, 0px);
+  --seguro-base:   env(safe-area-inset-bottom, 0px);
+}
+
+/* Quem pediu menos movimento no sistema recebe menos movimento. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-instante: 1ms;
+    --dur-rapido:   1ms;
+    --dur-normal:   1ms;
+    --dur-lento:    1ms;
+  }
+}

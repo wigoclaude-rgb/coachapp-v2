@@ -2,6 +2,10 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App.jsx'
+/* Camada nova primeiro, camada antiga depois: nomes não colidem (`ui-*` é
+   exclusivo), e as telas que ainda não migraram continuam exatamente iguais. */
+import './estilos/tokens.css'
+import './estilos/primitivos.css'
 import './styles.css'
 
 /*

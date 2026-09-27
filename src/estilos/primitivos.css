@@ -1,0 +1,332 @@
+/* ==========================================================================
+   COACHAPP 3.0 · PRIMITIVOS
+   Os tijolos. Cada um existe porque a mesma marcação estava repetida em
+   várias telas — não para ter um componente a mais.
+   Prefixo `ui-`: não colide com nada da camada antiga.
+   ========================================================================== */
+
+/* TODO MODIFICADOR LEVA `ui-`, inclusive os que parecem inofensivos.
+   `.ui-prog-fita.ok` parecia seguro e não era: o styles.css antigo tem um
+   `.ok` global de caixa de mensagem, com padding e margin-top. A fita herdava
+   22px de altura e 12px de deslocamento, saía do trilho e o `overflow:hidden`
+   a cortava inteira — a barra cheia aparecia vazia, sem nenhum erro no
+   console. Classe solta dentro deste arquivo é bug esperando a próxima tela. */
+
+/* ---------------------------------------------------------------- BOTÃO --
+   Uma tela tem UMA ação principal. Por isso só um `ui-bt` por tela deveria
+   ser `principal` — o resto é `neutro` ou `texto`. */
+.ui-bt {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--e-2);
+  min-height: var(--toque); padding: 0 var(--e-5);
+  border: 1px solid transparent; border-radius: var(--canto-2);
+  font-family: var(--fonte-texto); font-size: var(--fonte-14); font-weight: var(--peso-forte);
+  line-height: 1; text-decoration: none; white-space: nowrap; cursor: pointer;
+  transition: background var(--dur-rapido) var(--curva),
+              border-color var(--dur-rapido) var(--curva),
+              transform var(--dur-instante) var(--curva);
+}
+.ui-bt:active:not(:disabled) { transform: scale(.98); }
+.ui-bt:disabled { opacity: .45; cursor: not-allowed; }
+.ui-bt:focus-visible { outline: 2px solid var(--marca); outline-offset: 2px; }
+
+.ui-bt-principal { background: var(--marca); color: var(--marca-contraste); }
+.ui-bt-principal:hover:not(:disabled) { background: var(--marca-forte); }
+
+.ui-bt-neutro { background: var(--nivel-1); color: var(--tinta); border-color: var(--linha-forte); }
+.ui-bt-neutro:hover:not(:disabled) { background: var(--nivel-2); }
+
+.ui-bt-texto { background: none; color: var(--tinta-2); padding: 0 var(--e-3); }
+.ui-bt-texto:hover:not(:disabled) { background: var(--nivel-2); color: var(--tinta); }
+
+.ui-bt-perigo { background: none; color: var(--perigo); border-color: var(--perigo-linha); }
+.ui-bt-perigo:hover:not(:disabled) { background: var(--perigo-fundo); }
+
+/* Sobre fundo escuro — o Treino em Execução vive nele. */
+.ui-bt-claro { background: var(--tinta-clara); color: var(--invertido); }
+.ui-bt-claro:hover:not(:disabled) { background: #E8E8EA; }
+
+.ui-bt-p { min-height: 34px; padding: 0 var(--e-3); font-size: var(--fonte-13); }
+.ui-bt-g { min-height: 54px; padding: 0 var(--e-6); font-size: var(--fonte-16); }
+.ui-bt-cheio { width: 100%; }
+.ui-bt-icone { padding: 0; width: var(--toque); flex-shrink: 0; }
+
+/* ---------------------------------------------------------------- CAMPO -- */
+.ui-campo { display: flex; flex-direction: column; gap: var(--e-2); }
+.ui-campo > label {
+  font-size: var(--fonte-13); font-weight: var(--peso-medio); color: var(--tinta-2);
+}
+.ui-entrada {
+  width: 100%; min-height: var(--toque); padding: var(--e-3) var(--e-4);
+  background: var(--nivel-1); border: 1px solid var(--linha-forte);
+  border-radius: var(--canto-2);
+  font-family: var(--fonte-texto); font-size: var(--fonte-16); color: var(--tinta);
+  transition: border-color var(--dur-rapido) var(--curva), box-shadow var(--dur-rapido) var(--curva);
+}
+/* 16px não é escolha estética: abaixo disso o iOS dá zoom ao focar o campo,
+   e o aluno perde o enquadramento no meio do treino. */
+.ui-entrada::placeholder { color: var(--tinta-fraca); }
+.ui-entrada:focus {
+  outline: none; border-color: var(--marca);
+  box-shadow: 0 0 0 3px var(--marca-fraca);
+}
+.ui-entrada:disabled { background: var(--nivel-2); color: var(--tinta-3); cursor: not-allowed; }
+.ui-entrada.ui-invalido { border-color: var(--perigo); }
+.ui-campo-erro { font-size: var(--fonte-13); color: var(--perigo); }
+.ui-campo-dica { font-size: var(--fonte-13); color: var(--tinta-3); }
+
+textarea.ui-entrada { min-height: 88px; resize: vertical; line-height: var(--altura-normal); }
+select.ui-entrada { cursor: pointer; }
+
+/* Número grande, para carga e repetições durante o treino. */
+.ui-numero {
+  font-family: var(--fonte-num); font-size: var(--fonte-28); font-weight: var(--peso-pesado);
+  text-align: center; letter-spacing: -.02em; padding: var(--e-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ----------------------------------------------------------------- SELO -- */
+.ui-selo {
+  display: inline-flex; align-items: center; gap: var(--e-1);
+  padding: 3px var(--e-2); border-radius: var(--canto-pilula);
+  border: 1px solid var(--linha); background: var(--nivel-2);
+  font-size: var(--fonte-12); font-weight: var(--peso-forte); color: var(--tinta-2);
+  white-space: nowrap;
+}
+.ui-selo-ok      { background: var(--ok-fundo);        border-color: var(--ok-linha);        color: var(--ok); }
+.ui-selo-atencao { background: var(--atencao-fundo);   border-color: var(--atencao-linha);   color: var(--atencao); }
+.ui-selo-perigo  { background: var(--perigo-fundo);    border-color: var(--perigo-linha);    color: var(--perigo); }
+.ui-selo-info    { background: var(--aviso-info-fundo);border-color: var(--aviso-info-linha);color: var(--aviso-info); }
+.ui-selo-marca   { background: var(--marca); border-color: var(--marca); color: var(--marca-contraste); }
+.ui-selo-ponto { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+
+/* --------------------------------------------------------------- AVATAR -- */
+.ui-avatar {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 40px; height: 40px; border-radius: 50%; overflow: hidden;
+  background: var(--nivel-3); color: var(--tinta-2);
+  font-family: var(--fonte-num); font-size: var(--fonte-14); font-weight: var(--peso-forte);
+  text-transform: uppercase;
+}
+.ui-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.ui-avatar-p { width: 28px; height: 28px; font-size: var(--fonte-12); }
+.ui-avatar-g { width: 64px; height: 64px; font-size: var(--fonte-22); }
+.ui-avatar-env { position: relative; display: inline-flex; }
+.ui-avatar-online {
+  position: absolute; right: 0; bottom: 0; width: 11px; height: 11px;
+  border-radius: 50%; background: var(--ok); border: 2px solid var(--nivel-1);
+}
+
+/* ------------------------------------------------------------- PROGRESSO --
+   Sempre com texto ao lado: "3 de 7" diz mais que 43%. */
+.ui-prog { display: flex; align-items: center; gap: var(--e-3); }
+.ui-prog-trilho {
+  flex: 1; height: 6px; border-radius: var(--canto-pilula);
+  background: var(--nivel-3); overflow: hidden;
+}
+.ui-prog-fita {
+  display: block; height: 100%; border-radius: var(--canto-pilula);
+  background: var(--marca); transition: width var(--dur-normal) var(--curva-saida);
+}
+.ui-prog-fita.ui-completo { background: var(--ok); }
+.ui-prog-txt {
+  font-size: var(--fonte-13); font-weight: var(--peso-forte); color: var(--tinta-2);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+/* -------------------------------------------------------------- ESQUELETO --
+   Carregamento com a forma do conteúdo que vem. Barra de progresso genérica
+   não diz nada; um bloco do tamanho certo já prepara o olho. */
+.ui-esq {
+  background: linear-gradient(90deg, var(--nivel-2) 25%, var(--nivel-3) 37%, var(--nivel-2) 63%);
+  background-size: 400% 100%;
+  animation: ui-brilho 1.4s ease-in-out infinite;
+  border-radius: var(--canto-1);
+}
+@keyframes ui-brilho { from { background-position: 100% 0; } to { background-position: 0 0; } }
+.ui-esq-linha { height: 12px; margin-bottom: var(--e-2); }
+.ui-esq-titulo { height: 20px; width: 55%; margin-bottom: var(--e-3); }
+.ui-esq-bloco { height: 76px; border-radius: var(--canto-3); margin-bottom: var(--e-3); }
+@media (prefers-reduced-motion: reduce) { .ui-esq { animation: none; } }
+
+/* ------------------------------------------------------------ ESTADO VAZIO -- */
+.ui-estado {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  gap: var(--e-2); padding: var(--e-10) var(--e-5);
+}
+.ui-estado-icone {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 48px; height: 48px; border-radius: 50%;
+  background: var(--nivel-2); color: var(--tinta-fraca); margin-bottom: var(--e-2);
+}
+.ui-estado h3 { margin: 0; font-size: var(--fonte-16); font-weight: var(--peso-forte); color: var(--tinta); }
+.ui-estado p { margin: 0; font-size: var(--fonte-14); color: var(--tinta-3); max-width: 38ch; line-height: var(--altura-normal); }
+.ui-estado .ui-bt { margin-top: var(--e-3); }
+.ui-estado-perigo .ui-estado-icone { background: var(--perigo-fundo); color: var(--perigo); }
+
+/* ---------------------------------------------------------------- MODAL -- */
+.ui-fundo {
+  position: fixed; inset: 0; z-index: var(--z-modal);
+  background: rgba(16, 24, 40, .55); backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center; padding: var(--e-4);
+  animation: ui-aparece var(--dur-rapido) var(--curva);
+}
+@keyframes ui-aparece { from { opacity: 0; } to { opacity: 1; } }
+.ui-modal {
+  width: 100%; max-width: 440px; max-height: 88vh; display: flex; flex-direction: column;
+  background: var(--nivel-1); border-radius: var(--canto-4); box-shadow: var(--sombra-4);
+  animation: ui-sobe var(--dur-normal) var(--curva-saida);
+}
+@keyframes ui-sobe { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: none; } }
+.ui-modal-topo {
+  display: flex; align-items: flex-start; gap: var(--e-3);
+  padding: var(--e-5) var(--e-5) var(--e-3);
+}
+.ui-modal-topo h2 { margin: 0; flex: 1; font-size: var(--fonte-18); font-weight: var(--peso-forte); }
+.ui-modal-topo p { margin: var(--e-1) 0 0; font-size: var(--fonte-14); color: var(--tinta-3); }
+.ui-modal-corpo { padding: 0 var(--e-5); overflow-y: auto; flex: 1; }
+.ui-modal-pe {
+  display: flex; gap: var(--e-2); justify-content: flex-end;
+  padding: var(--e-5); border-top: 1px solid var(--linha); margin-top: var(--e-5);
+}
+.ui-fechar {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; flex-shrink: 0; border: none; border-radius: var(--canto-1);
+  background: none; color: var(--tinta-3); font-size: 20px; line-height: 1; cursor: pointer;
+}
+.ui-fechar:hover { background: var(--nivel-2); color: var(--tinta); }
+
+/* ---------------------------------------------------------------- GAVETA --
+   No celular sobe de baixo, ao alcance do polegar. No desktop entra pela
+   direita, onde há espaço sem cobrir a lista que originou a ação. */
+.ui-gaveta-fundo {
+  position: fixed; inset: 0; z-index: var(--z-gaveta);
+  background: rgba(16, 24, 40, .5);
+  animation: ui-aparece var(--dur-rapido) var(--curva);
+}
+.ui-gaveta {
+  position: fixed; z-index: var(--z-gaveta); background: var(--nivel-1);
+  display: flex; flex-direction: column;
+  left: 0; right: 0; bottom: 0; max-height: 90vh;
+  border-radius: var(--canto-4) var(--canto-4) 0 0;
+  padding-bottom: var(--seguro-base);
+  box-shadow: var(--sombra-4);
+  animation: ui-sobe-gaveta var(--dur-normal) var(--curva-saida);
+}
+@keyframes ui-sobe-gaveta { from { transform: translateY(100%); } to { transform: none; } }
+.ui-gaveta-puxador {
+  width: 36px; height: 4px; border-radius: var(--canto-pilula);
+  background: var(--linha-forte); margin: var(--e-3) auto var(--e-1);
+  flex-shrink: 0;
+}
+.ui-gaveta-topo { display: flex; align-items: flex-start; gap: var(--e-3); padding: var(--e-3) var(--e-5); }
+.ui-gaveta-topo h2 { margin: 0; flex: 1; font-size: var(--fonte-18); font-weight: var(--peso-forte); }
+.ui-gaveta-corpo { padding: 0 var(--e-5) var(--e-5); overflow-y: auto; }
+
+@media (min-width: 700px) {
+  .ui-gaveta {
+    left: auto; top: 0; right: 0; bottom: 0; width: 420px; max-height: none;
+    border-radius: 0; animation: ui-entra-lado var(--dur-normal) var(--curva-saida);
+  }
+  @keyframes ui-entra-lado { from { transform: translateX(100%); } to { transform: none; } }
+  .ui-gaveta-puxador { display: none; }
+  .ui-gaveta-topo { padding-top: var(--e-5); }
+}
+
+/* ----------------------------------------------------------------- ABAS -- */
+.ui-abas {
+  display: flex; gap: var(--e-1); overflow-x: auto; scrollbar-width: none;
+  border-bottom: 1px solid var(--linha);
+}
+.ui-abas::-webkit-scrollbar { display: none; }
+.ui-aba {
+  padding: var(--e-3) var(--e-4); border: none; background: none;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  font-family: var(--fonte-texto); font-size: var(--fonte-14); font-weight: var(--peso-medio);
+  color: var(--tinta-3); white-space: nowrap; cursor: pointer;
+  transition: color var(--dur-rapido) var(--curva);
+}
+.ui-aba:hover { color: var(--tinta); }
+.ui-aba[aria-selected="true"] { color: var(--marca); border-bottom-color: var(--marca); font-weight: var(--peso-forte); }
+
+/* Variante pílula, para filtros. */
+.ui-pilulas { display: flex; gap: var(--e-2); overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.ui-pilulas::-webkit-scrollbar { display: none; }
+.ui-pilula {
+  padding: var(--e-2) var(--e-4); border-radius: var(--canto-pilula);
+  border: 1px solid var(--linha-forte); background: var(--nivel-1);
+  font-family: var(--fonte-texto); font-size: var(--fonte-13); font-weight: var(--peso-medio);
+  color: var(--tinta-2); white-space: nowrap; cursor: pointer;
+  transition: all var(--dur-rapido) var(--curva);
+}
+.ui-pilula:hover { border-color: var(--tinta-fraca); }
+.ui-pilula[aria-pressed="true"] { background: var(--tinta); border-color: var(--tinta); color: var(--tinta-clara); }
+.ui-pilula-n { opacity: .6; margin-left: var(--e-1); }
+
+/* ---------------------------------------------------------------- AVISO --
+   Confirma que a ação aconteceu. Some sozinho; nunca exige um toque a mais. */
+.ui-avisos {
+  position: fixed; z-index: var(--z-aviso); left: 0; right: 0;
+  bottom: calc(var(--seguro-base) + var(--e-4));
+  display: flex; flex-direction: column; align-items: center; gap: var(--e-2);
+  padding: 0 var(--e-4); pointer-events: none;
+}
+.ui-aviso {
+  display: flex; align-items: center; gap: var(--e-3);
+  max-width: 420px; width: 100%; padding: var(--e-3) var(--e-4);
+  background: var(--invertido); color: var(--tinta-clara);
+  border-radius: var(--canto-2); box-shadow: var(--sombra-3);
+  font-size: var(--fonte-14); pointer-events: auto;
+  animation: ui-aviso-entra var(--dur-normal) var(--curva-saida);
+}
+@keyframes ui-aviso-entra { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.ui-aviso.ui-saindo { animation: ui-aviso-sai var(--dur-rapido) var(--curva) forwards; }
+@keyframes ui-aviso-sai { to { opacity: 0; transform: translateY(8px); } }
+.ui-aviso-icone { display: inline-flex; flex-shrink: 0; }
+.ui-aviso-ok .ui-aviso-icone { color: #4ADE80; }
+.ui-aviso-perigo .ui-aviso-icone { color: #FDA29B; }
+.ui-aviso-txt { flex: 1; line-height: var(--altura-normal); }
+.ui-aviso-acao {
+  border: none; background: none; color: var(--tinta-clara); opacity: .8;
+  font: inherit; font-weight: var(--peso-forte); cursor: pointer; padding: 0;
+}
+.ui-aviso-acao:hover { opacity: 1; }
+
+@media (min-width: 700px) {
+  .ui-avisos { left: auto; right: var(--e-5); bottom: var(--e-5); align-items: flex-end; }
+}
+
+/* ----------------------------------------------------------------- LISTA --
+   Nem tudo é cartão. Linha de lista é o padrão; cartão é exceção com motivo. */
+.ui-lista { display: flex; flex-direction: column; }
+.ui-item {
+  display: flex; align-items: center; gap: var(--e-3); width: 100%;
+  min-height: 60px; padding: var(--e-3) 0; text-align: left;
+  border: none; border-bottom: 1px solid var(--linha); background: none;
+  font-family: var(--fonte-texto); cursor: pointer;
+  transition: background var(--dur-rapido) var(--curva);
+}
+.ui-item:last-child { border-bottom: none; }
+.ui-item:hover { background: var(--nivel-2); }
+.ui-item-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ui-item-txt strong { font-size: var(--fonte-14); font-weight: var(--peso-forte); color: var(--tinta); }
+.ui-item-txt span { font-size: var(--fonte-13); color: var(--tinta-3); }
+.ui-item-fim { display: flex; align-items: center; gap: var(--e-2); flex-shrink: 0; }
+.ui-item-seta { color: var(--tinta-fraca); flex-shrink: 0; }
+
+/* ---------------------------------------------------------------- BLOCO --
+   Seção de conteúdo. Sem borda por padrão: borda dentro de borda dentro de
+   borda é o que faz uma tela parecer um formulário fiscal. */
+.ui-bloco { display: flex; flex-direction: column; gap: var(--e-3); }
+.ui-bloco-topo { display: flex; align-items: baseline; justify-content: space-between; gap: var(--e-3); }
+.ui-bloco-topo h2 {
+  margin: 0; font-size: var(--fonte-13); font-weight: var(--peso-forte);
+  text-transform: uppercase; letter-spacing: .06em; color: var(--tinta-3);
+}
+.ui-bloco-link {
+  border: none; background: none; padding: 0; font: inherit;
+  font-size: var(--fonte-13); font-weight: var(--peso-forte); color: var(--marca); cursor: pointer;
+}
+.ui-cartao {
+  background: var(--nivel-1); border: 1px solid var(--linha);
+  border-radius: var(--canto-3); padding: var(--e-5);
+}
