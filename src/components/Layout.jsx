@@ -44,7 +44,10 @@ export default function Layout({ user, perfil, onSair, itens, abaAtiva, onAba, r
             >
               <span className="nav-icone">{it.icone}</span>
               <span>{it.label}</span>
-              {it.badge > 0 && <span className="nav-badge">{it.badge}</span>}
+              {/* Truthy em vez de `> 0`: o badge também pode ser texto ("30+"),
+                  quando a contagem satura no limite de mensagens carregadas.
+                  0 e undefined continuam escondendo, como antes. */}
+              {!!it.badge && <span className="nav-badge">{it.badge}</span>}
             </button>
           ))}
         </nav>

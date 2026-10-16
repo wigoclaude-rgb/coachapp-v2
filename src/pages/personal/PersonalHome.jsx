@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { createUserWithEmailAndPassword, signOut, getAuth, deleteUser } from 'firebase/auth'
 import { initializeApp, getApps } from 'firebase/app'
-import { ref, onValue, set, push, update, remove, get, getDatabase } from 'firebase/database'
+import { ref, onValue, set, push, update, remove, get, getDatabase, query, limitToLast } from 'firebase/database'
 import { db, firebaseConfig } from '../../firebase'
-import { fmtData, fmtMoeda, vencida } from '../../lib/util'
+import { fmtData, fmtMoeda, fmtQuando, vencida } from '../../lib/util'
+import { montar as montarConversas, filtrar as filtrarConversas, totalNaoLidas,
+         contarPorFiltro, FILTROS as FILTROS_CHAT, LIMITE_MENSAGENS } from '../../lib/conversas'
 import { CAMPOS_FICHA, fichaParaAluno, fichaParaMedidas } from '../../lib/ficha'
 import { cpfValido, soDigitos, formatarCPF } from '../../lib/cpf'
 import { PLANOS, normalizarAssinatura, podeCriarAluno, rotuloStatus, chatSuporte } from '../../lib/planos'
@@ -163,6 +165,9 @@ export default function PersonalHome({ user, perfil, onSair }) {
     }
   }
 
+  const [mensagens, setMensagens] = useState({})
+  const [filtroChat, setFiltroChat] = useState('todas')
+
   const idsAlunos = useMemo(() => Object.keys(alunos).sort().join(','), [alunos])
 
   /*
@@ -173,7 +178,7 @@ export default function PersonalHome({ user, perfil, onSair }) {
   useEffect(() => {
     const uids = idsAlunos ? idsAlunos.split(',') : []
     if (uids.length === 0) {
-      setExecucoes({}); setCobrancas({}); setTreinos({})
+      setExecucoes({}); setCobrancas({}); setTreinos({}); setMensagens({})
       return
     }
 
@@ -186,14 +191,23 @@ export default function PersonalHome({ user, perfil, onSair }) {
     const porExec = guardar(setExecucoes)
     const porCob = guardar(setCobrancas)
     const porTreino = guardar(setTreinos)
+    const porChat = guardar(setMensagens)
 
     const inscricoes = uids.flatMap(uid => [
       onValue(ref(db, 'execucoes/' + uid), s => porExec(uid, s.val())),
       onValue(ref(db, 'cobrancas/' + uid), s => porCob(uid, s.val())),
-      onValue(ref(db, 'treinos/' + uid), s => porTreino(uid, s.val()))
+      onValue(ref(db, 'treinos/' + uid), s => porTreino(uid, s.val())),
+      /*
+        Só as últimas mensagens, nunca a conversa inteira: com 40 alunos, o
+        histórico completo de cada um seria baixado toda vez que o app abre,
+        só para montar uma lista de prévias. O preço é o contador saturar em
+        "30+" — e para decidir qual conversa abrir agora, 30+ já responde.
+      */
+      onValue(query(ref(db, 'chats/' + user.uid + '_' + uid), limitToLast(LIMITE_MENSAGENS)),
+        s => porChat(uid, s.val()))
     ])
     return () => inscricoes.forEach(cancelar => cancelar())
-  }, [idsAlunos])
+  }, [idsAlunos, user.uid])
 
   /** Cria (uma vez) o código curto do link público da ficha. */
   async function garantirCodigoFicha() {
@@ -451,11 +465,28 @@ export default function PersonalHome({ user, perfil, onSair }) {
     await remove(ref(db, 'fichas/' + user.uid + '/' + id))
   }
 
+  /*
+    A lista de conversas: `fichas` dá quem é o aluno, `mensagens` dá o que foi
+    dito. A ordem e as contagens saem de `lib/conversas.js` — o badge do menu,
+    o filtro e cada linha precisam concordar sobre o que é "não lida".
+  */
+  const conversas = useMemo(
+    () => montarConversas(fichas, mensagens, user.uid),
+    [fichas, mensagens, user.uid]
+  )
+  const conversasVisiveis = useMemo(
+    () => filtrarConversas(conversas, filtroChat),
+    [conversas, filtroChat]
+  )
+  const contagemChat = useMemo(() => contarPorFiltro(conversas), [conversas])
+  const naoLidasChat = useMemo(() => totalNaoLidas(conversas), [conversas])
+
   const itens = [
     { id: 'inicio', label: 'Início', icone: <IcInicio /> },
     { id: 'alunos', label: 'Alunos', icone: <IcAlunos /> },
     { id: 'financeiro', label: 'Financeiro', icone: <IcFinanceiro />, badge: paraValidar },
-    { id: 'chat', label: 'Chat', icone: <IcChat /> },
+    { id: 'chat', label: 'Chat', icone: <IcChat />,
+      badge: naoLidasChat.saturado ? naoLidasChat.total + '+' : naoLidasChat.total },
     { id: 'templates', label: 'Templates', icone: <IcTemplates /> },
     { id: 'avaliacoes', label: 'Avaliação física', icone: <IcEvolucao /> },
     { id: 'meutreino', label: 'Meu treino', icone: <IcTreino /> },
@@ -880,16 +911,59 @@ export default function PersonalHome({ user, perfil, onSair }) {
         !chatAluno ? (
           <div className="card">
             <div className="card-titulo"><h2>Conversas</h2></div>
+
             {fichas.length === 0 && <p className="muted">Nenhum aluno ainda.</p>}
-            {fichas.map(f => (
+
+            {/* Filtro só aparece quando há o que filtrar. */}
+            {fichas.length > 1 && (
+              <div className="cv-filtros">
+                {FILTROS_CHAT.map(f => (
+                  <button
+                    key={f.id}
+                    className={'chip-opcao' + (filtroChat === f.id ? ' ativo' : '')}
+                    aria-pressed={filtroChat === f.id}
+                    onClick={() => setFiltroChat(f.id)}
+                  >
+                    {f.rotulo}
+                    {contagemChat[f.id] > 0 && <span className="cv-conta">{contagemChat[f.id]}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {fichas.length > 0 && conversasVisiveis.length === 0 && (
+              <p className="muted" style={{ marginTop: 14 }}>
+                {filtroChat === 'nao_lidas'
+                  ? 'Nenhuma mensagem sem ler.'
+                  : 'Você respondeu todo mundo.'}
+              </p>
+            )}
+
+            {conversasVisiveis.map(c => (
               <div
-                key={f.uid} className="conversa-item"
-                onClick={() => setChatAluno({ uid: f.uid, nome: f.nome, foto: f.foto })}
+                key={c.uid}
+                className={'conversa-item' + (c.naoLidas > 0 ? ' nao-lida' : '')}
+                onClick={() => setChatAluno({ uid: c.uid, nome: c.nome, foto: c.foto })}
               >
-                <Avatar foto={f.foto} nome={f.nome} tamanho={44} />
+                <Avatar foto={c.foto} nome={c.nome} tamanho={44} />
                 <div className="cv-txt">
-                  <div className="cv-nome">{f.nome}</div>
-                  <div className="cv-previa">{rotuloUltimo(f)}</div>
+                  <div className="cv-topo">
+                    <span className="cv-nome">{c.nome}</span>
+                    {c.ts > 0 && <span className="cv-quando">{fmtQuando(c.ts)}</span>}
+                  </div>
+                  <div className="cv-baixo">
+                    <span className="cv-previa">
+                      {/* "Você:" deixa claro de quem é a última fala sem abrir. */}
+                      {c.vazia
+                        ? 'Nenhuma mensagem ainda'
+                        : (c.deMim ? 'Você: ' : '') + c.ultima}
+                    </span>
+                    {c.naoLidas > 0 && (
+                      <span className="cv-nao-lidas" aria-label={`${c.naoLidas} sem ler`}>
+                        {c.saturado ? c.naoLidas + '+' : c.naoLidas}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
