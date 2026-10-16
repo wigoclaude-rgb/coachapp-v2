@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ref, onValue, push, update, remove } from 'firebase/database'
+import { ref, onValue, push, set, update, remove } from 'firebase/database'
+import { observarConexao } from '../../lib/presenca'
 import { db } from '../../firebase'
 import { fmtData, fmtMoeda, vencida, hojeISO, imagemExercicio, youtubeId, comKg, beep } from '../../lib/util'
 import { notificar } from '../../lib/notify'
@@ -40,7 +41,7 @@ import {
 import { IcInicio,
   IcTreino, IcEvolucao, IcPagamentos, IcChat, IcConfig,
   IcFogo, IcCalendario, IcCheck, IcHalter, IcAlerta, IcTrofeu, IcVideo, IcSeta, IcFechar,
-  IcSuplemento
+  IcSuplemento, IcNuvemOff
 } from '../../components/Icones.jsx'
 
 const ABAS_VALIDAS = new Set(['inicio', 'treino', 'evolucao', 'diario', 'suplementos', 'pagamentos', 'chat', 'config'])
@@ -166,6 +167,11 @@ export default function AlunoHome({ user, perfil, onSair }) {
     viraria a nova ordem sem ninguém ter decidido isso.
   */
   const [escolhaHoje, setEscolhaHoje] = useState(null)
+  /* Séries já enviadas e ainda sem eco do banco — barra o duplo toque. */
+  const emVoo = useRef(new Set())
+  /* Começa conectado: supor o contrário mostraria o aviso por um instante em
+     toda abertura do app, inclusive para quem está com sinal. */
+  const [conectado, setConectado] = useState(true)
   /*
     Resumo do treino encerrado sem completar. Vive só na tela: o ciclo já avançou
     no banco, e isto existe para a pessoa não ver o treino seguinte aparecer do
@@ -212,6 +218,8 @@ export default function AlunoHome({ user, perfil, onSair }) {
     coluna Carga mostra depois de marcada — o que a pessoa levantou de verdade,
     e não o alvo que o personal escreveu.
   */
+  useEffect(() => observarConexao(setConectado), [])
+
   useEffect(() => {
     const hoje = new Date().toDateString()
     const f = {}
@@ -222,6 +230,8 @@ export default function AlunoHome({ user, perfil, onSair }) {
       }
     })
     setFeitas(f)
+    // O que o banco já confirmou não precisa mais da trava local.
+    Object.keys(f).forEach(k => emVoo.current.delete(k))
   }, [execucoes])
 
   /* ---------- Cobranças ---------- */
@@ -358,19 +368,50 @@ export default function AlunoHome({ user, perfil, onSair }) {
     `cargaNumero` e não `Number`: a carga é texto livre, e Number("45Kg") é NaN —
     era por isso que a trava antiga nem disparava quando o personal escrevia o Kg.
   */
-  async function marcarSerie(ex, serie, pesoDigitado, cargaLinha, motivo = '') {
-    if (feitas[chaveSerie(ex.nome, serie)]) return null
+  /*
+    Registra a série SEM esperar o servidor.
+
+    Antes isto era `await push(...)`, que só resolve quando o Firebase confirma.
+    Na academia sem sinal a tela ficava parada no toque, e a pessoa tocava de
+    novo achando que não pegou. Agora a escrita é local primeiro: o Firebase
+    aplica no cache, o `onValue` de `execucoes` dispara na hora com o registro
+    novo, e a fila sobe sozinha quando o sinal voltar — enquanto a página
+    estiver aberta.
+
+    A chave vem de `push(ref)` sem valor, que a gera no cliente. NÃO é uma chave
+    determinística por dia+exercício+série: o mesmo exercício pode aparecer duas
+    vezes no mesmo dia (treino A e B), e nome de exercício aceita caracteres que
+    o Firebase proíbe em chave (`.`, `#`, `$`, `[`, `]`, `/`). As duas coisas
+    sobrescreveriam registro legítimo. Ver o relato no CLAUDE.md.
+  */
+  function marcarSerie(ex, serie, pesoDigitado, cargaLinha, motivo = '') {
+    const chave = chaveSerie(ex.nome, serie)
+    // Duas barreiras: o que já está no banco e o que está em voo. O estado de
+    // `feitas` só chega no próximo render, e dois toques rápidos passariam juntos.
+    if (feitas[chave] || emVoo.current.has(chave)) return null
+
     const alvo = cargaNumero(cargaLinha) || 0
     const peso = pesoDigitado !== undefined && pesoDigitado !== '' ? Number(pesoDigitado) : alvo
     const abaixo = alvo > 0 && peso > 0 && peso < alvo
 
-    await push(ref(db, 'execucoes/' + user.uid), {
+    emVoo.current.add(chave)
+    const destino = push(ref(db, 'execucoes/' + user.uid))
+
+    set(destino, {
       exercicio: ex.nome,
       serie,
       peso: peso || '',
       ts: Date.now(),
       ...(abaixo ? { alvo, motivo: motivo || 'não informado' } : {})
     })
+      .catch(err => {
+        // Falha de verdade (regra negou, por exemplo) — offline não cai aqui,
+        // fica na fila. Libera a chave para a pessoa poder tentar de novo.
+        console.warn('Série não gravada:', err?.code || err)
+        emVoo.current.delete(chave)
+        setErroInline(e => ({ ...e, [ex.nome]: 'Não foi possível registrar. Tente de novo.' }))
+      })
+
     return null
   }
 
@@ -417,7 +458,7 @@ export default function AlunoHome({ user, perfil, onSair }) {
       return
     }
 
-    const msg = await marcarSerie(ex, serie, digitado ?? '', linha.carga, motivo)
+    const msg = marcarSerie(ex, serie, digitado ?? '', linha.carga, motivo)
     setErroInline(e => ({ ...e, [ex.nome]: msg || '' }))
     if (msg) return
 
@@ -809,6 +850,18 @@ export default function AlunoHome({ user, perfil, onSair }) {
       roleLabel="Aluno" titulo={meta.t} subtitulo={meta.s}
       onAjuda={tourDaAba ? () => setRever(true) : undefined}
     >
+      {/*
+        Offline não é erro: o que a pessoa marcou já está salvo no aparelho e
+        sobe sozinho. A faixa existe para ela não tocar duas vezes achando que
+        não pegou — que era o que acontecia quando a tela travava no toque.
+      */}
+      {!conectado && (
+        <div className="aviso-offline" role="status">
+          <IcNuvemOff />
+          <span>Sem conexão. O que você marcar fica salvo no aparelho e sobe quando o sinal voltar.</span>
+        </div>
+      )}
+
       {tourDaAba && (
         <Tour
           key={aba + (rever ? '-rever' : '')}

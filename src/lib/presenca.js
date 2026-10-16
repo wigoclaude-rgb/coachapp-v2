@@ -33,6 +33,26 @@ export function conectarPresenca(uid) {
   }
 }
 
+/**
+ * Observa a conexão DESTE aparelho com o Firebase. Chama onMudar(true|false).
+ *
+ * Não confundir com presença: presença é "fulano está no app"; isto é "as
+ * minhas escritas estão indo para o servidor agora ou ficando na fila".
+ *
+ * É o que sustenta o aviso de offline na marcação de série. O Firebase aplica
+ * a escrita localmente e enfileira enquanto a página estiver aberta — a série
+ * aparece marcada na hora, mas quem está na academia sem sinal precisa saber
+ * que ainda não subiu.
+ */
+export function observarConexao(onMudar) {
+  return onValue(
+    ref(db, '.info/connected'),
+    snap => onMudar(snap.val() === true),
+    // Sem leitura do estado de conexão, o silêncio é melhor que um alarme falso.
+    () => onMudar(true)
+  )
+}
+
 /** Observa a presença de outra pessoa. Chama onMudar({ online, visto }). */
 export function observarPresenca(uid, onMudar) {
   if (!uid) return () => {}

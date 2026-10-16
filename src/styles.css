@@ -1815,6 +1815,16 @@ button.tr-passo:hover { border-color: var(--primaria); color: var(--primaria); t
 .conversa-item .cv-previa { font-size: var(--t-sm); color: var(--texto-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* --- Lista de conversas: prévia, horário e não lidas --- */
+/* --- Aviso de offline --- */
+.aviso-offline {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 13px; margin-bottom: 14px;
+  background: var(--aviso-bg); border: 1px solid var(--aviso-borda);
+  border-radius: var(--raio); color: var(--aviso-txt);
+  font-size: var(--t-sm); line-height: 1.45;
+}
+.aviso-offline svg { width: 17px; height: 17px; flex-shrink: 0; }
+
 .cv-filtros { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
 .cv-conta { margin-left: 5px; opacity: 0.65; font-variant-numeric: tabular-nums; }
 

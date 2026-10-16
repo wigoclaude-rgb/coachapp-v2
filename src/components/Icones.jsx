@@ -91,6 +91,10 @@ export const IcMenu = () => (
 export const IcFechar = () => (
   <svg {...base}><path d="M6 6l12 12M18 6L6 18" /></svg>
 )
+/* Nuvem cortada: offline. A barra é o que distingue de "salvo na nuvem". */
+export const IcNuvemOff = () => (
+  <svg {...base}><path d="M17.5 17.5H7a4 4 0 0 1-.6-7.95" /><path d="M9.2 6.3A5.5 5.5 0 0 1 18 10.1a3.7 3.7 0 0 1 2.4 2.1" /><path d="M3 3l18 18" /></svg>
+)
 export const IcAlerta = () => (
   <svg {...base}><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16.2v.1" /></svg>
 )

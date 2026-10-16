@@ -87,14 +87,26 @@ export default function ExecucaoTreino({ exercicios, feitas, nomeTreino, cargaAn
       .map(ex => ({ ex, linha: linhaDe(ex, serieAtual) }))
       .filter(a => a.linha && !feitas[chaveSerie(a.ex.nome, serieAtual)])
 
-    for (const { ex, linha } of alvos) {
-      const msg = await onMarcar(ex, serieAtual, pesos[ex.nome] ?? '', linha.carga)
-      if (msg) { setErro(msg); setSalvando(false); return }
+    /*
+      `finally` e não `setSalvando(false)` espalhado: se `onMarcar` lançasse —
+      regra negada, rede caindo no meio — o botão ficava travado em "salvando"
+      para sempre, e a única saída era recarregar a página no meio do treino.
+    */
+    try {
+      for (const { ex, linha } of alvos) {
+        const msg = await onMarcar(ex, serieAtual, pesos[ex.nome] ?? '', linha.carga)
+        if (msg) { setErro(msg); return }
+      }
+      setErro('')
+      setPesos({})
+      setSerieEscolhida(null)
+    } catch (err) {
+      console.warn('Série não registrada:', err?.code || err)
+      setErro('Não foi possível registrar. Tente de novo.')
+      return
+    } finally {
+      setSalvando(false)
     }
-    setSalvando(false)
-    setErro('')
-    setPesos({})
-    setSerieEscolhida(null)
 
     /*
       Só avança de bloco quando não sobrou nenhuma série. Não dá para olhar só
