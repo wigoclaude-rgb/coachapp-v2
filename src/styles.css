@@ -441,9 +441,17 @@ h3 { font-size: var(--t-base); font-weight: 600; }
    FORMS
    ============================================================ */
 label { display: block; font-size: var(--t-md); font-weight: 500; margin: 14px 0 5px; color: var(--texto-2); }
+/*
+  16px não é escolha de estilo: abaixo disso o Safari do iPhone dá zoom ao
+  focar o campo, e quem está lançando carga no meio do treino precisa tirar o
+  zoom a cada série. A regra vale em toda largura — o iPad tem o mesmo
+  comportamento e não entra num @media de celular.
+
+  Onde a densidade importa, o ajuste é no padding, nunca na fonte.
+*/
 input, select, textarea {
-  width: 100%; padding: 9px 12px; border: 1px solid var(--borda-forte);
-  border-radius: var(--raio); font-size: var(--t-base); font-family: inherit;
+  width: 100%; padding: 8px 12px; border: 1px solid var(--borda-forte);
+  border-radius: var(--raio); font-size: 16px; font-family: inherit;
   background: var(--superficie); color: var(--texto);
   transition: border-color var(--t-rapida), box-shadow var(--t-rapida);
 }
@@ -814,16 +822,18 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   font-size: var(--t-xs); color: var(--texto-4); font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px;
 }
-.linha-serie input { padding: 7px 10px; font-size: var(--t-md); }
+.linha-serie input { padding: 6px 9px; }
 .linha-serie .remove-btn { display: flex; align-items: center; justify-content: center; }
 .linha-serie .remove-btn svg { width: 14px; height: 14px; }
 .linha-serie .remove-btn:disabled { opacity: 0.3; cursor: not-allowed; background: none; color: var(--texto-4); }
 .ls-reps { position: relative; display: flex; align-items: center; }
 .ls-reps .ls-prefixo {
-  position: absolute; left: 10px; font-size: var(--t-md); font-weight: 600;
+  position: absolute; left: 10px; font-size: var(--t-md); font-weight: 600; line-height: 1;
   color: var(--texto-4); pointer-events: none; font-variant-numeric: tabular-nums;
 }
-.ls-reps input { padding-left: 30px; }
+/* Espaço para "10×": o prefixo é absoluto dentro do campo, e com duas casas
+   ele invadia o texto digitado. Já era apertado antes de a fonte subir. */
+.ls-reps input { padding-left: 42px; }
 
 /* Imagem de demonstração no editor */
 .ex-imagem { margin-top: 14px; }
@@ -1184,7 +1194,7 @@ button.tr-passo:hover { border-color: var(--primaria); color: var(--primaria); t
 }
 .sp-filtro:hover { border-color: var(--borda-forte); }
 .sp-filtro.ativo { background: var(--texto); border-color: var(--texto); color: var(--superficie); font-weight: 600; }
-.sp-select { width: auto; margin: 0; padding: 7px 11px; font-size: var(--t-sm); }
+.sp-select { width: auto; margin: 0; padding: 6px 11px; }
 
 .sp-consist { margin-bottom: 14px; }
 .sp-consist-num { display: flex; align-items: baseline; gap: 8px; margin-bottom: 9px; flex-wrap: wrap; }
@@ -1271,7 +1281,7 @@ button.tr-passo:hover { border-color: var(--primaria); color: var(--primaria); t
 }
 .sp-menu-data { display: flex; flex-direction: column; gap: 4px; padding: 7px 11px 9px; }
 .sp-menu-data span { font-size: var(--t-sm); color: var(--texto-2); }
-.sp-menu-data input { margin: 0; padding: 6px 9px; font-size: var(--t-sm); }
+.sp-menu-data input { margin: 0; padding: 5px 9px; }
 
 @media (max-width: 560px) {
   .sp-agora { padding: 18px; }
@@ -1939,10 +1949,14 @@ button.tr-passo:hover { border-color: var(--primaria); color: var(--primaria); t
   .alunos-grid, .templates-grid { grid-template-columns: 1fr; }
   .exec-numeros { grid-template-columns: repeat(3, 1fr); gap: 6px; }
   .exec-numero { padding: 9px 6px; }
-  .linha-serie { grid-template-columns: 1.3fr 1fr 0.9fr 26px; gap: 4px; }
-  .linha-serie input { padding: 7px 8px; font-size: var(--t-sm); }
-  .ls-reps .ls-prefixo { left: 7px; font-size: var(--t-sm); }
-  .ls-reps input { padding-left: 25px; }
+  /* A coluna de reps leva a maior fatia: é a única que precisa caber texto
+     ("10-12") depois de reservar o espaço do prefixo. */
+  .linha-serie { grid-template-columns: 1.6fr 1fr 0.9fr 26px; gap: 4px; }
+  /* Sem redução de fonte aqui: era o que fazia o iPhone dar zoom. O aperto
+     vem do padding e da grade. */
+  .linha-serie input { padding: 6px 6px; }
+  .ls-reps .ls-prefixo { left: 6px; font-size: var(--t-sm); }
+  .ls-reps input { padding-left: 36px; }
   .barra-selecao { top: 8px; }
   .descanso-anel { width: 168px; height: 168px; }
   .descanso-anel .tempo { font-size: var(--t-3xl); }
@@ -1952,6 +1966,17 @@ button.tr-passo:hover { border-color: var(--primaria); color: var(--primaria); t
   .la-cabecalho { display: none; }
   .la-linha { grid-template-columns: 1fr auto; gap: 10px; }
   .la-col-mobile-off { display: none; }
+
+  /*
+    Largura mínima fixa dentro de um flex que embrulha é rolagem horizontal
+    esperando acontecer: a 360px, 200px de busca + qualquer vizinho já passa
+    do que cabe. No celular o item ocupa a linha inteira e o mínimo sai do
+    caminho.
+  */
+  .campo-busca { min-width: 0; width: 100%; }
+  .pagina-cabecalho .pc-txt { min-width: 0; }
+  .acao-card { min-width: 0; }
+  .tr-fb-pergunta { min-width: 0; }
 }
 
 @media (max-width: 420px) {
@@ -2410,8 +2435,10 @@ form.card .av-acoes { padding: 0; }
 .tr-tabela tr.da-vez { background: var(--primaria-suave); }
 .tr-tabela tr.da-vez .ts-n { color: var(--primaria); }
 .ts-input {
-  width: 74px; margin: 0; padding: 6px 9px; font-size: var(--t-sm);
-  border-radius: var(--raio-sm);
+  /* Fica largo o bastante para "100" a 16px sem o número encostar na borda. */
+  width: 82px; margin: 0; padding: 5px 8px;
+  border-radius: var(--raio-sm); text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 .tr-tabela tr.feita .ts-carga strong { color: var(--sucesso); font-weight: 700; }
 .tr-tabela tr.feita td { color: var(--texto-4); }
@@ -3685,7 +3712,7 @@ button.sp-dose-txt:disabled { cursor: default; }
 }
 .adm-busca input {
   width: 100%; margin: 0; border: none; border-bottom: 1px solid var(--borda);
-  border-radius: 0; padding: 16px 18px; font-size: 15px;
+  border-radius: 0; padding: 16px 18px; font-size: 16px;
 }
 .adm-busca input:focus { outline: none; box-shadow: none; }
 .adm-busca-dica { margin: 0; padding: 20px 18px; font-size: var(--t-sm); color: var(--texto-3); }
