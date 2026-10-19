@@ -66,6 +66,25 @@ export function novaSessao({ id, treinoIdx, treinoNome, seriesTotal, agora = Dat
   }
 }
 
+/**
+ * A sessão como ela vai para o banco: sem o `id`.
+ *
+ * A chave do nó JÁ é o id — gravá-lo também como campo seria a mesma
+ * informação em dois lugares, e as regras rejeitam campo desconhecido. Quem lê
+ * recebe o id de volta por `listar()`, que o tira da chave.
+ *
+ * `fimEm` e `encerradaPor` saem quando são nulos: no Realtime Database gravar
+ * null apaga a chave, então mandá-los seria pedir para apagar o que não existe.
+ */
+export function paraBanco(sessao) {
+  const { id, fimEm, encerradaPor, ...resto } = sessao
+  return {
+    ...resto,
+    ...(fimEm ? { fimEm } : {}),
+    ...(encerradaPor ? { encerradaPor } : {})
+  }
+}
+
 /* --------------------------------------------------------------- estado -- */
 
 /** `concluida` quando não sobrou série; `parcial` em qualquer outro caso. */
