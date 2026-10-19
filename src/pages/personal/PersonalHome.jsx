@@ -32,7 +32,7 @@ import {
 import {
   IcInicio, IcAlunos, IcFinanceiro, IcChat, IcTemplates, IcConfig,
   IcRaio, IcRelogio, IcMais, IcBusca, IcHalter, IcAlerta, IcCopiar, IcCheck, IcVoltar,
-  IcSuplemento, IcFechar, IcTreino, IcEvolucao, IcSeta
+  IcSuplemento, IcFechar, IcTreino, IcEvolucao, IcSeta, IcAjuda
 } from '../../components/Icones.jsx'
 
 // Sem I, O, 0 e 1 — some a chance do aluno digitar errado o que veio na mensagem.
