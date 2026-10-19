@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ref, onValue, push, set, update, remove } from 'firebase/database'
+import { ref, onValue, push, set, update, remove, runTransaction } from 'firebase/database'
 import { observarConexao } from '../../lib/presenca'
 import { db } from '../../firebase'
 import { fmtData, fmtMoeda, vencida, hojeISO, imagemExercicio, youtubeId, comKg, beep } from '../../lib/util'
@@ -14,7 +14,11 @@ import { enviarFoto } from '../../lib/fotos'
 import { anosDe, casaStatus } from '../../lib/filtroCobrancas'
 import { montarPainel } from '../../lib/painel'
 import { recordes, prsNoMes, frequenciaDoMes, evolucaoDeCarga, sequenciaAtual } from '../../lib/evolucao'
-import { diasQueContam } from '../../lib/sessoes'
+import {
+  diasQueContam, aberta as sessaoEmAndamento, novaSessao, paraBanco,
+  feitasDaSessao, feitasSoltasDeHoje, deveFecharSozinha, fechamento,
+  proximoIndice, estadosDoCiclo, EM_ANDAMENTO
+} from '../../lib/sessoes'
 import Inicio from '../../components/aluno/Inicio.jsx'
 import SituacaoPagamento from '../../components/pagamentos/SituacaoPagamento.jsx'
 import LinhaCobranca from '../../components/pagamentos/LinhaCobranca.jsx'
@@ -42,7 +46,7 @@ import {
 import { IcInicio,
   IcTreino, IcEvolucao, IcPagamentos, IcChat, IcConfig,
   IcFogo, IcCalendario, IcCheck, IcHalter, IcAlerta, IcTrofeu, IcVideo, IcSeta, IcFechar,
-  IcSuplemento, IcNuvemOff
+  IcSuplemento, IcNuvemOff, IcPlay
 } from '../../components/Icones.jsx'
 
 const ABAS_VALIDAS = new Set(['inicio', 'treino', 'evolucao', 'diario', 'suplementos', 'pagamentos', 'chat', 'config'])
@@ -152,8 +156,16 @@ export default function AlunoHome({ user, perfil, onSair }) {
   */
   const [escolhaHoje, setEscolhaHoje] = useState(null)
   const [sessoes, setSessoes] = useState({})
+  /* Confirmações na própria tela, no lugar do `confirm()` do navegador. */
+  const [trocaPedida, setTrocaPedida] = useState(null)
+  const [confirmarFim, setConfirmarFim] = useState(null)
   /* Séries já enviadas e ainda sem eco do banco — barra o duplo toque. */
   const emVoo = useRef(new Set())
+  /* Sessão criada agora e ainda sem eco: impede que duas séries marcadas em
+     sequência abram duas sessões para o mesmo treino. */
+  const sessaoCriada = useRef(null)
+  /* Fechamento automático só pode rodar uma vez por sessão. */
+  const jaFechou = useRef(new Set())
   /* Começa conectado: supor o contrário mostraria o aviso por um instante em
      toda abertura do app, inclusive para quem está com sinal. */
   const [conectado, setConectado] = useState(true)
@@ -206,19 +218,63 @@ export default function AlunoHome({ user, perfil, onSair }) {
   */
   useEffect(() => observarConexao(setConectado), [])
 
+  const sessaoAberta = useMemo(() => sessaoEmAndamento(sessoes), [sessoes])
+
+  /* Chegou o eco da sessão criada: a trava local não é mais necessária. */
   useEffect(() => {
-    const hoje = new Date().toDateString()
-    const f = {}
-    // `entries` e não `values`: o id do registro é o que permite desfazer depois.
-    Object.entries(execucoes).forEach(([id, e]) => {
-      if (new Date(e.ts).toDateString() === hoje) {
-        f[e.exercicio + '_' + e.serie] = { id, peso: e.peso ?? '', ts: e.ts }
-      }
+    if (sessaoCriada.current && sessoes[sessaoCriada.current]) sessaoCriada.current = null
+  }, [sessoes])
+
+  /*
+    Fecha sessão esquecida ao abrir o app.
+
+    Em transação porque dois aparelhos abertos fechariam a mesma sessão duas
+    vezes, e a segunda escrita sobrescreveria o `fimEm` da primeira com um
+    horário pior. A transação devolve `undefined` quando outro já fechou, e o
+    Firebase desiste sem gravar.
+
+    `fimEm` é a última série, não a hora de agora: quando o app foi reaberto não
+    diz nada sobre quando o treino acabou.
+  */
+  useEffect(() => {
+    if (!sessaoAberta || !deveFecharSozinha(sessaoAberta)) return
+    if (jaFechou.current.has(sessaoAberta.id)) return
+    jaFechou.current.add(sessaoAberta.id)
+
+    const daSessao = Object.values(execucoes).filter(e => e?.sessaoId === sessaoAberta.id)
+    const ultima = daSessao.reduce((m, e) => Math.max(m, e.ts || 0), 0)
+    const campos = fechamento(sessaoAberta, {
+      seriesFeitas: daSessao.length,
+      fimEm: ultima || sessaoAberta.inicioEm,
+      encerradaPor: 'automatico'
     })
+
+    runTransaction(ref(db, 'sessoes/' + user.uid + '/' + sessaoAberta.id), atual => {
+      if (!atual || atual.status !== EM_ANDAMENTO) return   // outro aparelho já fechou
+      return { ...atual, ...campos }
+    }).catch(err => console.warn('Sessão não fechada sozinha:', err?.code || err))
+  }, [sessaoAberta, execucoes, user.uid])
+
+
+  /*
+    O que já está marcado — agora DENTRO da sessão, não "tudo de hoje".
+
+    A chave continua `exercício_série`, mas antes ela varria todas as execuções
+    do dia: quem fazia supino no treino B e depois abria o C via o supino do C
+    já marcado, porque o nome e o número da série batiam. O recorte por sessão
+    é o que separa os dois.
+
+    Sem sessão aberta, o comportamento é o antigo — as execuções soltas de hoje.
+    É o que mantém a tela correta para quem ainda não tem nenhuma sessão.
+  */
+  useEffect(() => {
+    const f = sessaoAberta
+      ? feitasDaSessao(execucoes, sessaoAberta, sessoes)
+      : feitasSoltasDeHoje(execucoes)
     setFeitas(f)
     // O que o banco já confirmou não precisa mais da trava local.
     Object.keys(f).forEach(k => emVoo.current.delete(k))
-  }, [execucoes])
+  }, [execucoes, sessoes, sessaoAberta])
 
   /* ---------- Cobranças ---------- */
   /*
@@ -312,12 +368,24 @@ export default function AlunoHome({ user, perfil, onSair }) {
   const plano = useMemo(() => normalizarPlano(treinoBruto), [treinoBruto])
   const totalDias = plano ? plano.lista.length : 0
   const idxCiclo = plano ? indiceSeguro(plano.indiceAtual, totalDias) : 0
-  const podeEscolher = treinoBruto?.permiteEscolha === true && totalDias > 1
+  /* Ausente = permite. Quem bloqueia é o personal, marcando a opção no editor;
+     planos antigos, sem o campo, passam a deixar o aluno escolher. */
+  const podeEscolher = treinoBruto?.permiteEscolha !== false && totalDias > 1
 
-  /* A escolha só vale se o plano ainda tiver aquele treino — plano trocado, escolha cai. */
-  const idxAtual = podeEscolher && escolhaHoje !== null && escolhaHoje < totalDias
-    ? escolhaHoje
-    : idxCiclo
+  /*
+    Quem manda no treino de hoje, em ordem:
+      1. a sessão em andamento — ela é o que a pessoa está fazendo AGORA, e
+         sobrevive a recarregar a página ou trocar de aparelho;
+      2. a escolha do dia, se o plano ainda tiver aquele treino;
+      3. o índice do ciclo.
+    Antes só existiam 2 e 3, e o 2 era `useState`: recarregar no meio do treino
+    voltava para o treino do ciclo e os vistos sumiam da vista.
+  */
+  const idxAtual = sessaoAberta && sessaoAberta.treinoIdx < totalDias
+    ? sessaoAberta.treinoIdx
+    : podeEscolher && escolhaHoje !== null && escolhaHoje < totalDias
+      ? escolhaHoje
+      : idxCiclo
   const trocado = idxAtual !== idxCiclo
   const diaAtual = plano ? plano.lista[idxAtual] : null
   const exerciciosHoje = diaAtual?.exercicios || []
@@ -332,6 +400,40 @@ export default function AlunoHome({ user, perfil, onSair }) {
     for (let s = 1; s <= e.linhas.length; s++) if (feitas[chaveSerie(e.nome, s)]) n++
     return soma + n
   }, 0)
+  /*
+    Mantém `seriesFeitas` da sessão em dia.
+
+    O número não é enfeite: é dele que sai "esta sessão conta como dia
+    treinado" para a Evolução, para a Home e para o personal. Um efeito, e não
+    uma escrita dentro de `marcarSerie`, porque desmarcar série também precisa
+    baixar a contagem — e um efeito que compara antes de gravar converge
+    sozinho nos dois sentidos.
+  */
+  useEffect(() => {
+    if (!sessaoAberta) return
+    if (sessaoAberta.seriesFeitas === seriesFeitasHoje && sessaoAberta.seriesTotal === seriesDoDia) return
+    update(ref(db, 'sessoes/' + user.uid + '/' + sessaoAberta.id), {
+      seriesFeitas: seriesFeitasHoje,
+      seriesTotal: seriesDoDia
+    }).catch(err => console.warn('Progresso da sessão não salvo:', err?.code || err))
+  }, [sessaoAberta, seriesFeitasHoje, seriesDoDia, user.uid])
+
+  const estadosCiclo = useMemo(
+    () => estadosDoCiclo(sessoes, totalDias, { idxDeHoje: idxAtual }),
+    [sessoes, totalDias, idxAtual]
+  )
+
+  /* O título do botão diz o estado por extenso: a cor sozinha não informa
+     quem não a distingue, e o leitor de tela não lê classe de CSS. */
+  function rotuloLetra(dia, estado, sessao) {
+    const nome = dia?.nome || ''
+    if (estado === 'feito') return nome + ' — concluído nesta volta'
+    if (estado === 'meio') {
+      return nome + ` — parado em ${sessao?.seriesFeitas || 0} de ${sessao?.seriesTotal || 0} séries`
+    }
+    return podeEscolher ? 'Treinar ' + nome : 'Ver ' + nome
+  }
+
   const proximoBloco = blocosHoje.find(b =>
     b.exercicios.some(e => e.linhas.some((_, i) => !feitas[chaveSerie(e.nome, i + 1)]))
   )
@@ -346,9 +448,20 @@ export default function AlunoHome({ user, perfil, onSair }) {
   const minutosRestantes = seriesDoDia
     ? Math.round(minutos * (1 - seriesFeitasHoje / seriesDoDia))
     : 0
-  const proximoDoCiclo = ciclico
-    ? plano.lista[(idxAtual + 1) % totalDias]?.nome
-    : null
+  /*
+    O que a tela promete como próximo precisa ser o que o ciclo vai gravar de
+    verdade. Era `idxAtual + 1`, mas uma sessão fraca não avança o ciclo — a
+    tela dizia "o próximo será o B" e no dia seguinte o treino continuava o A.
+    `proximoIndice` já considera a sessão de agora como se fechasse neste
+    instante, com as séries que tem até aqui.
+  */
+  const proximoDoCiclo = useMemo(() => {
+    if (!ciclico) return null
+    const comoFicaria = sessaoAberta
+      ? { ...sessoes, [sessaoAberta.id]: { ...sessaoAberta, seriesFeitas: seriesFeitasHoje, seriesTotal: seriesDoDia } }
+      : sessoes
+    return plano.lista[proximoIndice(comoFicaria, totalDias, idxCiclo)]?.nome || null
+  }, [ciclico, sessoes, sessaoAberta, seriesFeitasHoje, seriesDoDia, plano, totalDias, idxCiclo])
 
   /** Registra uma série. Devolve mensagem de erro ou null. */
   /*
@@ -375,6 +488,41 @@ export default function AlunoHome({ user, perfil, onSair }) {
     o Firebase proíbe em chave (`.`, `#`, `$`, `[`, `]`, `/`). As duas coisas
     sobrescreveriam registro legítimo. Ver o relato no CLAUDE.md.
   */
+  /*
+    Devolve o id da sessão em andamento, abrindo uma se não houver.
+
+    A chave vem de `push(ref)` sem valor, que o Firebase gera no cliente — a
+    sessão nasce mesmo sem sinal, e a escrita sobe depois. Sem isso, começar um
+    treino na academia sem rede não registraria nada.
+
+    `sessaoCriada` segura o id entre a criação e o eco do banco: duas séries
+    marcadas em sequência abririam duas sessões para o mesmo treino.
+  */
+  function garantirSessao() {
+    if (sessaoAberta) return sessaoAberta.id
+    if (sessaoCriada.current) return sessaoCriada.current
+
+    const destino = push(ref(db, 'sessoes/' + user.uid))
+    const nova = novaSessao({
+      id: destino.key,
+      treinoIdx: idxAtual,
+      treinoNome: nomeTreinoHoje,
+      seriesTotal: seriesDoDia
+    })
+    sessaoCriada.current = destino.key
+    set(destino, paraBanco(nova)).catch(err => {
+      console.warn('Sessão não criada:', err?.code || err)
+      sessaoCriada.current = null
+    })
+    return destino.key
+  }
+
+  /** Começa o treino selecionado. Só isto cria sessão — escolher não grava nada. */
+  function comecarTreino() {
+    garantirSessao()
+    setExecutando(true)
+  }
+
   function marcarSerie(ex, serie, pesoDigitado, cargaLinha, motivo = '') {
     const chave = chaveSerie(ex.nome, serie)
     // Duas barreiras: o que já está no banco e o que está em voo. O estado de
@@ -386,6 +534,9 @@ export default function AlunoHome({ user, perfil, onSair }) {
     const abaixo = alvo > 0 && peso > 0 && peso < alvo
 
     emVoo.current.add(chave)
+    // Marcar a primeira série sem ter tocado em "Começar" também abre a sessão:
+    // quem usa a lista inline nunca passa pelo botão.
+    const sessaoId = garantirSessao()
     const destino = push(ref(db, 'execucoes/' + user.uid))
 
     set(destino, {
@@ -393,6 +544,9 @@ export default function AlunoHome({ user, perfil, onSair }) {
       serie,
       peso: peso || '',
       ts: Date.now(),
+      // Campos novos e opcionais: execução antiga sem eles continua válida.
+      sessaoId,
+      treinoIdx: idxAtual,
       ...(abaixo ? { alvo, motivo: motivo || 'não informado' } : {})
     })
       .catch(err => {
@@ -532,13 +686,42 @@ export default function AlunoHome({ user, perfil, onSair }) {
    * regra nova no banco. Treino encurtado toda semana é sinal de plano longo
    * demais para a rotina da pessoa, e hoje esse dado se perdia.
    */
+  /*
+    Fecha a sessão e empurra o ciclo.
+
+    O índice sai de `proximoIndice`, que olha a última sessão que REALMENTE
+    contou — não "o índice gravado + 1". Quem fecha o app sem tocar em nada
+    deixa de ficar preso no mesmo treino para sempre, e quem começou e desistiu
+    não avança por ter tentado.
+  */
+  async function fecharSessao({ encerradaPor = 'aluno' } = {}) {
+    const alvo = sessaoAberta
+    if (!alvo) return null
+
+    const ultima = Object.values(execucoes)
+      .filter(e => e?.sessaoId === alvo.id)
+      .reduce((m, e) => Math.max(m, e.ts || 0), 0)
+
+    const campos = fechamento(alvo, {
+      seriesFeitas: seriesFeitasHoje,
+      fimEm: ultima || Date.now(),
+      encerradaPor
+    })
+    const fechada = { ...alvo, ...campos }
+
+    await update(ref(db, 'sessoes/' + user.uid + '/' + alvo.id), campos)
+    if (ciclico) {
+      // Passa a sessão já fechada: `sessoes` ainda não recebeu o eco.
+      const idx = proximoIndice({ ...sessoes, [alvo.id]: fechada }, totalDias, idxCiclo)
+      await update(ref(db, 'treinos/' + user.uid), { indiceAtual: idx })
+    }
+    return fechada
+  }
+
+  /** "Terminei por hoje": confirma na tela, nunca com o `confirm()` do navegador. */
   async function encerrarPorHoje() {
     const proximo = ciclico ? plano.lista[(idxAtual + 1) % totalDias]?.nome : null
-    const texto = proximo
-      ? `Encerrar o treino com ${seriesFeitasHoje} de ${seriesDoDia} séries? O próximo será o ${proximo}.`
-      : `Encerrar o treino com ${seriesFeitasHoje} de ${seriesDoDia} séries?`
-    if (!confirm(texto)) return
-
+    setConfirmarFim(null)
     try {
       await push(ref(db, 'feedbacks/' + user.uid), {
         tipo: 'sessao',
@@ -547,9 +730,7 @@ export default function AlunoHome({ user, perfil, onSair }) {
         total: seriesDoDia,
         ts: Date.now()
       })
-      if (ciclico) {
-        await update(ref(db, 'treinos/' + user.uid), { indiceAtual: (idxAtual + 1) % totalDias })
-      }
+      await fecharSessao({ encerradaPor: 'aluno' })
       setEncerrado({ treino: nomeTreinoHoje, feitas: seriesFeitasHoje, total: seriesDoDia, proximo })
       setEscolhaHoje(null)
     } catch (err) {
@@ -558,16 +739,49 @@ export default function AlunoHome({ user, perfil, onSair }) {
   }
 
   async function concluirTreino() {
-    /*
-      O ciclo continua a partir do que foi treinado de verdade, não do que estava
-      marcado. Quem refez o A hoje segue para o B amanhã — que é o que a pessoa
-      espera de um ABC, mesmo tendo saído da ordem.
-    */
-    if (ciclico) {
-      await update(ref(db, 'treinos/' + user.uid), { indiceAtual: (idxAtual + 1) % totalDias })
-    }
+    await fecharSessao({ encerradaPor: 'aluno' })
     setEscolhaHoje(null)
     setExecutando(false)
+  }
+
+  /*
+    Trocar de treino com sessão aberta: fecha a atual como está e abre a outra.
+    A confirmação acontece na tela, com o número de séries à vista — trocar sem
+    saber que está descartando 12 de 41 seria uma perda silenciosa.
+  */
+  async function trocarTreino(novoIdx) {
+    setTrocaPedida(null)
+    try {
+      await fecharSessao({ encerradaPor: 'aluno' })
+      setEscolhaHoje(novoIdx)
+      /*
+        Abre a sessão nova na hora. Quem troca de treino no meio do treino não
+        está escolhendo para depois — está trocando AGORA, e o botão deve dizer
+        "Continuar", não "Começar". `sessaoCriada` fica nulo porque a sessão que
+        acabou de fechar não está mais em andamento.
+      */
+      sessaoCriada.current = null
+      const destino = push(ref(db, 'sessoes/' + user.uid))
+      const nova = novaSessao({
+        id: destino.key,
+        treinoIdx: novoIdx,
+        treinoNome: plano.lista[novoIdx]?.nome || '',
+        seriesTotal: totalSeries(plano.lista[novoIdx]?.exercicios || [])
+      })
+      sessaoCriada.current = destino.key
+      await set(destino, paraBanco(nova))
+    } catch (err) {
+      console.warn('Falha ao trocar de treino:', err)
+    }
+  }
+
+  /** Tocar numa letra: escolhe direto, ou pede confirmação se há treino aberto. */
+  function escolherTreino(i) {
+    if (!podeEscolher) { setVerTreino(i); return }
+    if (i === idxAtual) return
+    if (sessaoAberta && seriesFeitasHoje > 0) { setTrocaPedida(i); return }
+    if (sessaoAberta) { trocarTreino(i); return }
+    setEscolhaHoje(i)
   }
 
   /* Abre a confirmação já com a data de hoje preenchida — é o caso quase sempre. */
@@ -1063,17 +1277,23 @@ export default function AlunoHome({ user, perfil, onSair }) {
                     <div className="tr-cab">
                       <span className="tr-data">{dataPorExtenso()}</span>
                       {ciclico && (
+                        /*
+                          Cada letra mostra o que ACONTECEU, não onde o ciclo
+                          está. A versão anterior pintava de verde toda letra
+                          anterior ao índice — um treino que a pessoa nunca fez
+                          aparecia como feito só por estar atrás na fila.
+                        */
                         <div className={'tr-ciclo' + (podeEscolher ? ' escolhivel' : '')}>
-                          {plano.lista.map((d, i) => (
+                          {estadosCiclo.map(({ indice, estado, agora, sessao }) => (
                             <button
-                              key={i}
+                              key={indice}
                               type="button"
-                              className={'tr-passo' + (i === idxAtual ? ' agora' : i < idxCiclo ? ' feito' : '')}
-                              onClick={() => (podeEscolher ? setEscolhaHoje(i) : setVerTreino(i))}
-                              title={podeEscolher ? 'Treinar ' + d.nome : 'Ver ' + d.nome}
-                              aria-pressed={podeEscolher ? i === idxAtual : undefined}
+                              className={'tr-passo ' + estado + (agora ? ' agora' : '')}
+                              onClick={() => escolherTreino(indice)}
+                              title={rotuloLetra(plano.lista[indice], estado, sessao)}
+                              aria-pressed={podeEscolher ? agora : undefined}
                             >
-                              {LETRAS[i] || i + 1}
+                              {LETRAS[indice] || indice + 1}
                             </button>
                           ))}
                         </div>
@@ -1157,12 +1377,68 @@ export default function AlunoHome({ user, perfil, onSair }) {
                           Só aparece depois da primeira série: sem nada marcado não há
                           o que encerrar, e o botão só atrapalharia quem vai começar.
                         */}
+                        {/* Sem sessão aberta o botão principal começa uma; com
+                            sessão, ele continua de onde a pessoa parou — inclusive
+                            depois de fechar o app ou trocar de aparelho. */}
+                        <button className="btn btn-lg tr-acao" onClick={comecarTreino}>
+                          <IcPlay />
+                          {/* A letra, não o nome inteiro: "Continuar Treino A —
+                              Superiores · 2 de 19 séries" quebra em duas linhas
+                              no celular, e o nome já está no título acima. */}
+                          {sessaoAberta
+                            ? `Continuar treino ${LETRAS[idxAtual] || idxAtual + 1} · ${seriesFeitasHoje} de ${seriesDoDia} séries`
+                            : ciclico
+                              ? `Começar treino ${LETRAS[idxAtual] || idxAtual + 1}`
+                              : 'Começar treino'}
+                        </button>
+
                         {seriesFeitasHoje > 0 && (
-                          <button className="btn btn-sec tr-acao" onClick={encerrarPorHoje}>
+                          <button
+                            className="btn btn-sec tr-acao"
+                            onClick={() => setConfirmarFim(true)}
+                          >
                             Terminei por hoje
                           </button>
                         )}
                       </>
+                    )}
+
+                    {/* Confirmação de encerrar, na própria tela. */}
+                    {confirmarFim && (
+                      <div className="tr-confirma" role="alertdialog" aria-label="Encerrar o treino">
+                        <strong>Encerrar o {nomeTreinoHoje}?</strong>
+                        <span>
+                          Você fez {seriesFeitasHoje} de {seriesDoDia} séries.
+                          {ciclico && proximoDoCiclo ? ` O próximo será o ${proximoDoCiclo}.` : ''}
+                        </span>
+                        <div className="tr-confirma-acoes">
+                          <button className="btn btn-ghost btn-sm" onClick={() => setConfirmarFim(null)}>
+                            Continuar treinando
+                          </button>
+                          <button className="btn btn-sm" onClick={encerrarPorHoje}>
+                            Encerrar
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Confirmação de troca, com o que está sendo deixado para trás. */}
+                    {trocaPedida !== null && (
+                      <div className="tr-confirma" role="alertdialog" aria-label="Trocar de treino">
+                        <strong>
+                          Encerrar o {nomeTreinoHoje} com {seriesFeitasHoje} de {seriesDoDia} séries
+                          e começar o {plano.lista[trocaPedida]?.nome}?
+                        </strong>
+                        <span>O que você já marcou fica salvo no treino de agora.</span>
+                        <div className="tr-confirma-acoes">
+                          <button className="btn btn-ghost btn-sm" onClick={() => setTrocaPedida(null)}>
+                            Ficar no {LETRAS[idxAtual] || idxAtual + 1}
+                          </button>
+                          <button className="btn btn-sm" onClick={() => trocarTreino(trocaPedida)}>
+                            Trocar
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </section>
 

@@ -955,8 +955,26 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   padding: 0; cursor: pointer; transition: all var(--t);
 }
 button.tr-passo:hover { border-color: var(--primaria); color: var(--primaria); transform: translateY(-1px); }
+/*
+  Três estados independentes, e por isso compostos:
+    .feito  = sessão concluída ou que passou da metade (preenchimento verde)
+    .meio   = sessão parcial abaixo da metade (metade preenchida)
+    .agora  = o treino de hoje (contorno bordô)
+
+  `.agora` é contorno, não preenchimento, de propósito: o treino de hoje pode
+  JÁ ter sido feito, e um fundo bordô sólido apagaria o verde embaixo. Contorno
+  diz "é este agora" sem disputar com o que aconteceu.
+*/
 .tr-passo.feito { background: var(--sucesso-bg); color: var(--sucesso); border-color: var(--sucesso-borda); }
-.tr-passo.agora { background: var(--primaria); color: #fff; border-color: var(--primaria); }
+.tr-passo.meio {
+  color: var(--texto-2); border-color: var(--borda-forte);
+  background: linear-gradient(to top, var(--sucesso-bg) 50%, var(--superficie-2) 50%);
+}
+.tr-passo.agora {
+  border-color: var(--primaria); color: var(--primaria);
+  box-shadow: 0 0 0 2px var(--primaria-suave);
+}
+.tr-passo.agora.vazio { background: var(--primaria-suave); }
 .tr-nome {
   font-family: 'Archivo'; font-size: var(--t-2xl); font-weight: 700;
   letter-spacing: -0.025em; margin: 8px 0 0;
@@ -1815,6 +1833,17 @@ button.tr-passo:hover { border-color: var(--primaria); color: var(--primaria); t
 .conversa-item .cv-previa { font-size: var(--t-sm); color: var(--texto-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* --- Lista de conversas: prévia, horário e não lidas --- */
+/* --- Confirmação dentro da tela, no lugar do confirm() do navegador --- */
+.tr-confirma {
+  display: flex; flex-direction: column; gap: 6px;
+  margin-top: 14px; padding: 14px;
+  background: var(--superficie-2); border: 1px solid var(--borda-forte);
+  border-radius: var(--raio);
+}
+.tr-confirma strong { font-size: var(--t-base); line-height: 1.4; }
+.tr-confirma > span { font-size: var(--t-sm); color: var(--texto-3); line-height: 1.45; }
+.tr-confirma-acoes { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; flex-wrap: wrap; }
+
 /* --- Aviso de offline --- */
 .aviso-offline {
   display: flex; align-items: center; gap: 10px;

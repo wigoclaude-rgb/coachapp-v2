@@ -219,10 +219,15 @@ export function estadosDoCiclo(sessoes, totalDias, { idxDeHoje = null } = {}) {
 
   return Array.from({ length: total }, (_, i) => {
     const s = porIndice.get(i)
-    // Três estados, não quatro: existe sessão e ela conta (feito), existe e não
-    // conta (meio), ou não existe (vazio). Se está em andamento ou já fechou não
-    // muda o desenho — o que muda é ter passado da metade.
-    const estado = !s ? 'vazio' : contaComoDiaTreinado(s) ? 'feito' : 'meio'
+    /*
+      `meio` quer dizer progresso de verdade que não chegou à metade. Sessão
+      recém-aberta, com zero séries, é `vazio`: desenhá-la meio preenchida
+      daria a quem acabou de começar a mesma marca de quem desistiu no início.
+    */
+    const estado = !s ? 'vazio'
+      : contaComoDiaTreinado(s) ? 'feito'
+      : (Number(s.seriesFeitas) || 0) > 0 ? 'meio'
+      : 'vazio'
     return { indice: i, estado, agora: i === idxDeHoje, sessao: s || null }
   })
 }
