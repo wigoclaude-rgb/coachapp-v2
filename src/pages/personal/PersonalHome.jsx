@@ -5,6 +5,7 @@ import { initializeApp, getApps } from 'firebase/app'
 import { ref, onValue, set, push, update, remove, get, getDatabase, query, limitToLast } from 'firebase/database'
 import { db, firebaseConfig } from '../../firebase'
 import { fmtData, fmtMoeda, fmtQuando, vencida } from '../../lib/util'
+import { diasQueContam } from '../../lib/sessoes'
 import { montar as montarConversas, filtrar as filtrarConversas, totalNaoLidas,
          contarPorFiltro, FILTROS as FILTROS_CHAT, LIMITE_MENSAGENS } from '../../lib/conversas'
 import { CAMPOS_FICHA, fichaParaAluno, fichaParaMedidas } from '../../lib/ficha'
@@ -166,6 +167,7 @@ export default function PersonalHome({ user, perfil, onSair }) {
   }
 
   const [mensagens, setMensagens] = useState({})
+  const [sessoes, setSessoes] = useState({})
   const [filtroChat, setFiltroChat] = useState('todas')
 
   const idsAlunos = useMemo(() => Object.keys(alunos).sort().join(','), [alunos])
@@ -178,7 +180,7 @@ export default function PersonalHome({ user, perfil, onSair }) {
   useEffect(() => {
     const uids = idsAlunos ? idsAlunos.split(',') : []
     if (uids.length === 0) {
-      setExecucoes({}); setCobrancas({}); setTreinos({}); setMensagens({})
+      setExecucoes({}); setCobrancas({}); setTreinos({}); setMensagens({}); setSessoes({})
       return
     }
 
@@ -192,6 +194,7 @@ export default function PersonalHome({ user, perfil, onSair }) {
     const porCob = guardar(setCobrancas)
     const porTreino = guardar(setTreinos)
     const porChat = guardar(setMensagens)
+    const porSessao = guardar(setSessoes)
 
     const inscricoes = uids.flatMap(uid => [
       onValue(ref(db, 'execucoes/' + uid), s => porExec(uid, s.val())),
@@ -204,7 +207,8 @@ export default function PersonalHome({ user, perfil, onSair }) {
         "30+" — e para decidir qual conversa abrir agora, 30+ já responde.
       */
       onValue(query(ref(db, 'chats/' + user.uid + '_' + uid), limitToLast(LIMITE_MENSAGENS)),
-        s => porChat(uid, s.val()))
+        s => porChat(uid, s.val())),
+      onValue(ref(db, 'sessoes/' + uid), s => porSessao(uid, s.val()))
     ])
     return () => inscricoes.forEach(cancelar => cancelar())
   }, [idsAlunos, user.uid])
@@ -241,7 +245,15 @@ export default function PersonalHome({ user, perfil, onSair }) {
 
     return Object.entries(alunos).map(([uid, a]) => {
       const exs = Object.values(execucoes[uid] || {})
-      const ultimoTs = exs.reduce((m, e) => Math.max(m, e.ts || 0), 0) || null
+      /*
+        "Sem treinar há N dias" passa a olhar o último dia que REALMENTE contou
+        como treino — sessão concluída ou que chegou à metade. Antes bastava
+        uma série solta para o aluno aparecer como ativo, e o personal não
+        ligava para quem tinha desistido no meio.
+      */
+      const diasDoAluno = diasQueContam(execucoes[uid], sessoes[uid])
+      const ultimoDia = [...diasDoAluno].sort().pop() || null
+      const ultimoTs = ultimoDia ? new Date(ultimoDia + 'T12:00:00').getTime() : null
       const seriesHoje = exs.filter(e => e.ts >= inicioHoje.getTime()).length
 
       const cobs = Object.entries(cobrancas[uid] || {}).map(([id, c]) => ({ id, ...c }))
@@ -259,7 +271,7 @@ export default function PersonalHome({ user, perfil, onSair }) {
 
       return { uid, ...a, ultimoTs, diasParado, ativo, seriesHoje, emAtraso, aguardando, proxVenc, aReceber, temPlano }
     })
-  }, [alunos, execucoes, cobrancas, treinos])
+  }, [alunos, execucoes, cobrancas, treinos, sessoes])
 
   const totalAlunos = fichas.length
   const assinatura = normalizarAssinatura(assinaturaBruta)

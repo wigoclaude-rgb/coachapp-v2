@@ -25,7 +25,17 @@ export function ordenar(execucoes) {
 
 /* ============================ dias ============================ */
 
-/** Set de dias (YYYY-MM-DD) em que houve pelo menos uma série. */
+/**
+ * Set de dias (YYYY-MM-DD) em que houve pelo menos uma série.
+ *
+ * NÃO use isto numa tela. "Houve série" não é "treinou": uma série solta
+ * pintava o dia inteiro como treinado na frequência, na sequência e no
+ * calendário. Quem decide isso é `sessoes.diasQueContam`.
+ *
+ * Fica aqui porque é a referência do teste de equivalência
+ * (`previa/testes/equivalencia.mjs`): é contra ela que se prova que o
+ * histórico de quem nunca teve sessão continua contando igual.
+ */
 export function diasTreinados(lista) {
   return new Set(lista.map(e => diaISO(new Date(e.ts))))
 }

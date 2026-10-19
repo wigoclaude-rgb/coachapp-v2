@@ -246,6 +246,43 @@ export function diasQueTemSessao(sessoes) {
   return dias
 }
 
+/**
+ * OS DIAS TREINADOS. É esta que as telas devem usar — frequência, sequência,
+ * treinos no mês, calendário, heatmap e o "sem treinar há N dias" do personal.
+ *
+ * Antes disto, cinco lugares diferentes montavam o próprio conjunto de dias a
+ * partir das execuções (`evolucao.diasTreinados`, duas vezes no `AlunoHome`,
+ * `AlunoDetalhe` e o `ultimoTs` do `PersonalHome`). Cada um respondia "o aluno
+ * treinou?" à sua maneira, e bastava uma série solta para o dia valer em todos.
+ *
+ * A regra agora é uma só:
+ *   - dia que TEM sessão → conta apenas se alguma sessão dele atingiu a metade
+ *     ou foi concluída;
+ *   - dia SEM sessão nenhuma → qualquer execução conta, como sempre contou.
+ *
+ * A segunda metade não é descuido: é o histórico de quem usava o app antes das
+ * sessões existirem. Apagar esses dias zeraria a sequência das pessoas por uma
+ * mudança técnica.
+ *
+ * Mora aqui, e não em `evolucao.js`, porque `sessoes.js` já importa `diaISO`
+ * dali — a volta criaria um ciclo entre os dois arquivos.
+ */
+export function diasQueContam(execucoes, sessoes) {
+  const porExecucao = new Set()
+  Object.values(execucoes || {}).forEach(e => {
+    if (e && typeof e.ts === 'number') porExecucao.add(diaISO(new Date(e.ts)))
+  })
+  if (!sessoes || Object.keys(sessoes).length === 0) return porExecucao
+
+  const temDono = diasQueTemSessao(sessoes)
+  const contam = diasComSessao(sessoes)
+  const saida = new Set()
+  porExecucao.forEach(d => { if (!temDono.has(d) || contam.has(d)) saida.add(d) })
+  // Sessão que conta e não deixou execução (caso raro) ainda é um dia treinado.
+  contam.forEach(d => saida.add(d))
+  return saida
+}
+
 /* ------------------------------------------------- progresso da sessão -- */
 
 /**

@@ -13,7 +13,8 @@ import {
 import { enviarFoto } from '../../lib/fotos'
 import { anosDe, casaStatus } from '../../lib/filtroCobrancas'
 import { montarPainel } from '../../lib/painel'
-import { recordes, prsNoMes, frequenciaDoMes, evolucaoDeCarga } from '../../lib/evolucao'
+import { recordes, prsNoMes, frequenciaDoMes, evolucaoDeCarga, sequenciaAtual } from '../../lib/evolucao'
+import { diasQueContam } from '../../lib/sessoes'
 import Inicio from '../../components/aluno/Inicio.jsx'
 import SituacaoPagamento from '../../components/pagamentos/SituacaoPagamento.jsx'
 import LinhaCobranca from '../../components/pagamentos/LinhaCobranca.jsx'
@@ -87,23 +88,6 @@ function dataPorExtenso(d = new Date()) {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
-/** Dias consecutivos treinados, contando de hoje (ou de ontem, se ainda não treinou hoje). */
-function calcularSequencia(diasSet) {
-  if (diasSet.size === 0) return 0
-  const hoje = new Date(); hoje.setHours(0, 0, 0, 0)
-  let cursor = new Date(hoje)
-  if (!diasSet.has(diaISO(cursor))) {
-    cursor.setDate(cursor.getDate() - 1)
-    if (!diasSet.has(diaISO(cursor))) return 0
-  }
-  let n = 0
-  while (diasSet.has(diaISO(cursor))) {
-    n++
-    cursor.setDate(cursor.getDate() - 1)
-  }
-  return n
-}
-
 export default function AlunoHome({ user, perfil, onSair }) {
   /*
     A notificação abre em /aluno?aba=suplementos&sup=ID. Sem ler isso aqui, o
@@ -167,6 +151,7 @@ export default function AlunoHome({ user, perfil, onSair }) {
     viraria a nova ordem sem ninguém ter decidido isso.
   */
   const [escolhaHoje, setEscolhaHoje] = useState(null)
+  const [sessoes, setSessoes] = useState({})
   /* Séries já enviadas e ainda sem eco do banco — barra o duplo toque. */
   const emVoo = useRef(new Set())
   /* Começa conectado: supor o contrário mostraria o aviso por um instante em
@@ -199,6 +184,7 @@ export default function AlunoHome({ user, perfil, onSair }) {
     const u1 = onValue(ref(db, 'treinos/' + user.uid), s => setTreinoBruto(s.exists() ? s.val() : null))
     const u2 = onValue(ref(db, 'cobrancas/' + user.uid), s => setCobrancas(s.val() || {}))
     const u3 = onValue(ref(db, 'execucoes/' + user.uid), s => setExecucoes(s.val() || {}))
+    const uS = onValue(ref(db, 'sessoes/' + user.uid), s => setSessoes(s.val() || {}))
     const u4 = onValue(ref(db, 'avaliacoes/' + user.uid), s => setAvaliacoes(s.val() || {}))
     const u5 = onValue(ref(db, 'treinosHistorico/' + user.uid), s => setHistorico(s.val() || {}))
     const u6 = onValue(ref(db, 'users/' + perfil.personalId), s => setPersonal(s.val()))
@@ -210,7 +196,7 @@ export default function AlunoHome({ user, perfil, onSair }) {
     const u11 = onValue(ref(db, 'chats/' + perfil.personalId + '_' + user.uid), s => setMensagens(s.val() || {}))
     const u12 = onValue(ref(db, 'diario/' + user.uid), s => setDiario(s.val() || {}))
     const u13 = onValue(ref(db, 'notificacoes/' + user.uid), s => setAvisos(s.val() || {}))
-    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8(); u9(); u10(); u11(); u12(); u13() }
+    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8(); u9(); u10(); u11(); u12(); u13(); uS() }
   }, [user.uid, perfil.personalId])
 
   /*
@@ -283,19 +269,24 @@ export default function AlunoHome({ user, perfil, onSair }) {
   )
   const listaHist = Object.entries(historico).map(([id, t]) => ({ id, ...t })).sort((a, b) => (b.arquivadoEm || 0) - (a.arquivadoEm || 0))
 
-  const diasTreinados = useMemo(() => new Set(listaExec.map(e => diaISO(e.ts))), [listaExec])
-  const sequencia = useMemo(() => calcularSequencia(diasTreinados), [diasTreinados])
+  /*
+    Um conjunto só, vindo da regra da sessão. Antes esta tela montava o próprio
+    Set a partir de qualquer execução — uma série solta já pintava o dia como
+    treinado na frequência e na sequência.
+  */
+  const diasTreinados = useMemo(() => diasQueContam(execucoes, sessoes), [execucoes, sessoes])
+  /* `sequenciaAtual` da lib. A cópia que existia aqui era idêntica linha a
+     linha — duas implementações da mesma regra é como elas divergem. */
+  const sequencia = useMemo(() => sequenciaAtual(diasTreinados), [diasTreinados])
 
   const mesAtual = new Date().getMonth()
   const anoAtual = new Date().getFullYear()
+  /* Do mesmo conjunto acima: dois Sets independentes podiam discordar sobre o
+     mesmo dia, e discordavam — este contava execução solta, o outro também. */
   const treinosNoMes = useMemo(() => {
-    const dias = new Set()
-    listaExec.forEach(e => {
-      const d = new Date(e.ts)
-      if (d.getMonth() === mesAtual && d.getFullYear() === anoAtual) dias.add(diaISO(e.ts))
-    })
-    return dias.size
-  }, [listaExec, mesAtual, anoAtual])
+    const prefixo = anoAtual + '-' + String(mesAtual + 1).padStart(2, '0')
+    return [...diasTreinados].filter(d => d.startsWith(prefixo)).length
+  }, [diasTreinados, mesAtual, anoAtual])
 
   /** Última carga registrada para um exercício, ignorando as séries de hoje. */
   /*
@@ -1499,6 +1490,7 @@ export default function AlunoHome({ user, perfil, onSair }) {
         <>
           <Evolucao
             execucoes={execucoes}
+            sessoes={sessoes}
             avaliacoes={avalVisiveis}
             diasSemana={treinoBruto?.diasSemana}
           />

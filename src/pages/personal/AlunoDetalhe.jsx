@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ref, onValue, push, remove, set } from 'firebase/database'
 import { db } from '../../firebase'
+import { diasQueContam } from '../../lib/sessoes'
 import { fmtData } from '../../lib/util'
 import { soDigitos } from '../../lib/cpf'
 import { atividadeDe, resumoAtividade } from '../../lib/atividades'
@@ -47,6 +48,7 @@ export default function AlunoDetalhe({ user }) {
   const [feedbacks, setFeedbacks] = useState({})
   const [verComoAluno, setVerComoAluno] = useState(false)
   const [anexos, setAnexos] = useState({})
+  const [sessoes, setSessoes] = useState({})
   const [exercicioGrafico, setExercicioGrafico] = useState('')
   const [tipoFoto, setTipoFoto] = useState('frente')
 
@@ -61,7 +63,8 @@ export default function AlunoDetalhe({ user }) {
     const u7 = onValue(ref(db, 'feedbacks/' + alunoId), s => setFeedbacks(s.val() || {}))
     // Só o metadado. O conteúdo em base64 vive em `anexosDados` e é lido no clique.
     const u8 = onValue(ref(db, 'anexos/' + alunoId), s => setAnexos(s.val() || {}))
-    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8() }
+    const u9 = onValue(ref(db, 'sessoes/' + alunoId), s => setSessoes(s.val() || {}))
+    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8(); u9() }
   }, [alunoId])
 
   if (!aluno) return <div className="loading">Carregando...</div>
@@ -92,12 +95,12 @@ export default function AlunoDetalhe({ user }) {
   const pontosCargaReduzidos = pontosCarga.length > 12 ? pontosCarga.filter((_, i) => i % Math.ceil(pontosCarga.length / 12) === 0) : pontosCarga
 
   // Frequência
-  const diasTreinados = new Set(listaExec.map(e => {
-    const d = new Date(e.ts)
-    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
-  }))
+  /* A mesma regra que o aluno vê: sessão que chegou à metade ou foi concluída.
+     Este Set era montado aqui à mão, a partir de qualquer execução — o personal
+     via "treinou" num dia em que o aluno marcou uma série e parou. */
+  const diasTreinados = diasQueContam(execucoes, sessoes)
   const seteDias = Date.now() - 7 * 24 * 3600 * 1000
-  const diasSemana = new Set(listaExec.filter(e => e.ts >= seteDias).map(e => new Date(e.ts).toDateString())).size
+  const diasSemana = [...diasTreinados].filter(d => new Date(d + 'T12:00:00').getTime() >= seteDias).length
 
   /*
     Salva a avaliação inteira. `prepararParaSalvar` recalcula IMC, relação

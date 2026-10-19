@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import {
-  ordenar, diasTreinados, sequenciaAtual, treinosNoMes, frequenciaDoMes,
+  ordenar, sequenciaAtual, treinosNoMes, frequenciaDoMes,
   recordes, prsNoMes, melhoresResultados, porSemana, resumoDoDia,
   mesGrade, ESTADOS, conquistas, semanasSeguidas, diaISO
 } from '../lib/evolucao'
+import { diasQueContam } from '../lib/sessoes'
 import EvolucaoCorporal from './EvolucaoCorporal.jsx'
 import { IcFogo, IcCalendario, IcTrofeu, IcEvolucao, IcHalter } from './Icones.jsx'
 
@@ -52,7 +53,7 @@ function Barras({ pontos, campo, unidade }) {
   )
 }
 
-export default function Evolucao({ execucoes, avaliacoes, diasSemana, nomeDoDia }) {
+export default function Evolucao({ execucoes, avaliacoes, diasSemana, nomeDoDia, sessoes = {} }) {
   const [metrica, setMetrica] = useState('carga')
   const [diaAberto, setDiaAberto] = useState(null)
   const [mesVisto, setMesVisto] = useState(() => {
@@ -61,7 +62,9 @@ export default function Evolucao({ execucoes, avaliacoes, diasSemana, nomeDoDia 
   })
 
   const lista = useMemo(() => ordenar(execucoes), [execucoes])
-  const dias = useMemo(() => diasTreinados(lista), [lista])
+  /* A regra da sessão, não "houve execução": uma série solta não é um treino.
+     Dias antigos, sem sessão nenhuma, continuam contando como antes. */
+  const dias = useMemo(() => diasQueContam(execucoes, sessoes), [execucoes, sessoes])
   const { melhor, marcos } = useMemo(() => recordes(lista), [lista])
 
   const sequencia = sequenciaAtual(dias)
