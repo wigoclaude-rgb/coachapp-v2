@@ -13,6 +13,53 @@
 
 export const NOVIDADES = [
   {
+    versao: '2.6.0',
+    data: '19 de outubro de 2026',
+    titulo: 'Escolha o treino do dia e continue de onde parou',
+    itens: [
+      {
+        para: 'aluno',
+        texto: 'Agora você escolhe qual treino fazer hoje. Toque na letra (A, B, C…) e comece — não precisa seguir a ordem do ciclo se o dia não saiu como planejado.'
+      },
+      {
+        para: 'aluno',
+        texto: 'Saiu do app no meio do treino? Ao voltar, ele continua de onde você parou — inclusive em outro celular. O botão diz quantas séries faltam.'
+      },
+      {
+        para: 'aluno',
+        texto: 'As letras do ciclo mostram o que você fez de verdade: verde para treino concluído, meio preenchida para quem parou no meio. Antes elas ficavam verdes só por estarem na fila.'
+      },
+      {
+        para: 'aluno',
+        texto: 'O ciclo não trava mais. Mesmo que você feche o app sem tocar em "Finalizar", no dia seguinte o próximo treino já está certo.'
+      },
+      {
+        para: 'aluno',
+        texto: 'Sem sinal na academia? Pode marcar as séries normalmente: fica salvo no aparelho e sobe sozinho quando o sinal voltar.'
+      },
+      {
+        para: 'aluno',
+        texto: 'Os campos não dão mais zoom no iPhone ao tocar — principalmente o da carga, no meio do treino.'
+      },
+      {
+        para: 'personal',
+        texto: 'A ficha do aluno passa a contar como treino só o que foi treino de verdade: sessão concluída ou que passou da metade. Uma série solta não conta mais o dia inteiro.'
+      },
+      {
+        para: 'personal',
+        texto: '"Sem treinar há N dias" ficou confiável pelo mesmo motivo — antes bastava o aluno marcar uma série e parar para ele aparecer como ativo.'
+      },
+      {
+        para: 'personal',
+        texto: 'Seu aluno já pode escolher o treino do dia. Se preferir travar a ordem do ciclo, desmarque a opção no editor do plano.'
+      },
+      {
+        para: 'personal',
+        texto: 'A lista de conversas mostra a última mensagem, o horário e quantas faltam ler, ordenada pela conversa mais recente. Tem filtro de não lidas e de sem resposta.'
+      }
+    ]
+  },
+  {
     versao: '2.5.0',
     data: '13 de setembro de 2026',
     titulo: 'O app agora abre no Início',

@@ -24,8 +24,15 @@ export default function CriarTreino({ user }) {
   const [diaAtivo, setDiaAtivo] = useState(0)
   const [treinoExistente, setTreinoExistente] = useState(null)
   const [indiceAtualExistente, setIndiceAtualExistente] = useState(0)
-  // Ausente = ciclo travado, que é como o app sempre funcionou.
-  const [permiteEscolha, setPermiteEscolha] = useState(false)
+  /*
+    Ausente = PERMITE. Era o contrário, e a decisão mudou: escolher o treino do
+    dia passou a ser o padrão, e quem bloqueia é o personal, desmarcando aqui.
+
+    O padrão importa mais do que parece: o editor grava este campo em todo
+    salvamento. Com `false` por padrão, abrir e salvar um plano antigo —
+    que não tem o campo — tiraria a escolha do aluno sem ninguém pedir.
+  */
+  const [permiteEscolha, setPermiteEscolha] = useState(true)
   // Dias da semana em que o aluno deve treinar. 0 = domingo, como no Date.getDay().
   const [diasSemana, setDiasSemana] = useState([])
   const [meusTemplates, setMeusTemplates] = useState({})
@@ -53,7 +60,7 @@ export default function CriarTreino({ user }) {
       setPlanoNome(bruto.nome || '')
       setDias(plano.lista)
       setIndiceAtualExistente(plano.indiceAtual)
-      setPermiteEscolha(bruto.permiteEscolha === true)
+      setPermiteEscolha(bruto.permiteEscolha !== false)
       setDiasSemana(Array.isArray(bruto.diasSemana) ? bruto.diasSemana : [])
     })
   }, [alunoId, user.uid])
@@ -159,7 +166,9 @@ export default function CriarTreino({ user }) {
       indiceAtual,
       atualizadoEm: Date.now(),
       personalId: user.uid,
-      permiteEscolha,
+      /* Só grava quando é bloqueio. Deixar o campo ausente no caso normal
+         mantém os planos antigos e os novos com o mesmo significado. */
+      ...(permiteEscolha ? {} : { permiteEscolha: false }),
       diasSemana: diasSemana.slice().sort()
     }
     await set(ref(db, 'treinos/' + alunoId), novo)
@@ -205,10 +214,10 @@ export default function CriarTreino({ user }) {
           />
           <span className="tp-caixa" aria-hidden="true"><IcCheck /></span>
           <span className="tp-texto">
-            <strong>Deixar o aluno escolher qual treino fazer</strong>
+            <strong>Permitir que o aluno escolha o treino do dia</strong>
             <span className="mini">
-              Sem isso, ele segue a ordem do ciclo. Com isso, pode repetir o A depois do B
-              quando o dia não sair como planejado.
+              Vem ligado. Com isso ele pode repetir o A depois do B quando o dia não sair
+              como planejado. Desmarque para travar a ordem do ciclo.
             </span>
           </span>
         </label>

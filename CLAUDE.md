@@ -9,7 +9,7 @@ que envia os push de suplementação. Ela existe porque com o app fechado nada n
 celular acorda no horário — ver `netlify/LEIA-ME.md`.
 
 Deploy: Netlify (`netlify.toml` já faz build e o redirect de SPA).
-Versão do app exibida ao usuário: **2.5.0** (ver `src/lib/novidades.js`).
+Versão do app exibida ao usuário: **2.6.0** (ver `src/lib/novidades.js`).
 
 ---
 
@@ -103,7 +103,8 @@ e **precisam ser coladas no console do Firebase à mão** — o repositório nã
 | `linksFicha/{codigo}` / `fichas/{personalId}` | ficha pública de pré-cadastro |
 | `treinos/{alunoUid}` | plano ativo |
 | `treinosHistorico/{alunoUid}` | planos arquivados ao salvar um novo |
-| `execucoes/{alunoUid}` | cada série concluída (só o aluno escreve) |
+| `execucoes/{alunoUid}` | cada série concluída (só o aluno escreve) + `sessaoId` e `treinoIdx` opcionais |
+| `sessoes/{alunoUid}/{sessaoId}` | `treinoIdx`, `treinoNome`, `inicioEm`, `fimEm`, `status`, `encerradaPor`, `seriesFeitas`, `seriesTotal`, `dia` |
 | `feedbacks/{alunoUid}` | feedback por exercício (dor, carga pesada) |
 | `avaliacoes/{alunoUid}` | avaliação física (só o personal escreve) |
 | `fotosProgresso/{alunoUid}` | fotos antes/depois |
@@ -241,6 +242,59 @@ e **precisam ser coladas no console do Firebase à mão** — o repositório nã
 - **As classes do painel são `.adm-*`.** A casca antiga (`.admin-wrap`, `.admin-topo`,
   `.admin-nav`, `.admin-cards`, `.admin-mrr`…) foi removida do CSS junto com a tela
   que a usava. O que sobrou de `.admin-*` é só o que a ficha do personal ainda usa.
+- **Sessão de treino é quem responde "o aluno treinou?".** `sessoes/{aluno}` guarda
+  qual treino, de quando até quando e quantas séries. A regra, em `src/lib/sessoes.js`:
+  **dia treinado = sessão concluída OU que atingiu metade das séries**. Uma série solta
+  não conta. Vale para frequência, sequência, treinos no mês, calendário, heatmap e o
+  "sem treinar há N dias" do personal — todos passam por `diasQueContam()`.
+- **EXCEÇÃO deliberada:** o `treinouHoje` do lembrete de suplemento pós-treino
+  (`lib/lembretes.js` e a função do Netlify) **continua** olhando qualquer execução do
+  dia. Quem fez meio treino também precisa do pós-treino; negar a dose por causa de uma
+  régua de frequência seria confundir duas perguntas diferentes.
+- **Dia antigo, sem sessão nenhuma, continua contando por qualquer execução.** É o
+  histórico de quem usava o app antes das sessões existirem — apagá-lo zeraria a
+  sequência das pessoas por uma mudança técnica. Provado em
+  `previa/testes/equivalencia.mjs`, que compara a função nova com a antiga.
+- **O ciclo anda a partir do que foi feito, não do índice gravado.**
+  `proximoIndice()` = treino da última sessão que conta, + 1. Antes só avançava em
+  "Finalizar"; quem fechava o app ficava preso no mesmo treino para sempre. Sessão
+  parcial abaixo da metade não avança: começar o B e desistir não manda para o C.
+- **As letras do ciclo mostram o que aconteceu, nunca a posição.** `i < idxCiclo`
+  pintava de verde um treino que a pessoa nunca fez. Os estados (`feito`, `meio`,
+  `vazio`) saem de `estadosDoCiclo()`, sobre a volta atual — que termina quando um
+  `treinoIdx` se repete, olhando de trás para frente. A regra do "desde a última vez
+  que o A começou" não cobre quem pula treino ou faz A → C → B.
+- **`.tr-passo.agora` é contorno, não preenchimento.** O treino de hoje pode já ter
+  sido feito, e um fundo bordô sólido apagaria o verde embaixo.
+- **O progresso é da sessão, não do dia.** `feitas` era montado por
+  `exercício + série` sobre todas as execuções do dia: fazer supino no B marcava o
+  supino do C. Execução antiga sem `sessaoId` entra na PRIMEIRA sessão do dia — em
+  todas traria o bug de volta, em nenhuma sumiriam os vistos de quem estava treinando
+  quando a atualização chegou.
+- **Escolher o treino do dia vem LIGADO.** `permiteEscolha` ausente = permite; o
+  personal bloqueia desmarcando no editor. O editor só grava o campo quando é
+  bloqueio: gravar `false` por padrão tirava a escolha do aluno toda vez que um plano
+  antigo fosse aberto e salvo.
+- **Sessão esquecida fecha sozinha**, em `runTransaction`: aberta há mais de 4 horas
+  ou de um dia anterior vira `parcial`/`concluida` com `encerradaPor: 'automatico'`.
+  Transação porque dois aparelhos abertos fechariam a mesma sessão duas vezes, e a
+  segunda escrita estragaria o `fimEm` da primeira. `fimEm` é a última série, não a
+  hora em que o app foi reaberto.
+- **Marcar série não espera o servidor.** A chave vem de `push(ref)` no cliente, a
+  escrita vai sem `await` e o Firebase enfileira — na academia sem sinal a tela andava
+  parada e a pessoa tocava de novo. A trava de duplo toque tem duas barreiras: o que
+  está no banco e o que está em voo (`useRef`), porque o estado só chega no render
+  seguinte.
+- **NÃO existe chave determinística de execução** (`dia_exercício_série`). O mesmo
+  exercício pode aparecer duas vezes no dia (treino A e B), e nome de exercício aceita
+  caracteres que o Firebase proíbe em chave (`.`, `#`, `$`, `[`, `]`, `/`).
+- **Campo de formulário nunca abaixo de 16px.** Menos que isso faz o Safari do iPhone
+  dar zoom ao focar, e quem lança carga no meio do treino tira o zoom a cada série.
+  Onde a densidade importa, aperta-se o padding — nunca a fonte.
+- **A lista de conversas usa `limitToLast(30)` por conversa.** Baixar o histórico
+  inteiro de 40 alunos a cada abertura do app não se paga por uma prévia. O preço é o
+  contador saturar: acima de 30 a tela mostra "30+", e diz isso em vez de inventar um
+  número. "Sem resposta" não é "não lida" — dá para ter lido e ainda dever resposta.
 - **Bloqueio por inadimplência.** Cobrança vencida (`vencida(c)` em `src/lib/util.js`)
   → `bloqueado = true` → a aba Meu Treino vira um aviso. `vencida()` continua contando
   a cobrança em análise como devida, de propósito: se informar o pagamento destravasse,
@@ -277,6 +331,8 @@ e **precisam ser coladas no console do Firebase à mão** — o repositório nã
 | `cobrancas.js` | estados da cobrança, o que é informável, selos e rótulos |
 | `painel.js` | o que a Home do aluno mostra, em que ordem, e as ações rápidas |
 | `admin.js` | listas da plataforma, visão geral, alertas, busca global e logs |
+| `sessoes.js` | sessão de treino: criar, fechar, dia treinado, ciclo e letras |
+| `conversas.js` | lista de conversas do personal: prévia, não lidas, filtros |
 | `lembretes.js` | quando notificar uma dose: fuso, dias, antecedência, anti-spam |
 | `doses.js` | escrita da dose, em transação — o único lugar que grava |
 | `push.js` | inscrição de push do navegador e o caso do iPhone |
@@ -344,7 +400,8 @@ Confira com `git log --oneline -1 origin/main` — esta linha envelhece rápido.
 O que foi entregue depois da V2 original (Set/2026), em ordem:
 pagamentos com "Já paguei" e quatro estados → filtros de cobrança →
 lembretes de suplementação por push → "não registrado ≠ não tomado" →
-Home do aluno → painel WIGO ADMIN.
+Home do aluno → painel WIGO ADMIN → campos de 16px → lista de conversas →
+marcar série sem sinal → sessão de treino.
 
 O painel do admin não gerou entrada em `novidades.js`: o changelog é lido por aluno
 e por personal, e nenhum dos dois viu nada mudar. O admin não tem registro em
@@ -374,7 +431,12 @@ versão, cole no console, senão o fluxo de pagamento quebra:
    `suplementosTomados` ganhou validação de campo (`estado`, `vezes`, `ts`,
    `retroativo`). Sem ela o app funciona, mas nada impede um campo inválido.
 
-5. **Realtime Database → Regras** mais uma vez, pelo painel do admin: `presenca`
+5. **Realtime Database → Regras**, o nó novo `sessoes`. **É a mais importante da
+   lista:** sem ela o aluno não consegue gravar sessão nenhuma. O app não quebra — cai
+   no comportamento antigo —, mas escolher o treino, retomar de onde parou, as letras
+   do ciclo e o "dia treinado" ficam todos sem efeito.
+
+6. **Realtime Database → Regras** mais uma vez, pelo painel do admin: `presenca`
    ganhou `.read` no nível do nó para quem está em `admins/`. Antes só
    `presenca/$uid` era legível, e regra de filho não permite ler o pai — o painel
    levava PERMISSION_DENIED ao carregar "último acesso". Sem essa regra o admin
