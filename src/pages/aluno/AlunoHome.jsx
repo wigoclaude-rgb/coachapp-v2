@@ -19,6 +19,7 @@ import {
   feitasDaSessao, feitasSoltasDeHoje, deveFecharSozinha, fechamento,
   proximoIndice, estadosDoCiclo, EM_ANDAMENTO
 } from '../../lib/sessoes'
+import { repsAlvo, repsParaGravar, abaixoDoAlvo } from '../../lib/series'
 import Inicio from '../../components/aluno/Inicio.jsx'
 import SituacaoPagamento from '../../components/pagamentos/SituacaoPagamento.jsx'
 import LinhaCobranca from '../../components/pagamentos/LinhaCobranca.jsx'
@@ -156,6 +157,8 @@ export default function AlunoHome({ user, perfil, onSair }) {
   */
   const [escolhaHoje, setEscolhaHoje] = useState(null)
   const [sessoes, setSessoes] = useState({})
+  /* O que o aluno digitou nas reps. Vazio = fez o que o personal pediu. */
+  const [repsInline, setRepsInline] = useState({})
   /* Confirmações na própria tela, no lugar do `confirm()` do navegador. */
   const [trocaPedida, setTrocaPedida] = useState(null)
   const [confirmarFim, setConfirmarFim] = useState(null)
@@ -364,6 +367,22 @@ export default function AlunoHome({ user, perfil, onSair }) {
     return (nome, serie) => mapa[nome + '_' + serie] ?? null
   }, [listaExec])
 
+  /*
+    As repetições do último treino, do mesmo jeito que a carga. Em exercício de
+    carga livre — flexão, abdominal — as repetições são a ÚNICA medida de
+    progresso que existe, e até agora elas não eram nem gravadas.
+  */
+  const repsAnterior = useMemo(() => {
+    const mapa = {}
+    const hoje = new Date().toDateString()
+    listaExec.forEach(e => {
+      if (new Date(e.ts).toDateString() === hoje) return
+      const chave = e.exercicio + '_' + e.serie
+      if (mapa[chave] === undefined && e.reps) mapa[chave] = Number(e.reps)
+    })
+    return (nome, serie) => mapa[nome + '_' + serie] ?? null
+  }, [listaExec])
+
   /* ---------- Plano de treino ---------- */
   const plano = useMemo(() => normalizarPlano(treinoBruto), [treinoBruto])
   const totalDias = plano ? plano.lista.length : 0
@@ -523,7 +542,7 @@ export default function AlunoHome({ user, perfil, onSair }) {
     setExecutando(true)
   }
 
-  function marcarSerie(ex, serie, pesoDigitado, cargaLinha, motivo = '') {
+  function marcarSerie(ex, serie, pesoDigitado, cargaLinha, motivo = '', repsDigitadas) {
     const chave = chaveSerie(ex.nome, serie)
     // Duas barreiras: o que já está no banco e o que está em voo. O estado de
     // `feitas` só chega no próximo render, e dois toques rápidos passariam juntos.
@@ -532,6 +551,19 @@ export default function AlunoHome({ user, perfil, onSair }) {
     const alvo = cargaNumero(cargaLinha) || 0
     const peso = pesoDigitado !== undefined && pesoDigitado !== '' ? Number(pesoDigitado) : alvo
     const abaixo = alvo > 0 && peso > 0 && peso < alvo
+
+    /*
+      Repetições. Campo em branco quer dizer "fiz o que foi pedido", não "não
+      sei" — mesma regra da carga, que já cai no valor do plano quando ninguém
+      digita. Quem fez diferente digita; quem cumpriu não toca em nada no meio
+      da série.
+
+      Prescrição sem número ("até a falha") não vira alvo: `repsParaGravar`
+      devolve null e nada é gravado. Chutar um número ali seria inventar dado.
+    */
+    const textoReps = ex.linhas?.[serie - 1]?.reps
+    const reps = repsParaGravar(repsDigitadas, textoReps)
+    const repsAbaixo = reps !== null && abaixoDoAlvo(reps, textoReps)
 
     emVoo.current.add(chave)
     // Marcar a primeira série sem ter tocado em "Começar" também abre a sessão:
@@ -547,6 +579,11 @@ export default function AlunoHome({ user, perfil, onSair }) {
       // Campos novos e opcionais: execução antiga sem eles continua válida.
       sessaoId,
       treinoIdx: idxAtual,
+      // Só grava quando há número: ausência continua querendo dizer "sem dado".
+      ...(reps !== null ? { reps } : {}),
+      /* O alvo vai junto quando ficou abaixo. O plano pode mudar depois, e o
+         personal precisa ver o que estava combinado NAQUELE dia. */
+      ...(repsAbaixo ? { repsAlvo: String(textoReps) } : {}),
       ...(abaixo ? { alvo, motivo: motivo || 'não informado' } : {})
     })
       .catch(err => {
@@ -603,12 +640,13 @@ export default function AlunoHome({ user, perfil, onSair }) {
       return
     }
 
-    const msg = marcarSerie(ex, serie, digitado ?? '', linha.carga, motivo)
+    const msg = marcarSerie(ex, serie, digitado ?? '', linha.carga, motivo, repsInline[chave])
     setErroInline(e => ({ ...e, [ex.nome]: msg || '' }))
     if (msg) return
 
     setReducao(null)
     setPesoInline(p => ({ ...p, [chave]: '' }))
+    setRepsInline(r => ({ ...r, [chave]: '' }))
 
     const segundos = Number(linha.descanso) || 0
     const ultimaSerie = serie >= ex.linhas.length
@@ -1482,7 +1520,7 @@ export default function AlunoHome({ user, perfil, onSair }) {
                           const proximaSerie = ex.linhas.findIndex((_, li) => !feitas[chaveSerie(ex.nome, li + 1)]) + 1
                           const temDescanso = ex.linhas.some(l => Number(l.descanso) > 0)
                           // Coluna "Anterior" só entra quando existe histórico — senão é uma coluna de traços.
-                          const temAnterior = ex.linhas.some((_, li) => cargaAnterior(ex.nome, li + 1))
+                          const temAnterior = ex.linhas.some((_, li) => cargaAnterior(ex.nome, li + 1) || repsAnterior(ex.nome, li + 1))
                           const img = imagemExercicio(ex)
                           const vid = youtubeId(ex.video)
                           const erro = erroInline[ex.nome]
@@ -1545,10 +1583,48 @@ export default function AlunoHome({ user, perfil, onSair }) {
                                         return (
                                           <tr key={s} className={(feita ? 'feita' : '') + (daVez ? ' da-vez' : '')}>
                                             <td className="ts-n">{s}ª</td>
-                                            <td>{linha.reps || '—'}</td>
+                                            {/*
+                                              Reps: na linha da vez vira campo, com o
+                                              número do personal como sugestão em cinza.
+                                              Deixar em branco quer dizer "fiz o que foi
+                                              pedido" — só digita quem fez diferente.
+                                              O alvo fica embaixo para não sumir de vista
+                                              quando a pessoa digita por cima.
+                                            */}
+                                            <td className="ts-reps">
+                                              {feita
+                                                ? <strong>{reg.reps ? reg.reps : (linha.reps || '—')}</strong>
+                                                : daVez
+                                                  ? (() => {
+                                                      const alvoReps = repsAlvo(linha.reps)
+                                                      return (
+                                                        <>
+                                                          <input
+                                                            type="number" inputMode="numeric"
+                                                            className="ts-input ts-input-reps"
+                                                            value={repsInline[chave] ?? ''}
+                                                            onChange={e => setRepsInline(r => ({ ...r, [chave]: e.target.value }))}
+                                                            placeholder={alvoReps ? String(alvoReps.sugerido) : '—'}
+                                                            aria-label={`Repetições da série ${s}${alvoReps ? `, pedido ${linha.reps}` : ''}`}
+                                                          />
+                                                          {linha.reps && (!alvoReps || alvoReps.min !== alvoReps.max) && (
+                                                            <span className="ts-alvo-reps">{linha.reps}</span>
+                                                          )}
+                                                        </>
+                                                      )
+                                                    })()
+                                                  : (linha.reps || '—')}
+                                            </td>
                                             {temAnterior && (
                                               <td className="ts-antes">
-                                                {cargaAnterior(ex.nome, s) ? comKg(cargaAnterior(ex.nome, s)) : '—'}
+                                                {(() => {
+                                                  const kg = cargaAnterior(ex.nome, s)
+                                                  const rp = repsAnterior(ex.nome, s)
+                                                  if (!kg && !rp) return '—'
+                                                  // "8 × 85 kg" é a comparação que a pessoa quer no meio da série.
+                                                  if (rp && kg) return `${rp} × ${comKg(kg)}`
+                                                  return rp ? `${rp} reps` : comKg(kg)
+                                                })()}
                                               </td>
                                             )}
                                             <td className="ts-carga">

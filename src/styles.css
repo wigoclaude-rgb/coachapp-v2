@@ -2513,6 +2513,16 @@ form.card .av-acoes { padding: 0; }
 /* A série da vez: destaque suave, campo de carga pronto para digitar. */
 .tr-tabela tr.da-vez { background: var(--primaria-suave); }
 .tr-tabela tr.da-vez .ts-n { color: var(--primaria); }
+/* Reps: campo estreito, com o pedido do personal logo abaixo. */
+.ts-reps { white-space: nowrap; }
+.ts-input-reps { width: 58px; }
+.ts-alvo-reps {
+  display: block; margin-top: 2px;
+  font-size: var(--t-xs); color: var(--texto-4);
+  font-variant-numeric: tabular-nums;
+}
+.ts-antes { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
 .ts-input {
   /* Fica largo o bastante para "100" a 16px sem o número encostar na borda. */
   width: 82px; margin: 0; padding: 5px 8px;

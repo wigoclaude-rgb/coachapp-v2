@@ -322,7 +322,7 @@ export function execucoesDaSessao(execucoes, sessao, sessoes) {
 export function feitasDaSessao(execucoes, sessao, sessoes) {
   const f = {}
   Object.entries(execucoesDaSessao(execucoes, sessao, sessoes)).forEach(([id, e]) => {
-    f[e.exercicio + '_' + e.serie] = { id, peso: e.peso ?? '', ts: e.ts }
+    f[e.exercicio + '_' + e.serie] = { id, peso: e.peso ?? '', reps: e.reps ?? null, ts: e.ts }
   })
   return f
 }
@@ -335,7 +335,7 @@ export function feitasSoltasDeHoje(execucoes, hoje = new Date()) {
     if (!e || typeof e.ts !== 'number') return
     if (e.sessaoId) return
     if (diaISO(new Date(e.ts)) !== dia) return
-    f[e.exercicio + '_' + e.serie] = { id, peso: e.peso ?? '', ts: e.ts }
+    f[e.exercicio + '_' + e.serie] = { id, peso: e.peso ?? '', reps: e.reps ?? null, ts: e.ts }
   })
   return f
 }
