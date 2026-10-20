@@ -2,7 +2,19 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      `user-scalable=no` tira o zoom por pinça no Android. O Safari do iPhone
+      IGNORA esta diretiva desde o iOS 10, de propósito — é decisão da Apple e
+      não há como desfazer pelo HTML. Quem tira o duplo toque nas duas
+      plataformas é o `touch-action: manipulation` do styles.css.
+
+      ATENÇÃO: com o zoom travado, a regra de 16px nos campos deixa de ser
+      conforto e vira obrigação. Campo menor que isso faz o iOS dar zoom
+      sozinho ao focar — e sem zoom manual a pessoa fica presa na tela ampliada,
+      sem conseguir voltar. Ver "Campo de formulário nunca abaixo de 16px" no
+      CLAUDE.md.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>CoachApp</title>
     <meta name="theme-color" content="#7F1D1D" />
     <meta name="description" content="Treinos, suplementação e acompanhamento com seu personal." />

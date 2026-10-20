@@ -1833,6 +1833,19 @@ button.tr-passo:hover { border-color: var(--primaria); color: var(--primaria); t
 .conversa-item .cv-previa { font-size: var(--t-sm); color: var(--texto-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* --- Lista de conversas: prévia, horário e não lidas --- */
+/*
+  Tira o zoom por duplo toque e o atraso de 300ms que o navegador guarda
+  esperando por ele. Vale no iPhone também, onde `user-scalable=no` é ignorado.
+
+  `manipulation` e não `none`: `none` mataria junto a rolagem por toque, e a
+  tela do treino é uma lista comprida.
+*/
+html { touch-action: manipulation; }
+
+/* O campo de carga é o lugar onde o zoom indesejado mais incomodava: aqui a
+   pessoa toca com a mão suada, no meio da série. */
+input, select, textarea, button, a { touch-action: manipulation; }
+
 /* --- Confirmação dentro da tela, no lugar do confirm() do navegador --- */
 .tr-confirma {
   display: flex; flex-direction: column; gap: 6px;
