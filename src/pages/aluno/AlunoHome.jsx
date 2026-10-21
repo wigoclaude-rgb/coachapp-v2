@@ -273,7 +273,7 @@ export default function AlunoHome({ user, perfil, onSair }) {
   useEffect(() => {
     const f = sessaoAberta
       ? feitasDaSessao(execucoes, sessaoAberta, sessoes)
-      : feitasSoltasDeHoje(execucoes)
+      : feitasSoltasDeHoje(execucoes, new Date(), sessoes)
     setFeitas(f)
     // O que o banco já confirmou não precisa mais da trava local.
     Object.keys(f).forEach(k => emVoo.current.delete(k))

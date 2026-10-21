@@ -309,7 +309,9 @@ export function execucoesDaSessao(execucoes, sessao, sessoes) {
   const saida = {}
   Object.entries(execucoes || {}).forEach(([id, e]) => {
     if (!e || typeof e.ts !== 'number') return
-    if (e.sessaoId) { if (e.sessaoId === sessao.id) saida[id] = e; return }
+    if (e.sessaoId === sessao.id) { saida[id] = e; return }
+    // `sessaoId` apontando para sessão inexistente é órfã, como se não tivesse.
+    if (e.sessaoId && sessoes?.[e.sessaoId]) return
     if (adotaOrfas && diaISO(new Date(e.ts)) === sessao.dia) saida[id] = e
   })
   return saida
@@ -327,13 +329,25 @@ export function feitasDaSessao(execucoes, sessao, sessoes) {
   return f
 }
 
-/** Sem sessão aberta: o comportamento antigo, as execuções soltas de hoje. */
-export function feitasSoltasDeHoje(execucoes, hoje = new Date()) {
+/**
+ * Sem sessão aberta: as execuções de hoje que não têm dono.
+ *
+ * "Sem dono" é execução sem `sessaoId` OU com um `sessaoId` que aponta para uma
+ * sessão que NÃO EXISTE. A segunda metade não é teoria: se a escrita da sessão
+ * falha — regra ausente no console, rede caindo na hora exata — a execução vai
+ * para o banco carregando um id órfão. Antes, o filtro era só `if (e.sessaoId)
+ * return`, e essas execuções sumiam da tela: o aluno tocava, o dado era gravado,
+ * o visto não aparecia, e ele tocava de novo. O treino inteiro ficava invisível.
+ *
+ * Esconder o que a pessoa fez é pior do que mostrar sem a sessão. A sessão é
+ * contabilidade; o visto é o trabalho dela.
+ */
+export function feitasSoltasDeHoje(execucoes, hoje = new Date(), sessoes = {}) {
   const dia = diaISO(hoje)
   const f = {}
   Object.entries(execucoes || {}).forEach(([id, e]) => {
     if (!e || typeof e.ts !== 'number') return
-    if (e.sessaoId) return
+    if (e.sessaoId && sessoes?.[e.sessaoId]) return   // tem dono de verdade
     if (diaISO(new Date(e.ts)) !== dia) return
     f[e.exercicio + '_' + e.serie] = { id, peso: e.peso ?? '', reps: e.reps ?? null, ts: e.ts }
   })
