@@ -1580,9 +1580,9 @@ export default function AlunoHome({ user, perfil, onSair }) {
                                       <tr>
                                         <th>Série</th>
                                         <th>Reps</th>
-                                        {temAnterior && <th title="O que você usou no último treino">Anterior</th>}
+                                        {temAnterior && <th className="ts-antes-col" title="O que você usou no último treino">Anterior</th>}
                                         <th>Carga</th>
-                                        {temDescanso && <th>Desc.</th>}
+                                        {temDescanso && <th className="ts-desc-col">Desc.</th>}
                                         <th />
                                       </tr>
                                     </thead>

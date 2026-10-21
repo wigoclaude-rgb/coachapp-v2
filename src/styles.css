@@ -2515,7 +2515,7 @@ form.card .av-acoes { padding: 0; }
 .tr-tabela tr.da-vez .ts-n { color: var(--primaria); }
 /* Reps: campo estreito, com o pedido do personal logo abaixo. */
 .ts-reps { white-space: nowrap; }
-.ts-input-reps { width: 58px; }
+.ts-input-reps { width: 54px; }
 .ts-alvo-reps {
   display: block; margin-top: 2px;
   font-size: var(--t-xs); color: var(--texto-4);
@@ -3844,4 +3844,42 @@ button.sp-dose-txt:disabled { cursor: default; }
   .adm-corpo { padding: 18px 16px 50px; }
   .adm-mrr-linha { grid-template-columns: 1fr; gap: 12px; }
   .adm-filtros select, .adm-filtros .campo-busca { width: 100%; min-width: 0; }
+}
+
+
+/* ==========================================================================
+   TABELA DE SÉRIES EM TELA ESTREITA
+   --------------------------------------------------------------------------
+   A BOLINHA NUNCA PODE SAIR DA TELA. Ela é a ação principal do treino: sem
+   ela, não há como marcar série nenhuma.
+
+   Quando a coluna de repetições virou campo, a tabela foi de 308 para 332px
+   dentro de um container de 308, e a bolinha parou em x=364 numa tela de 360.
+   O aluno via a tabela cortada e não tinha onde tocar.
+
+   Este bloco fica no FIM do arquivo de propósito: `@media` não acrescenta
+   especificidade, e a primeira tentativa de corrigir isso ficou antes das
+   regras base de `.tr-tabela` — o `padding: 8px 8px 8px 0` continuava ganhando
+   e nada mudava.
+
+   A ordem do que se corta, do menos para o mais custoso:
+     1. descanso  — o cronômetro já aparece sozinho ao marcar a série
+     2. folga     — padding, nunca a fonte (16px é o que impede o zoom do iOS)
+     3. anterior  — só nas telas mais estreitas, onde não há escolha
+   ========================================================================== */
+
+@media (max-width: 640px) {
+  .tr-tabela .ts-desc-col, .tr-tabela .ts-desc { display: none; }
+  .tr-tabela th { padding: 0 4px 7px 0; }
+  .tr-tabela td { padding: 8px 4px 8px 0; }
+  .ts-n { padding-right: 2px; }
+  .ts-input { width: 56px; padding: 5px 6px; }
+  .ts-input-reps { width: 44px; }
+  .ts-antes { font-size: var(--t-xs); }
+}
+
+@media (max-width: 370px) {
+  /* Aqui não dá para manter as duas: entre ver o histórico e conseguir marcar
+     a série, marcar vence. O histórico continua na Evolução. */
+  .tr-tabela .ts-antes-col, .tr-tabela .ts-antes { display: none; }
 }
