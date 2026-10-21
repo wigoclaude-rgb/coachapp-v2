@@ -587,11 +587,24 @@ export default function AlunoHome({ user, perfil, onSair }) {
       ...(abaixo ? { alvo, motivo: motivo || 'não informado' } : {})
     })
       .catch(err => {
-        // Falha de verdade (regra negou, por exemplo) — offline não cai aqui,
-        // fica na fila. Libera a chave para a pessoa poder tentar de novo.
-        console.warn('Série não gravada:', err?.code || err)
+        /*
+          Offline NÃO cai aqui — fica na fila do Firebase. Chegar neste catch
+          quer dizer que o servidor recusou de verdade, e aí o visto que já
+          apareceu some sozinho quando o Firebase desfaz a escrita local.
+
+          A mensagem distingue os dois casos porque o conselho é oposto: regra
+          recusando não melhora tentando de novo, e mandar o aluno repetir o
+          toque só faz ele gravar duplicado quando a regra voltar.
+        */
+        const codigo = String(err?.code || err)
+        console.warn('Série não gravada:', codigo, err)
         emVoo.current.delete(chave)
-        setErroInline(e => ({ ...e, [ex.nome]: 'Não foi possível registrar. Tente de novo.' }))
+        setErroInline(e => ({
+          ...e,
+          [ex.nome]: codigo.toUpperCase().includes('PERMISSION_DENIED')
+            ? 'O servidor recusou este registro. É configuração do app, não erro seu — avise quem cuida do CoachApp.'
+            : 'Não foi possível registrar. Tente de novo.'
+        }))
       })
 
     return null
